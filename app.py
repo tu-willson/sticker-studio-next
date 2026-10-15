@@ -1323,7 +1323,7 @@ def v10_subsection(title, accent="#4f8cff"):
 # OpenAI Key。自備 Key 仍可隨時使用；會員 Beta 則只使用本專案新的
 # Supabase、Google 登入與點數帳本。
 # ============================================================
-BETA_API_MODE = "✨ 會員 Beta（登入送 2 點）"
+BETA_API_MODE = "✨ 會員 Beta（登入享 2 次）"
 OWN_API_MODE = "🔑 使用自己的 OpenAI API"
 BETA_SITE_URL = "https://sticker-studio-next.streamlit.app"
 
@@ -1552,7 +1552,7 @@ def _beta_render_account_panel():
         email = html.escape(str(user.get("email", "已登入會員") or "已登入會員"))
         try:
             balance = _beta_credit_balance(session)
-            st.success(f"已登入：{email}　｜　可用點數：{balance} 點")
+            st.success(f"已登入：{email}　｜　可用體驗額度：{balance} 次")
         except Exception:
             st.warning(f"已登入：{email}　｜　點數暫時無法讀取，請稍後再試。")
         if st.button("登出會員 Beta", key="beta_logout"):
@@ -1566,7 +1566,7 @@ def _beta_render_account_panel():
     login_error = st.session_state.pop("beta_login_error", "")
     if login_error:
         st.warning(login_error)
-    st.caption("使用 Google 登入，新帳號只會獲得一次 2 點 Beta 體驗額度。")
+    st.caption("新登入會員有 2 次體驗額度。")
     if st.button("準備 Google 登入", type="primary", key="beta_start_google_login"):
         try:
             st.session_state["beta_pending_login_url"] = _beta_new_login_url()
@@ -3089,7 +3089,7 @@ def _v12_sync_user_api_key():
 # 4. 預設隱碼；可由使用者自行切換顯示。
 # ============================================================
 v10_section("🤖 AI 生成方式", "#6366f1")
-st.caption("📌 自備 Key 模式持續可用；會員 Beta 以獨立帳號、RLS 與點數帳本提供一次性的 2 點體驗額度。")
+st.caption("📌 自備 Key 模式持續可用；新登入會員有 2 次體驗額度。")
 
 # 重要：不要再直接把 radio 綁在 v11_api_mode。
 # 字型快速選擇／開關 125 種總覽都會觸發 Streamlit rerun，
@@ -4164,8 +4164,16 @@ if st.button(
         except Exception:
             st.error("❌ 目前無法確認會員點數，請稍後再試。")
             st.stop()
-        if not _reservation["granted"] or not _reservation["job_id"]:
-            st.warning(f"點數不足：目前可用 {_reservation['balance']} 點。")
+        if not _reservation["granted"]:
+            if _reservation["job_id"]:
+                st.warning("此帳號已有一份圖片正在生成，請等完成後再試。")
+            elif _reservation["balance"] > 0:
+                st.warning("剛完成生成，請等候 60 秒後再使用下一次體驗額度。")
+            else:
+                st.warning("體驗額度已使用完畢。")
+            st.stop()
+        if not _reservation["job_id"]:
+            st.error("❌ 無法建立本次生成作業，請稍後再試。")
             st.stop()
         st.session_state["beta_generation_job_id"] = _reservation["job_id"]
 

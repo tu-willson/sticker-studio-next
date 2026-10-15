@@ -11,6 +11,7 @@
 1. [`20261015_000001_member_credit_beta.sql`](supabase/migrations/20261015_000001_member_credit_beta.sql)
 2. [`20261016_000002_oauth_login_state.sql`](supabase/migrations/20261016_000002_oauth_login_state.sql)
 3. [`20261016_000003_refund_stale_reservations.sql`](supabase/migrations/20261016_000003_refund_stale_reservations.sql)
+4. [`20261016_000004_member_generation_guardrails.sql`](supabase/migrations/20261016_000004_member_generation_guardrails.sql)
 
 它提供：
 
@@ -21,6 +22,7 @@
 - 僅能讀取自己資料的 RLS 規則。
 - 一次性、10 分鐘有效的 Google PKCE 登入狀態；
 - 若瀏覽器或服務中斷，15 分鐘後於會員下次生成前自動退回未完成的保留點數。
+- 同帳號跨分頁同時只能有一份進行中的站方生成，且成功後需等候 60 秒才能再次生成。
 
 設定 `SUPABASE_URL` 與 `SUPABASE_ANON_KEY` 後，網站會顯示 Google 登入與會員點數。只有再設定伺服器端 `OPENAI_API_KEY` 時，會員模式才會允許站方付費生成；在此之前自備 Key 模式仍可完整使用。自備 OpenAI API Key 不消耗會員點數，也不會寫入資料庫。
 
