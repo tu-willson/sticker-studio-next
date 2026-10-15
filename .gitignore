@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Never commit deployment credentials or runtime user data.
+.streamlit/secrets.toml
+v10_data/*.json

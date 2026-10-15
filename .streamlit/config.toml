@@ -1,0 +1,20 @@
+[theme]
+base = "light"
+primaryColor = "#ff5c7a"
+backgroundColor = "#f3f0ec"
+secondaryBackgroundColor = "#fbf9f6"
+textColor = "#2f3138"
+borderColor = "#ddd7d0"
+showWidgetBorder = true
+
+[theme.light]
+backgroundColor = "#f3f0ec"
+secondaryBackgroundColor = "#fbf9f6"
+textColor = "#2f3138"
+borderColor = "#ddd7d0"
+
+[theme.dark]
+backgroundColor = "#17191d"
+secondaryBackgroundColor = "#23262c"
+textColor = "#f1f3f5"
+borderColor = "#3b414a"

@@ -1,0 +1,4574 @@
+# V11｜STEP 02D-3｜公開版最後操作細節整理
+import re
+import zipfile
+import streamlit as st
+from openai import OpenAI
+import base64
+from io import BytesIO
+from PIL import Image
+import random
+from pathlib import Path
+import json
+import hashlib
+import html
+import urllib.request
+import urllib.error
+
+# ------------------------------------------------------------
+# V10 使用者資料本／獨立儲存區
+# 不放進 app.py 內；只要這些 JSON 檔仍在專案中，更新 app.py 不會清空。
+# 先讀取新的 v10_data/，若尚未建立則相容讀取舊版根目錄 JSON。
+# ------------------------------------------------------------
+import time
+V10_DATA_DIR = Path(__file__).with_name("v10_data")
+V10_DATA_DIR.mkdir(exist_ok=True)
+
+V10_PRESET_FILE = V10_DATA_DIR / "V10_user_presets.json"
+V10_CUSTOM_PHRASE_POOL_FILE = V10_DATA_DIR / "V10_custom_phrase_pool.json"
+
+V10_LEGACY_PRESET_FILE = Path(__file__).with_name("V10_user_presets.json")
+V10_LEGACY_PHRASE_POOL_FILE = Path(__file__).with_name("V10_custom_phrase_pool.json")
+
+def _public02a_default_settings():
+    return {
+        "style_custom": [""] * 10,
+        "style_custom_names": [f"使用者自定{i}" for i in range(1, 11)],
+        "character_custom": ["", "", ""],
+        "character_enabled": [False, False, False],
+        "custom_phrases": [],
+    }
+
+
+def _public02a_normalize_settings(data):
+    base = _public02a_default_settings()
+    if not isinstance(data, dict):
+        return base
+
+    for key in ("style_custom", "style_custom_names"):
+        value = data.get(key)
+        if isinstance(value, list):
+            value = [str(x) if x is not None else "" for x in value[:10]]
+            value += [""] * (10 - len(value))
+            base[key] = value
+
+    value = data.get("character_custom")
+    if isinstance(value, list):
+        value = [str(x) if x is not None else "" for x in value[:3]]
+        value += [""] * (3 - len(value))
+        base["character_custom"] = value
+
+    value = data.get("character_enabled")
+    if isinstance(value, list):
+        value = [bool(x) for x in value[:3]]
+        value += [False] * (3 - len(value))
+        base["character_enabled"] = value
+
+    value = data.get("custom_phrases")
+    if isinstance(value, list):
+        base["custom_phrases"] = list(dict.fromkeys(
+            str(x).strip() for x in value if str(x).strip()
+        ))
+
+    return base
+
+
+def _public02a_get_settings():
+    """
+    取得目前使用者的完整自定義設定。
+
+    V12 FIX｜匯出空檔案修正
+
+    自定義風格在 V12 已改由 public02a_style_bank 作為唯一可靠來源，
+    因為舊的 v10_style_custom_* widget 會在切換頁面／條件渲染後被
+    Streamlit 移除或重設。
+
+    因此匯出時不能再直接讀 legacy widget keys，
+    必須從 Style Bank 取得真正已儲存的風格資料。
+    """
+
+    # ------------------------------------------------------------
+    # ① 自定義風格：Style Bank 是 V12 的 authoritative source
+    # ------------------------------------------------------------
+    bank = _public02a_get_style_bank()
+
+    style_custom = [
+        str(bank[str(i)].get("prompt", ""))
+        for i in range(1, 11)
+    ]
+
+    style_custom_names = [
+        str(bank[str(i)].get("name", "")).strip() or f"使用者自定{i}"
+        for i in range(1, 11)
+    ]
+
+    # ------------------------------------------------------------
+    # ② 人物／場景：優先讀目前畫面中的 widget，
+    #    若 widget 已被 Streamlit 清除，則回退到 durable preset store
+    # ------------------------------------------------------------
+    preset_store = _public02a_get_preset_store()
+
+    character_custom = []
+    character_enabled = []
+
+    for i in range(1, 4):
+        custom_key = f"v10_character_custom_{i}"
+        enabled_key = f"v10_character_enabled_{i}"
+
+        if custom_key in st.session_state:
+            character_custom.append(
+                str(st.session_state.get(custom_key, ""))
+            )
+        else:
+            character_custom.append(
+                str(preset_store["character_custom"][i - 1])
+            )
+
+        if enabled_key in st.session_state:
+            character_enabled.append(
+                bool(st.session_state.get(enabled_key, False))
+            )
+        else:
+            character_enabled.append(
+                bool(preset_store["character_enabled"][i - 1])
+            )
+
+    # ------------------------------------------------------------
+    # ③ 自定義語詞：使用目前 Session 的專屬語詞池
+    # ------------------------------------------------------------
+    custom_phrases = list(
+        dict.fromkeys(
+            str(x).strip()
+            for x in st.session_state.get("public02a_custom_phrases", [])
+            if str(x).strip()
+        )
+    )
+
+    settings = {
+        "style_custom": style_custom,
+        "style_custom_names": style_custom_names,
+        "character_custom": character_custom,
+        "character_enabled": character_enabled,
+        "custom_phrases": custom_phrases,
+    }
+
+    # 最後統一正規化，確保匯出的 JSON 格式固定且可再次匯入。
+    return _public02a_normalize_settings(settings)
+
+
+def _public02a_apply_settings(data):
+    # Streamlit widget keys cannot be modified after those widgets are instantiated.
+    # Store the imported data as a pending payload; the next script run applies it
+    # before the widgets are created.
+    data = _public02a_normalize_settings(data)
+    st.session_state["public02a_pending_import"] = data
+    return True
+
+
+def _public02a_default_style_bank():
+    return {
+        str(i): {
+            "name": f"使用者自定{i}",
+            "prompt": "",
+        }
+        for i in range(1, 11)
+    }
+
+
+def _public02a_normalize_style_bank(data):
+    base = _public02a_default_style_bank()
+    if not isinstance(data, dict):
+        return base
+    for i in range(1, 11):
+        row = data.get(str(i), data.get(i, {}))
+        if isinstance(row, dict):
+            name = str(row.get("name", "") or "").strip()
+            prompt = str(row.get("prompt", "") or "").strip()
+            if name:
+                base[str(i)]["name"] = name
+            if prompt:
+                base[str(i)]["prompt"] = prompt
+    return base
+
+
+def _public02a_get_style_bank():
+    bank = _public02a_normalize_style_bank(
+        st.session_state.get("public02a_style_bank")
+    )
+    st.session_state["public02a_style_bank"] = bank
+    return bank
+
+
+def _public02a_set_style_bank(bank):
+    st.session_state["public02a_style_bank"] = _public02a_normalize_style_bank(bank)
+
+
+def _public02a_sync_style_bank_from_widgets():
+    """V12 REFACTOR compatibility shim.
+
+    The old 10-slot conditional widgets are no longer the source of truth.
+    Custom styles are now managed through one fixed editor + Style Bank.
+    Keeping this function non-destructive prevents stale/blank legacy widget
+    keys from overwriting saved prompts during page navigation.
+    """
+    return _public02a_get_style_bank()
+
+
+def _v12_load_style_editor_from_slot():
+    """Load the selected Style Bank slot into the single fixed editor."""
+    try:
+        slot = int(st.session_state.get("v12_style_editor_slot", 1))
+    except Exception:
+        slot = 1
+    slot = max(1, min(10, slot))
+
+    bank = _public02a_get_style_bank()
+    item = bank[str(slot)]
+
+    st.session_state["v12_style_editor_name"] = str(item.get("name", "")).strip() or f"使用者自定{slot}"
+    st.session_state["v12_style_editor_prompt"] = str(item.get("prompt", ""))
+
+
+def _v12_save_style_editor():
+    """Save only the single editor into the selected Style Bank slot."""
+    try:
+        slot = int(st.session_state.get("v12_style_editor_slot", 1))
+    except Exception:
+        slot = 1
+    slot = max(1, min(10, slot))
+
+    bank = _public02a_get_style_bank()
+    name = str(st.session_state.get("v12_style_editor_name", "")).strip() or f"使用者自定{slot}"
+    prompt = str(st.session_state.get("v12_style_editor_prompt", "")).strip()
+
+    bank[str(slot)] = {
+        "name": name,
+        "prompt": prompt,
+    }
+    _public02a_set_style_bank(bank)
+
+    # Keep the legacy combined structure synchronized, but derive it only
+    # from the authoritative Style Bank.
+    _save_v10_presets()
+    return True
+
+
+def _public02a_init():
+    # V12 FIX4：非 Widget 的個人設定 store。
+    # 公開版不能直接把所有訪客資料寫進共用 v10_data，
+    # 因此同一位使用者的 Session 以 public02a_user_presets 作為可靠來源。
+    st.session_state.setdefault(
+        "public02a_user_presets",
+        {
+            "style_custom": [""] * 10,
+            "style_custom_names": [f"使用者自定{i}" for i in range(1, 11)],
+            "character_custom": ["", "", ""],
+            "character_enabled": [False, False, False],
+        },
+    )
+
+    # FIX11: custom style prompts have their own authoritative bank.
+    if "public02a_style_bank" not in st.session_state:
+        _seed = _public02a_normalize_settings(
+            st.session_state.get("public02a_user_presets")
+        )
+        _public02a_set_style_bank({
+            str(i): {
+                "name": _seed["style_custom_names"][i - 1],
+                "prompt": _seed["style_custom"][i - 1],
+            }
+            for i in range(1, 11)
+        })
+
+    # Sync any still-existing editor values BEFORE Streamlit can discard
+    # conditional widget state at the end of a navigation rerun.
+    _public02a_sync_style_bank_from_widgets()
+
+    defaults = _public02a_normalize_settings(
+        st.session_state.get("public02a_user_presets")
+    )
+    _style_bank_defaults = _public02a_get_style_bank()
+    for _i in range(1, 11):
+        defaults["style_custom_names"][_i - 1] = _style_bank_defaults[str(_i)]["name"]
+        defaults["style_custom"][_i - 1] = _style_bank_defaults[str(_i)]["prompt"]
+
+    # Apply an imported profile BEFORE the corresponding Streamlit widgets are instantiated.
+    pending = st.session_state.pop("public02a_pending_import", None)
+    if pending is not None:
+        pending = _public02a_normalize_settings(pending)
+        st.session_state["public02a_user_presets"] = {
+            "style_custom": list(pending["style_custom"]),
+            "style_custom_names": list(pending["style_custom_names"]),
+            "character_custom": list(pending["character_custom"]),
+            "character_enabled": list(pending["character_enabled"]),
+        }
+        defaults = pending
+        for i in range(1, 11):
+            st.session_state[f"v10_style_custom_{i}"] = pending["style_custom"][i - 1]
+            st.session_state[f"v10_style_name_{i}"] = pending["style_custom_names"][i - 1]
+        for i in range(1, 4):
+            st.session_state[f"v10_character_custom_{i}"] = pending["character_custom"][i - 1]
+            st.session_state[f"v10_character_enabled_{i}"] = pending["character_enabled"][i - 1]
+        st.session_state["public02a_custom_phrases"] = list(pending["custom_phrases"])
+        _public02a_set_style_bank({
+            str(i): {
+                "name": pending["style_custom_names"][i - 1],
+                "prompt": pending["style_custom"][i - 1],
+            }
+            for i in range(1, 11)
+        })
+
+    # V12 FIX5｜關鍵修正：
+    # Streamlit 切到「我的作品」後，創作頁的 widget key 可能被移除，
+    # 但 public02a_initialized 仍然是 True。
+    # FIX4 之前因此不會再次執行 setdefault，造成回到創作頁時風格變空白。
+    #
+    # 所以每一次 rerun 都檢查「缺少的 widget key」，並從非 Widget store
+    # 重新補回；已有的 key 絕不覆蓋使用者正在編輯的內容。
+    for i in range(1, 11):
+        st.session_state.setdefault(
+            f"v10_style_custom_{i}", defaults["style_custom"][i - 1]
+        )
+        st.session_state.setdefault(
+            f"v10_style_name_{i}", defaults["style_custom_names"][i - 1]
+        )
+
+    for i in range(1, 4):
+        st.session_state.setdefault(
+            f"v10_character_custom_{i}", defaults["character_custom"][i - 1]
+        )
+        st.session_state.setdefault(
+            f"v10_character_enabled_{i}", defaults["character_enabled"][i - 1]
+        )
+
+    st.session_state.setdefault("public02a_custom_phrases", [])
+    st.session_state["public02a_initialized"] = True
+
+
+
+_public02a_init()
+
+# 每個 Streamlit Session 都有自己的語詞池。
+# 不再讀寫共用的 v10_data/V10_custom_phrase_pool.json。
+V10_CUSTOM_PHRASE_POOL = st.session_state["public02a_custom_phrases"]
+
+
+def _load_v10_phrase_pool():
+    # 公開版：只從目前使用者 Session 取得。
+    return list(st.session_state.get("public02a_custom_phrases", []))
+
+
+def _save_v10_phrase_pool(values):
+    # 公開版：只更新目前使用者 Session，不寫入共用檔案。
+    values = list(dict.fromkeys(
+        str(x).strip() for x in values if str(x).strip()
+    ))
+    st.session_state["public02a_custom_phrases"] = values
+    return True
+
+
+def _public02a_get_preset_store():
+    data = st.session_state.get("public02a_user_presets")
+    return _public02a_normalize_settings(data)
+
+
+def _public02a_set_preset_store(data):
+    normalized = _public02a_normalize_settings(data)
+    st.session_state["public02a_user_presets"] = {
+        "style_custom": list(normalized["style_custom"]),
+        "style_custom_names": list(normalized["style_custom_names"]),
+        "character_custom": list(normalized["character_custom"]),
+        "character_enabled": list(normalized["character_enabled"]),
+    }
+
+
+def _public02a_sync_style_slot(slot: int):
+    """FIX10: non-destructive sync.
+
+    A blank conditional Streamlit widget must never erase an already saved
+    custom-style prompt. Only non-empty editor values are allowed to update
+    the durable preset store.
+    """
+    try:
+        slot = int(slot)
+        if not 1 <= slot <= 10:
+            return
+
+        current = _public02a_get_preset_store()
+        name_key = f"v10_style_name_{slot}"
+        style_key = f"v10_style_custom_{slot}"
+
+        if name_key in st.session_state:
+            name = str(st.session_state[name_key]).strip()
+            if name:
+                current["style_custom_names"][slot - 1] = name
+
+        if style_key in st.session_state:
+            style = str(st.session_state[style_key]).strip()
+            # CRITICAL: never let an empty/recreated conditional widget erase
+            # a previously saved custom-style prompt.
+            if style:
+                current["style_custom"][slot - 1] = style
+
+        _public02a_set_preset_store(current)
+        st.session_state["public02a_last_preset_snapshot"] = _public02a_get_preset_store()
+    except Exception:
+        pass
+
+def _load_v10_presets():
+    return _public02a_get_preset_store()
+
+
+def _save_v10_presets():
+    try:
+        # V12 REFACTOR｜Style Bank is authoritative.
+        # Never read legacy conditional style widgets here.
+        bank = _public02a_get_style_bank()
+
+        snapshot = {
+            "style_custom": [
+                str(bank[str(i)]["prompt"])
+                for i in range(1, 11)
+            ],
+            "style_custom_names": [
+                str(bank[str(i)]["name"])
+                for i in range(1, 11)
+            ],
+            "character_custom": [
+                str(st.session_state.get(f"v10_character_custom_{i}", ""))
+                for i in range(1, 4)
+            ],
+            "character_enabled": [
+                bool(st.session_state.get(f"v10_character_enabled_{i}", False))
+                for i in range(1, 4)
+            ],
+        }
+
+        _public02a_set_preset_store(snapshot)
+        st.session_state["public02a_last_preset_snapshot"] = _public02a_get_preset_store()
+        return True
+    except Exception:
+        return False
+
+
+# 舊版 v10_data/ 仍保留在專案中，作為備份資料，不由公開版讀寫。
+
+import streamlit.components.v1 as components
+
+def _v11_clear_generation_state() -> None:
+    """Clear only transient generation UI/session flags after a terminal outcome."""
+    for _key in (
+        "v11_generation_pending",
+        "v11_generation_in_progress",
+    ):
+        st.session_state.pop(_key, None)
+
+
+
+def _v11_user_error_message(exc: Exception) -> str:
+    """Return a simple Chinese message for end users; never expose traceback."""
+    msg = str(exc or "").lower()
+
+    if isinstance(exc, TimeoutError) or "timeout" in msg or "timed out" in msg:
+        return "⏱️ 生成逾時，請重新操作。"
+
+    if "api key" in msg or "authentication" in msg or "unauthorized" in msg or "401" in msg:
+        return "🔑 API Key 無法使用，請確認後重新操作。"
+
+    if "429" in msg or "rate limit" in msg or "quota" in msg:
+        return "⚠️ AI 服務目前較忙，請稍後再試。"
+
+    if "no api key" in msg or "api key" in msg:
+        return "🔑 請先確認 API Key，再重新操作。"
+
+    if "b64_json" in msg or "沒有取得有效圖片" in msg or "圖片資料不完整" in msg:
+        return "🖼️ 這次沒有取得有效圖片，請重新操作。"
+
+    if "image" in msg or "png" in msg or "pil" in msg or "base64" in msg:
+        return "🖼️ 圖片處理失敗，請重新操作。"
+
+    return "🔴 圖片生成失敗，請稍後重新操作。"
+
+
+# ============================================================
+# V10 STEP 10C
+# 原生 HTML Canvas 滑鼠裁切版
+#
+# 核心：
+# - 不使用 streamlit-drawable-canvas
+# - 8 個裁切框同時顯示
+# - 滑鼠拖曳框中央：移動
+# - 拖曳四角：縮放
+# - 拖曳四邊：單方向縮放
+# - 顯示座標與原圖座標分離
+# - 固定預覽上限，不跟 Streamlit 容器無限放大
+# - Chrome 80/100/125/150% 仍以原始圖片座標計算
+# - 01～08 不會送給 AI 當作圖片編號
+# ============================================================
+
+st.set_page_config(
+    page_title="LINE 貼圖創作工作室｜V12",
+    page_icon="🎨",
+    layout="wide",
+)
+
+# ============================================================
+# V10 STEP 20｜介面重新排版
+# - 大標題置中、放大
+# - 每個主要區域以彩虹色分隔
+# - 一般控制項限制寬度，避免滿版橫跨
+# - 主要內容維持中央操作區
+# ============================================================
+# ============================================================
+# V11｜STEP 02C-1｜FIX4
+# 主題顏色改由 .streamlit/config.toml 的 Streamlit 原生 Light/Dark theme 控制。
+# Python 這裡不再強制覆蓋整個 App 的背景與文字顏色。
+
+
+st.markdown("""
+<style>
+/* V12｜④ 文字來源雙入口：維持兩個清楚、可點選的大標題。 */
+.st-key-v12_open_ai_copy_panel button,
+.st-key-v12_open_random_panel button{
+  min-height:58px !important;
+  border-radius:12px !important;
+  font-size:18px !important;
+  font-weight:800 !important;
+}
+:root{
+  --v10-max: 1180px;
+  --v10-control: 820px;
+}
+.block-container{
+  max-width:1180px !important;
+  padding-left:2rem !important;
+  padding-right:2rem !important;
+}
+
+
+
+/* V11｜02D-3｜公開版最後操作細節整理 */
+.v11-section-tip{
+  width:min(900px,100%);
+  margin:.35rem auto .85rem;
+  padding:.6rem .85rem;
+  border-radius:12px;
+  border:1px solid rgba(120,120,120,.14);
+  background:color-mix(in srgb,#64748b 7%, transparent);
+  font-size:.96rem;
+  line-height:1.55;
+}
+.v11-success-next{
+  width:min(900px,100%);
+  margin:.8rem auto 1rem;
+  padding:.8rem 1rem;
+  border-radius:14px;
+  border:1px solid rgba(22,160,133,.25);
+  background:color-mix(in srgb,#16a085 9%, transparent);
+  text-align:center;
+  font-weight:800;
+}
+/* V11｜02D-2｜生成後流程導引 */
+.v11-postgen-guide{
+  width:min(1080px,100%);
+  margin:1rem auto 1.25rem;
+  padding:1rem 1.1rem;
+  border-radius:18px;
+  border:1px solid rgba(120,120,120,.18);
+  background:color-mix(in srgb,#16a085 8%, transparent);
+}
+.v11-postgen-title{
+  text-align:center;
+  font-size:clamp(1.15rem,2.2vw,1.55rem);
+  font-weight:900;
+  margin:.05rem 0 .8rem;
+}
+.v11-postgen-steps{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:.7rem;
+}
+.v11-postgen-step{
+  padding:.75rem .85rem;
+  border-radius:14px;
+  border:1px solid rgba(120,120,120,.12);
+  background:color-mix(in srgb,#ffffff 58%, transparent);
+}
+.v11-postgen-step strong{
+  display:block;
+  margin-bottom:.2rem;
+  font-size:1.02rem;
+}
+.v11-postgen-step span{
+  font-size:.96rem;
+  line-height:1.5;
+  opacity:.9;
+}
+@media (max-width:720px){
+  .v11-postgen-steps{grid-template-columns:1fr;}
+}
+/* V11｜02D-1｜首次使用導引 */
+.v11-onboarding{
+  width:min(1080px,100%);
+  margin:0 auto 1.2rem;
+  padding:1rem 1.15rem 1.1rem;
+  border-radius:18px;
+  border:1px solid rgba(120,120,120,.18);
+  background:linear-gradient(135deg,
+    color-mix(in srgb,#7c5cff 10%, transparent),
+    color-mix(in srgb,#4bb3fd 8%, transparent),
+    color-mix(in srgb,#31c48d 7%, transparent));
+}
+.v11-onboarding-title{
+  text-align:center;
+  font-size:clamp(1.2rem,2.3vw,1.7rem);
+  font-weight:900;
+  margin:.1rem 0 .8rem;
+}
+.v11-onboarding-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:.75rem;
+}
+.v11-onboarding-card{
+  padding:.8rem .9rem;
+  border-radius:14px;
+  background:color-mix(in srgb,#ffffff 62%, transparent);
+  border:1px solid rgba(120,120,120,.12);
+}
+.v11-onboarding-step{
+  font-size:1.05rem;
+  font-weight:900;
+  margin-bottom:.25rem;
+}
+.v11-onboarding-text{
+  font-size:.98rem;
+  line-height:1.55;
+  opacity:.9;
+}
+@media (max-width:720px){
+  .v11-onboarding-grid{grid-template-columns:1fr;}
+}
+.v10-main-title{
+  text-align:center;
+  font-size:clamp(2rem,4vw,3.15rem);
+  font-weight:900;
+  letter-spacing:.04em;
+  margin:1.0rem auto 1.8rem;
+}
+.v10-section{
+  position:relative;
+  margin:2.8rem 0 1.4rem;
+  padding:1.15rem 1rem 1rem;
+  border-top:5px solid var(--accent);
+  border-bottom:2px solid color-mix(in srgb,var(--accent) 45%, transparent);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 9%, transparent),transparent);
+  border-radius:12px;
+  text-align:center;
+}
+.v10-section::after{
+  content:"";
+  display:block;
+  width:150px;
+  height:5px;
+  border-radius:99px;
+  background:var(--accent);
+  margin:.8rem auto 0;
+}
+.v10-section-title{
+  font-size:clamp(1.65rem,3vw,2.35rem);
+  line-height:1.2;
+  font-weight:900;
+  letter-spacing:.03em;
+}
+.v10-transparent-box{
+  width:min(760px,100%);
+  margin:0 auto 1rem;
+  padding:.45rem .75rem;
+  text-align:center;
+}
+/* V11｜02C-3D｜透明背景選項專用穩定 CSS scope */
+.st-key-transparent_png_option{
+  width:min(900px,100%);
+  margin:.35rem auto 1.25rem;
+  padding:.65rem 1rem;
+  text-align:center;
+}
+
+.st-key-transparent_png_option [data-testid="stCheckbox"]{
+  width:100% !important;
+}
+
+.st-key-transparent_png_option [data-testid="stCheckbox"] label{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:1rem !important;
+  width:100% !important;
+  cursor:pointer !important;
+}
+
+.st-key-transparent_png_option [data-testid="stCheckbox"] label p{
+  margin:0 !important;
+  font-size:2rem !important;
+  line-height:1.2 !important;
+  font-weight:900 !important;
+}
+
+.st-key-transparent_png_option [data-testid="stCheckbox"] label span{
+  font-size:2rem !important;
+  font-weight:900 !important;
+}
+
+.st-key-transparent_png_option [data-testid="stCheckbox"] [role="checkbox"]{
+  min-width:2.1rem !important;
+  width:2.1rem !important;
+  min-height:2.1rem !important;
+  height:2.1rem !important;
+  transform:scale(1.15);
+  transform-origin:center;
+}
+
+.st-key-transparent_png_option [data-testid="stCheckbox"] input{
+  width:2rem !important;
+  height:2rem !important;
+  cursor:pointer !important;
+}
+
+.v11-transparent-title{
+  width:min(900px,100%);
+  margin:1.25rem auto .55rem;
+  padding:.7rem 1rem;
+  border-left:8px solid #16a085;
+  border-radius:10px;
+  background:color-mix(in srgb,#16a085 10%, transparent);
+  color:var(--text-color, inherit);
+  font-size:2rem !important;
+  line-height:1.2 !important;
+  font-weight:900 !important;
+  text-align:left;
+}
+.v10-transparent-box div[data-testid="stCheckbox"]{
+  width:100% !important;
+  text-align:center !important;
+}
+.v10-transparent-box label{
+  font-size:2rem !important;
+  font-weight:900 !important;
+  line-height:1.25 !important;
+  cursor:pointer !important;
+}
+.v10-transparent-box label p,
+.v10-transparent-box label span{
+  font-size:2rem !important;
+  font-weight:900 !important;
+}
+.v10-transparent-box div[data-testid="stCheckbox"] input{
+  width:2.25rem !important;
+  height:2.25rem !important;
+  transform:scale(1.35);
+  transform-origin:center;
+  cursor:pointer !important;
+}
+div[data-testid="stCheckbox"] label{
+  font-size:1.12rem !important;
+  font-weight:700 !important;
+}
+.v10-subsection{
+  width:min(900px,100%);
+  margin:1.25rem auto .75rem;
+  padding:.65rem 1rem;
+  border-left:6px solid var(--accent);
+  border-radius:8px;
+  background:color-mix(in srgb,var(--accent) 10%, transparent);
+  font-size:1.28rem;
+  font-weight:800;
+  text-align:left;
+}
+.v10-note{
+  width:min(900px,100%);
+  margin:.5rem auto 1rem;
+  text-align:center;
+  opacity:.9;
+}
+.v10-control{
+  width:min(var(--v10-control),100%);
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+.v10-control-wide{
+  width:min(1050px,100%);
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+
+.v10-centered-image{
+  display:flex;
+  justify-content:center;
+  width:100%;
+}
+.v10-centered-image img{
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+.v12-back-to-top{
+  position:fixed;
+  right:22px;
+  bottom:22px;
+  z-index:9999;
+  width:52px;
+  height:52px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-decoration:none !important;
+  font-size:26px;
+  font-weight:900;
+  color:#fff !important;
+  background:#ff4f67;
+  border:2px solid rgba(255,255,255,.78);
+  box-shadow:0 8px 24px rgba(0,0,0,.35);
+  transition:transform .18s ease, opacity .18s ease;
+}
+.v12-back-to-top:hover{
+  transform:translateY(-3px) scale(1.05);
+  color:#fff !important;
+}
+.v12-font-gallery-note{
+  text-align:center;
+  opacity:.9;
+  margin:.4rem 0 .7rem;
+}
+.v12-settings-label{
+  font-size:1.05rem;
+  font-weight:800;
+  margin:0 0 .55rem;
+}
+
+/* V12｜STEP 01B③｜125 種帶圖字型響應式圖卡牆 */
+.v12-font-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:14px;
+  width:100%;
+  margin:.7rem auto 1rem;
+}
+.v12-font-card{
+  min-width:0;
+  overflow:hidden;
+  border:1px solid rgba(122,142,170,.28);
+  border-radius:14px;
+  background:rgba(255,255,255,.025);
+  box-shadow:0 4px 14px rgba(0,0,0,.14);
+}
+.v12-font-card img{
+  display:block;
+  width:100%;
+  aspect-ratio:1 / 1;
+  object-fit:cover;
+  background:#f7f7f7;
+}
+.v12-font-card-meta{
+  display:flex;
+  align-items:center;
+  gap:.45rem;
+  padding:.48rem .58rem .58rem;
+  min-width:0;
+}
+.v12-font-card-no{
+  flex:0 0 auto;
+  font-weight:900;
+  color:#a9c9ff;
+  font-size:.92rem;
+}
+.v12-font-card-name{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  opacity:.88;
+  font-size:.86rem;
+}
+@media (max-width:1000px){
+  .v12-font-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:11px;
+  }
+}
+@media (max-width:640px){
+  .v12-font-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:9px;
+    margin:.55rem auto .8rem;
+  }
+  .v12-font-card{
+    border-radius:11px;
+  }
+  .v12-font-card-meta{
+    gap:.35rem;
+    padding:.4rem .45rem .48rem;
+  }
+  .v12-font-card-no{
+    font-size:.82rem;
+  }
+  .v12-font-card-name{
+    font-size:.78rem;
+  }
+}
+@media (max-width:800px){
+  /* 手機瀏覽器底部工具列較高，置頂鍵往上避開系統導覽列 */
+  .v12-back-to-top{
+    width:46px;
+    height:46px;
+    right:14px;
+    bottom:88px;
+    font-size:23px;
+  }
+}
+
+/* V12｜STEP 01B③-5｜手機字型圖卡強制雙欄
+   Streamlit 原生欄位在手機預設會折成單欄；這裡只針對字型總覽容器覆寫。 */
+@media (max-width:640px){
+  .st-key-v12_font_card_grid [data-testid="stHorizontalBlock"]{
+    flex-direction:row !important;
+    flex-wrap:wrap !important;
+    gap:9px !important;
+    align-items:flex-start !important;
+  }
+  .st-key-v12_font_card_grid [data-testid="stColumn"]{
+    flex:0 0 calc(50% - 4.5px) !important;
+    width:calc(50% - 4.5px) !important;
+    min-width:0 !important;
+  }
+}
+
+div[data-testid="stFileUploader"],
+div[data-testid="stSelectbox"],
+div[data-testid="stMultiSelect"],
+div[data-testid="stTextInput"],
+div[data-testid="stTextArea"],
+div[data-testid="stNumberInput"]{
+  width:min(var(--v10-control),100%) !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+div[data-testid="stButton"]{
+  width:min(520px,100%) !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+.v10-small-button div[data-testid="stButton"]{
+  width:min(360px,100%) !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+div[data-testid="stCheckbox"],
+div[data-testid="stRadio"]{
+  width:min(var(--v10-control),100%) !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+div[data-testid="stExpander"]{
+  width:min(1000px,100%) !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+@media (max-width:800px){
+  .block-container{
+    padding-left:.75rem !important;
+    padding-right:.75rem !important;
+  }
+  .v10-section{margin-top:2rem;}
+  .v10-section-title{font-size:1.55rem;}
+}
+
+/* V12 試作版｜局部文字上色：色卡使用實際背景色，不依賴 emoji 色字。 */
+div[class*="st-key-v12_text_color_pick_"] button p{
+  color:transparent !important;
+  font-size:0 !important;
+}
+div[class*="st-key-v12_text_color_pick_"] button:hover{
+  filter:brightness(.92) !important;
+  transform:translateY(-1px);
+}
+div[class*="st-key-v12_text_color_pick_0_0_0"] button,
+div[class*="st-key-v12_text_color_pick_0_1_0"] button,
+div[class*="st-key-v12_text_color_pick_0_2_0"] button,
+div[class*="st-key-v12_text_color_pick_1_0_0"] button,
+div[class*="st-key-v12_text_color_pick_1_1_0"] button,
+div[class*="st-key-v12_text_color_pick_1_2_0"] button,
+div[class*="st-key-v12_text_color_pick_2_0_0"] button,
+div[class*="st-key-v12_text_color_pick_2_1_0"] button,
+div[class*="st-key-v12_text_color_pick_2_2_0"] button,
+div[class*="st-key-v12_text_color_pick_3_0_0"] button,
+div[class*="st-key-v12_text_color_pick_3_1_0"] button,
+div[class*="st-key-v12_text_color_pick_3_2_0"] button,
+div[class*="st-key-v12_text_color_pick_4_0_0"] button,
+div[class*="st-key-v12_text_color_pick_4_1_0"] button,
+div[class*="st-key-v12_text_color_pick_4_2_0"] button,
+div[class*="st-key-v12_text_color_pick_5_0_0"] button,
+div[class*="st-key-v12_text_color_pick_5_1_0"] button,
+div[class*="st-key-v12_text_color_pick_5_2_0"] button,
+div[class*="st-key-v12_text_color_pick_6_0_0"] button,
+div[class*="st-key-v12_text_color_pick_6_1_0"] button,
+div[class*="st-key-v12_text_color_pick_6_2_0"] button,
+div[class*="st-key-v12_text_color_pick_7_0_0"] button,
+div[class*="st-key-v12_text_color_pick_7_1_0"] button,
+div[class*="st-key-v12_text_color_pick_7_2_0"] button{
+  background:#FFFFFF !important;
+  background-color:#FFFFFF !important;
+  color:transparent !important;
+  border:2px solid #666666 !important;
+  box-shadow:0 0 0 1px rgba(128,128,128,.18) inset !important;
+  min-height:52px !important;
+  border-radius:11px !important;
+}
+
+div[class*="st-key-v12_text_color_pick_0_0_1"] button,
+div[class*="st-key-v12_text_color_pick_0_1_1"] button,
+div[class*="st-key-v12_text_color_pick_0_2_1"] button,
+div[class*="st-key-v12_text_color_pick_1_0_1"] button,
+div[class*="st-key-v12_text_color_pick_1_1_1"] button,
+div[class*="st-key-v12_text_color_pick_1_2_1"] button,
+div[class*="st-key-v12_text_color_pick_2_0_1"] button,
+div[class*="st-key-v12_text_color_pick_2_1_1"] button,
+div[class*="st-key-v12_text_color_pick_2_2_1"] button,
+div[class*="st-key-v12_text_color_pick_3_0_1"] button,
+div[class*="st-key-v12_text_color_pick_3_1_1"] button,
+div[class*="st-key-v12_text_color_pick_3_2_1"] button,
+div[class*="st-key-v12_text_color_pick_4_0_1"] button,
+div[class*="st-key-v12_text_color_pick_4_1_1"] button,
+div[class*="st-key-v12_text_color_pick_4_2_1"] button,
+div[class*="st-key-v12_text_color_pick_5_0_1"] button,
+div[class*="st-key-v12_text_color_pick_5_1_1"] button,
+div[class*="st-key-v12_text_color_pick_5_2_1"] button,
+div[class*="st-key-v12_text_color_pick_6_0_1"] button,
+div[class*="st-key-v12_text_color_pick_6_1_1"] button,
+div[class*="st-key-v12_text_color_pick_6_2_1"] button,
+div[class*="st-key-v12_text_color_pick_7_0_1"] button,
+div[class*="st-key-v12_text_color_pick_7_1_1"] button,
+div[class*="st-key-v12_text_color_pick_7_2_1"] button{
+  background:#111111 !important;
+  background-color:#111111 !important;
+  color:transparent !important;
+  border:2px solid #111111 !important;
+  box-shadow:0 0 0 1px rgba(128,128,128,.18) inset !important;
+  min-height:52px !important;
+  border-radius:11px !important;
+}
+
+div[class*="st-key-v12_text_color_pick_0_0_2"] button,
+div[class*="st-key-v12_text_color_pick_0_1_2"] button,
+div[class*="st-key-v12_text_color_pick_0_2_2"] button,
+div[class*="st-key-v12_text_color_pick_1_0_2"] button,
+div[class*="st-key-v12_text_color_pick_1_1_2"] button,
+div[class*="st-key-v12_text_color_pick_1_2_2"] button,
+div[class*="st-key-v12_text_color_pick_2_0_2"] button,
+div[class*="st-key-v12_text_color_pick_2_1_2"] button,
+div[class*="st-key-v12_text_color_pick_2_2_2"] button,
+div[class*="st-key-v12_text_color_pick_3_0_2"] button,
+div[class*="st-key-v12_text_color_pick_3_1_2"] button,
+div[class*="st-key-v12_text_color_pick_3_2_2"] button,
+div[class*="st-key-v12_text_color_pick_4_0_2"] button,
+div[class*="st-key-v12_text_color_pick_4_1_2"] button,
+div[class*="st-key-v12_text_color_pick_4_2_2"] button,
+div[class*="st-key-v12_text_color_pick_5_0_2"] button,
+div[class*="st-key-v12_text_color_pick_5_1_2"] button,
+div[class*="st-key-v12_text_color_pick_5_2_2"] button,
+div[class*="st-key-v12_text_color_pick_6_0_2"] button,
+div[class*="st-key-v12_text_color_pick_6_1_2"] button,
+div[class*="st-key-v12_text_color_pick_6_2_2"] button,
+div[class*="st-key-v12_text_color_pick_7_0_2"] button,
+div[class*="st-key-v12_text_color_pick_7_1_2"] button,
+div[class*="st-key-v12_text_color_pick_7_2_2"] button{
+  background:#F5222D !important;
+  background-color:#F5222D !important;
+  color:transparent !important;
+  border:2px solid #F5222D !important;
+  box-shadow:0 0 0 1px rgba(128,128,128,.18) inset !important;
+  min-height:52px !important;
+  border-radius:11px !important;
+}
+
+div[class*="st-key-v12_text_color_pick_0_0_3"] button,
+div[class*="st-key-v12_text_color_pick_0_1_3"] button,
+div[class*="st-key-v12_text_color_pick_0_2_3"] button,
+div[class*="st-key-v12_text_color_pick_1_0_3"] button,
+div[class*="st-key-v12_text_color_pick_1_1_3"] button,
+div[class*="st-key-v12_text_color_pick_1_2_3"] button,
+div[class*="st-key-v12_text_color_pick_2_0_3"] button,
+div[class*="st-key-v12_text_color_pick_2_1_3"] button,
+div[class*="st-key-v12_text_color_pick_2_2_3"] button,
+div[class*="st-key-v12_text_color_pick_3_0_3"] button,
+div[class*="st-key-v12_text_color_pick_3_1_3"] button,
+div[class*="st-key-v12_text_color_pick_3_2_3"] button,
+div[class*="st-key-v12_text_color_pick_4_0_3"] button,
+div[class*="st-key-v12_text_color_pick_4_1_3"] button,
+div[class*="st-key-v12_text_color_pick_4_2_3"] button,
+div[class*="st-key-v12_text_color_pick_5_0_3"] button,
+div[class*="st-key-v12_text_color_pick_5_1_3"] button,
+div[class*="st-key-v12_text_color_pick_5_2_3"] button,
+div[class*="st-key-v12_text_color_pick_6_0_3"] button,
+div[class*="st-key-v12_text_color_pick_6_1_3"] button,
+div[class*="st-key-v12_text_color_pick_6_2_3"] button,
+div[class*="st-key-v12_text_color_pick_7_0_3"] button,
+div[class*="st-key-v12_text_color_pick_7_1_3"] button,
+div[class*="st-key-v12_text_color_pick_7_2_3"] button{
+  background:#FA8C16 !important;
+  background-color:#FA8C16 !important;
+  color:transparent !important;
+  border:2px solid #FA8C16 !important;
+  box-shadow:0 0 0 1px rgba(128,128,128,.18) inset !important;
+  min-height:52px !important;
+  border-radius:11px !important;
+}
+
+div[class*="st-key-v12_text_color_pick_0_0_4"] button,
+div[class*="st-key-v12_text_color_pick_0_1_4"] button,
+div[class*="st-key-v12_text_color_pick_0_2_4"] button,
+div[class*="st-key-v12_text_color_pick_1_0_4"] button,
+div[class*="st-key-v12_text_color_pick_1_1_4"] button,
+div[class*="st-key-v12_text_color_pick_1_2_4"] button,
+div[class*="st-key-v12_text_color_pick_2_0_4"] button,
+div[class*="st-key-v12_text_color_pick_2_1_4"] button,
+div[class*="st-key-v12_text_color_pick_2_2_4"] button,
+div[class*="st-key-v12_text_color_pick_3_0_4"] button,
+div[class*="st-key-v12_text_color_pick_3_1_4"] button,
+div[class*="st-key-v12_text_color_pick_3_2_4"] button,
+div[class*="st-key-v12_text_color_pick_4_0_4"] button,
+div[class*="st-key-v12_text_color_pick_4_1_4"] button,
+div[class*="st-key-v12_text_color_pick_4_2_4"] button,
+div[class*="st-key-v12_text_color_pick_5_0_4"] button,
+div[class*="st-key-v12_text_color_pick_5_1_4"] button,
+div[class*="st-key-v12_text_color_pick_5_2_4"] button,
+div[class*="st-key-v12_text_color_pick_6_0_4"] button,
+div[class*="st-key-v12_text_color_pick_6_1_4"] button,
+div[class*="st-key-v12_text_color_pick_6_2_4"] button,
+div[class*="st-key-v12_text_color_pick_7_0_4"] button,
+div[class*="st-key-v12_text_color_pick_7_1_4"] button,
+div[class*="st-key-v12_text_color_pick_7_2_4"] button{
+  background:#FADB14 !important;
+  background-color:#FADB14 !important;
+  color:transparent !important;
+  border:2px solid #FADB14 !important;
+  box-shadow:0 0 0 1px rgba(128,128,128,.18) inset !important;
+  min-height:52px !important;
+  border-radius:11px !important;
+}
+
+div[class*="st-key-v12_text_color_pick_0_0_5"] button,
+div[class*="st-key-v12_text_color_pick_0_1_5"] button,
+div[class*="st-key-v12_text_color_pick_0_2_5"] button,
+div[class*="st-key-v12_text_color_pick_1_0_5"] button,
+div[class*="st-key-v12_text_color_pick_1_1_5"] button,
+div[class*="st-key-v12_text_color_pick_1_2_5"] button,
+div[class*="st-key-v12_text_color_pick_2_0_5"] button,
+div[class*="st-key-v12_text_color_pick_2_1_5"] button,
+div[class*="st-key-v12_text_color_pick_2_2_5"] button,
+div[class*="st-key-v12_text_color_pick_3_0_5"] button,
+div[class*="st-key-v12_text_color_pick_3_1_5"] button,
+div[class*="st-key-v12_text_color_pick_3_2_5"] button,
+div[class*="st-key-v12_text_color_pick_4_0_5"] button,
+div[class*="st-key-v12_text_color_pick_4_1_5"] button,
+div[class*="st-key-v12_text_color_pick_4_2_5"] button,
+div[class*="st-key-v12_text_color_pick_5_0_5"] button,
+div[class*="st-key-v12_text_color_pick_5_1_5"] button,
+div[class*="st-key-v12_text_color_pick_5_2_5"] button,
+div[class*="st-key-v12_text_color_pick_6_0_5"] button,
+div[class*="st-key-v12_text_color_pick_6_1_5"] button,
+div[class*="st-key-v12_text_color_pick_6_2_5"] button,
+div[class*="st-key-v12_text_color_pick_7_0_5"] button,
+div[class*="st-key-v12_text_color_pick_7_1_5"] button,
+div[class*="st-key-v12_text_color_pick_7_2_5"] button{
+  background:#52C41A !important;
+  background-color:#52C41A !important;
+  color:transparent !important;
+  border:2px solid #52C41A !important;
+  box-shadow:0 0 0 1px rgba(128,128,128,.18) inset !important;
+  min-height:52px !important;
+  border-radius:11px !important;
+}
+
+div[class*="st-key-v12_text_color_pick_0_0_6"] button,
+div[class*="st-key-v12_text_color_pick_0_1_6"] button,
+div[class*="st-key-v12_text_color_pick_0_2_6"] button,
+div[class*="st-key-v12_text_color_pick_1_0_6"] button,
+div[class*="st-key-v12_text_color_pick_1_1_6"] button,
+div[class*="st-key-v12_text_color_pick_1_2_6"] button,
+div[class*="st-key-v12_text_color_pick_2_0_6"] button,
+div[class*="st-key-v12_text_color_pick_2_1_6"] button,
+div[class*="st-key-v12_text_color_pick_2_2_6"] button,
+div[class*="st-key-v12_text_color_pick_3_0_6"] button,
+div[class*="st-key-v12_text_color_pick_3_1_6"] button,
+div[class*="st-key-v12_text_color_pick_3_2_6"] button,
+div[class*="st-key-v12_text_color_pick_4_0_6"] button,
+div[class*="st-key-v12_text_color_pick_4_1_6"] button,
+div[class*="st-key-v12_text_color_pick_4_2_6"] button,
+div[class*="st-key-v12_text_color_pick_5_0_6"] button,
+div[class*="st-key-v12_text_color_pick_5_1_6"] button,
+div[class*="st-key-v12_text_color_pick_5_2_6"] button,
+div[class*="st-key-v12_text_color_pick_6_0_6"] button,
+div[class*="st-key-v12_text_color_pick_6_1_6"] button,
+div[class*="st-key-v12_text_color_pick_6_2_6"] button,
+div[class*="st-key-v12_text_color_pick_7_0_6"] button,
+div[class*="st-key-v12_text_color_pick_7_1_6"] button,
+div[class*="st-key-v12_text_color_pick_7_2_6"] button{
+  background:#1677FF !important;
+  background-color:#1677FF !important;
+  color:transparent !important;
+  border:2px solid #1677FF !important;
+  box-shadow:0 0 0 1px rgba(128,128,128,.18) inset !important;
+  min-height:52px !important;
+  border-radius:11px !important;
+}
+
+div[class*="st-key-v12_text_color_pick_0_0_7"] button,
+div[class*="st-key-v12_text_color_pick_0_1_7"] button,
+div[class*="st-key-v12_text_color_pick_0_2_7"] button,
+div[class*="st-key-v12_text_color_pick_1_0_7"] button,
+div[class*="st-key-v12_text_color_pick_1_1_7"] button,
+div[class*="st-key-v12_text_color_pick_1_2_7"] button,
+div[class*="st-key-v12_text_color_pick_2_0_7"] button,
+div[class*="st-key-v12_text_color_pick_2_1_7"] button,
+div[class*="st-key-v12_text_color_pick_2_2_7"] button,
+div[class*="st-key-v12_text_color_pick_3_0_7"] button,
+div[class*="st-key-v12_text_color_pick_3_1_7"] button,
+div[class*="st-key-v12_text_color_pick_3_2_7"] button,
+div[class*="st-key-v12_text_color_pick_4_0_7"] button,
+div[class*="st-key-v12_text_color_pick_4_1_7"] button,
+div[class*="st-key-v12_text_color_pick_4_2_7"] button,
+div[class*="st-key-v12_text_color_pick_5_0_7"] button,
+div[class*="st-key-v12_text_color_pick_5_1_7"] button,
+div[class*="st-key-v12_text_color_pick_5_2_7"] button,
+div[class*="st-key-v12_text_color_pick_6_0_7"] button,
+div[class*="st-key-v12_text_color_pick_6_1_7"] button,
+div[class*="st-key-v12_text_color_pick_6_2_7"] button,
+div[class*="st-key-v12_text_color_pick_7_0_7"] button,
+div[class*="st-key-v12_text_color_pick_7_1_7"] button,
+div[class*="st-key-v12_text_color_pick_7_2_7"] button{
+  background:#722ED1 !important;
+  background-color:#722ED1 !important;
+  color:transparent !important;
+  border:2px solid #722ED1 !important;
+  box-shadow:0 0 0 1px rgba(128,128,128,.18) inset !important;
+  min-height:52px !important;
+  border-radius:11px !important;
+}
+
+@media (max-width:640px){
+  div[class*="st-key-v12_text_color_pick_"] button{
+    min-height:48px !important;
+  }
+}
+
+/* V12 試作版｜目前選中的色卡：外框圈選 + 勾勾。
+   白色色卡使用深色勾勾與深色外圈，避免在白色背景上看不見。 */
+div[class*="st-key-v12_color_selected_"] button{
+  position:relative !important;
+  border:3px solid #FFFFFF !important;
+  box-shadow:0 0 0 3px rgba(255,255,255,.95), 0 3px 10px rgba(0,0,0,.22) !important;
+  transform:translateY(-1px) !important;
+}
+div[class*="st-key-v12_color_selected_"] button::after{
+  content:"✓" !important;
+  position:absolute !important;
+  left:50% !important;
+  top:50% !important;
+  width:24px !important;
+  height:24px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  transform:translate(-50%,-50%) !important;
+  border-radius:50% !important;
+  background:rgba(0,0,0,.24) !important;
+  color:#FFFFFF !important;
+  font-size:18px !important;
+  font-weight:900 !important;
+  line-height:1 !important;
+  pointer-events:none !important;
+}
+div[class*="st-key-v12_color_selected_white_"] button{
+  border:3px solid #111111 !important;
+  box-shadow:0 0 0 3px rgba(255,255,255,.98), 0 0 0 6px #111111, 0 3px 10px rgba(0,0,0,.22) !important;
+}
+div[class*="st-key-v12_color_selected_white_"] button::after{
+  color:#111111 !important;
+  background:rgba(255,255,255,.88) !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<a class="v12-back-to-top" href="#v12-page-top" title="快速回到頁面頂端" aria-label="快速回到頁面頂端">⬆️</a>', unsafe_allow_html=True)
+
+def v10_section(title, accent="#7c4dff"):
+    st.markdown(
+        f'<div class="v10-section" style="--accent:{accent}">'
+        f'<div class="v10-section-title">{title}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+def v10_subsection(title, accent="#4f8cff"):
+    st.markdown(
+        f'<div class="v10-subsection" style="--accent:{accent}">{title}</div>',
+        unsafe_allow_html=True,
+    )
+
+# ============================================================
+# Sticker Studio Next｜獨立預覽版
+#
+# 這個專案不讀取、不呼叫舊版 LINE Sticker Web 的 Supabase 或網站
+# OpenAI Key。正式會員／點數系統完成前，圖片生成僅允許使用者在
+# 當前 Streamlit Session 輸入自己的 OpenAI API Key。
+# ============================================================
+def _supabase_rpc(function_name):
+    """伺服器端呼叫 Supabase RPC。只使用 Streamlit Secrets。"""
+    supabase_url = str(st.secrets["SUPABASE_URL"]).rstrip("/")
+    service_role_key = str(st.secrets["SUPABASE_SERVICE_ROLE_KEY"])
+    endpoint = f"{supabase_url}/rest/v1/rpc/{function_name}"
+    req = urllib.request.Request(
+        endpoint,
+        data=b"{}",
+        method="POST",
+        headers={
+            "apikey": service_role_key,
+            "Authorization": f"Bearer {service_role_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=10) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if isinstance(payload, list):
+        return payload[0] if payload else {}
+    if isinstance(payload, dict):
+        return payload
+    return {}
+
+
+def _get_daily_ai_quota():
+    """從 Supabase RPC 讀取全站今日額度。失敗時回傳 None。"""
+    try:
+        row = _supabase_rpc("get_daily_ai_quota")
+        used = int(row.get("used_count", 0))
+        remaining = int(row.get("remaining", 10))
+        limit = int(row.get("quota_limit", 10))
+
+        limit = max(1, limit)
+        used = max(0, min(used, limit))
+        remaining = max(0, min(remaining, limit))
+
+        return {
+            "used_count": used,
+            "remaining": remaining,
+            "quota_limit": limit,
+        }
+
+    except Exception as exc:
+        # 公開版不要把 Supabase endpoint、secret 或完整錯誤內容顯示給訪客。
+        st.session_state["public_quota_error"] = type(exc).__name__
+        return None
+
+
+def _consume_daily_ai_quota():
+    """
+    真正取得 1 次全站 AI 額度。
+    成功回傳 quota dict；沒有額度或 RPC 失敗則回傳 None。
+    """
+    try:
+        row = _supabase_rpc("consume_daily_ai_quota")
+        used = int(row.get("used_count", 0))
+        remaining = int(row.get("remaining", 0))
+        limit = int(row.get("quota_limit", 10))
+
+        limit = max(1, limit)
+        used = max(0, min(used, limit))
+        remaining = max(0, min(remaining, limit))
+
+        # consume function 若沒有取得額度，通常會回傳 remaining=0。
+        # 這裡不自行修改資料庫，避免前端繞過 RPC 規則。
+        granted = bool(row.get("granted", False))
+
+        return {
+            "granted": granted,
+            "used_count": used,
+            "remaining": remaining,
+            "quota_limit": limit,
+        }
+
+    except Exception as exc:
+        st.session_state["public_quota_error"] = type(exc).__name__
+        return None
+
+
+def _refund_daily_ai_quota():
+    """OpenAI 生成失敗時，退回本次已取得的 1 次額度。"""
+    try:
+        row = _supabase_rpc("refund_daily_ai_quota")
+        used = int(row.get("used_count", 0))
+        remaining = int(row.get("remaining", 0))
+        limit = int(row.get("quota_limit", 10))
+
+        limit = max(1, limit)
+        used = max(0, min(used, limit))
+        remaining = max(0, min(remaining, limit))
+
+        return {
+            "used_count": used,
+            "remaining": remaining,
+            "quota_limit": limit,
+        }
+    except Exception as exc:
+        st.session_state["public_quota_error"] = type(exc).__name__
+        return None
+
+
+def _show_daily_ai_quota():
+    """顯示所有訪客共用的全站每日 AI 使用進度。"""
+    quota = _get_daily_ai_quota()
+
+    st.markdown(
+        """
+        <div style="
+            max-width:820px;
+            margin:10px auto 14px;
+            padding:16px 20px;
+            border:1px solid #3b4658;
+            border-radius:14px;
+            background:linear-gradient(135deg,#151b26,#202938);
+            text-align:center;
+        ">
+            <div style="font-size:22px;font-weight:800;color:#ffffff;">
+                🤖 今日 AI 使用量
+            </div>
+            <div style="font-size:14px;color:#b9c4d4;margin-top:4px;">
+                全站共用每日額度
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if quota is None:
+        st.warning(
+            "⚠️ 目前無法讀取全站 AI 使用量。"
+            "請確認 Supabase Secrets 已設定正確。"
+        )
+        return None
+
+    used = quota["used_count"]
+    remaining = quota["remaining"]
+    limit = quota["quota_limit"]
+    ratio = used / limit if limit else 0
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("今日已使用", f"{used} 次")
+    c2.metric("今日剩餘", f"{remaining} 次")
+    c3.metric("每日上限", f"{limit} 次")
+
+    st.progress(ratio)
+
+    if remaining > 0:
+        st.success(f"🟢 全站今日剩餘 **{remaining} 次** AI 生成額度")
+    else:
+        st.error("🔴 全站今日 AI 額度已用完，請明天再試。")
+
+    return quota
+
+
+COMMON_PHRASES = [
+    "早安","晚安","午安","嗨","哈囉","加油","辛苦了","謝謝",
+    "感謝","不客氣","沒問題","OK","收到","了解","好喔","好的",
+    "太好了","讚","超讚","棒棒的","恭喜","祝福你","一起加油",
+    "慢慢來","等等我","馬上來","我來了","出發","回來了","先這樣",
+    "掰掰","再見","哈哈哈","笑死","真的嗎","真的假的","好開心",
+    "好幸福","太可愛了","我愛你","想你","抱抱","親親","不要啦",
+    "不要鬧","傻眼","無言","生氣","氣死我了","好累","累了",
+    "忙死了","休息一下","我不行了","好餓","吃飯了嗎","等等再說",
+    "拜託","求你了","可以嗎","好嗎","當然可以","當然好","隨便你",
+    "沒事","沒關係","別擔心","放心","我懂","我知道","我明白",
+    "太扯了","救命","完蛋了","糟糕","慘了","好可怕","不要怕","冷靜"
+]
+
+# ============================================================
+# V8.6.4 資料模組移植：語詞／風格／貼圖字型／125 帶圖字型
+# 資料內容沿用 V8，不改名稱與排列順序。
+# ============================================================
+V8_STYLES = ['Q版黏土3D', 'Q版收藏公仔', '3D收藏公仔', '軟陶公仔', '木雕玩具', '微縮場景', '療癒系Cute風', '日系可愛插畫', '韓系簡約插畫', '手繪水彩', '色鉛筆手繪', '粉彩蠟筆', '扁平插畫', '貼紙插畫風', '復古漫畫', '美式漫畫', '日系漫畫', '像素藝術', '毛氈玩偶', '羊毛氈手作', '紙雕立體', '紙黏土手作', '奶油霧面3D', '玻璃質感3D', '玩具盒收藏風', '盲盒公仔風', '電影級3D', '黏土定格動畫風', '低多邊形Low Poly', 'Dreamy夢幻療癒', '童話繪本風', '森林療癒風', '極簡精品風', '復古80年代', '復古90年代', '街頭潮流插畫', 'Emoji表情貼風', 'LINE訊息貼圖風', '透明背景貼圖風', '⭐ 自訂1', '⭐ 自訂2', '⭐ 自訂3', '⭐ 自訂4', '⭐ 自訂5']
+V8_DEFAULT_CONTENT = ['早安', '晚安', '謝謝', '收到', 'OK', '加油', '辛苦了', '太棒了']
+V8_RANDOM_POOLS = {'日常對話': ['你好', '哈囉', 'Hello', 'Hi', '安安', '嗨嗨', '請多多指教', '是我', '我來了', '來打聲招呼', '很高興認識你', '好久不見', '我來了', '想我了嗎', '在忙嗎？', '掰掰', 'Bye', '再聊', '再會', '再見', '晚點聊'], '生活應用': ['OK', '好的', '沒問題', '嗯嗯', '可以呀', '我可以', '收到', '了解', '知道了', '加油', '你可以的', '我相信你', '別緊張', '給你加加油', '生日快樂'], '時間問候': ['早安', '早呀', '早上好', '咕摸寧', '午安', '下午好', '晚安', '咕奈', '好好睡', '一覺好眠'], '溫暖關愛': ['愛你', '給你愛心', '給你一個小心心', '抱', '別哭', '抱一個', '給你大大的擁抱', '別擔心', '別想太多'], '歡樂笑聲': ['哈哈哈', '好好笑', '也太好笑', '笑死', '笑爛', '廢到笑', '呵呵', '嘻嘻', '噗', '開心', '耶耶耶', '耶伊', 'YEAH', '呀比', '好開心', '撒花', '讚', '棒', '100分', '優秀', '厲害', '好可愛'], '表現難過': ['哭哭', '嗚嗚', '傷心', '桑心', '難過', '難受', '崩潰', '今天心情不美麗'], '祝賀對方': ['恭喜', '可喜可賀', '以你為榮', '替你開心', '給你第一名', '你真的hen棒', '這感覺太美妙'], '帶點懷疑': ['真的嗎', '真的假的', '真假', '是喔？', '屁啦', '你騙人', '我不相信'], '尷尬反應': ['尷尬了', '好尷尬', '誤會大了', '希望沒事'], '驚訝震驚': ['哇哇哇', '哇嗚', '哇塞', '哇靠', '到底', '這…', '驚', 'OMG', '天啊', '驚訝', '好Shock', '我的天'], '無言傻眼': ['瞎', '扯', '蛤', '呃', '呿', '…', '無言', '傻眼', '暈倒', '我暈'], '誇張荒謬': ['誇張', '離譜', '有事嗎', '很有事', '很有病', '太扯了', '沒救了', '忘了吃藥', '比扯鈴還扯'], '調皮搗蛋': ['幹嘛', '幹什麼', '想幹嘛', '你怪怪的'], '衷心感謝': ['謝謝', '感謝你', '大感激', '甘溫', '乾蝦', '辛苦了', '有你真好', '好貼心'], '誠摯道歉': ['抱歉', '對不起', 'Sorry', '拍謝', '不好意思'], '不必客氣': ['不客氣', '小事啦', '一塊小蛋糕', '沒關係', '沒事的', '應該的', '別介意', 'No mind', '別放心上'], '時間行程': ['等我一下', '等等我', '等你', '我等你', '晚點見', '明天見', 'See you', '路上小心', '一路順風'], '交通出門': ['在路上了', '我快到了', 'on the way', '我出門了', '出發', '剛出發', '已離開', '走囉'], '地點詢問': ['約哪兒', '在哪', '到哪裡了'], '忙碌相關': ['好忙', '忙翻', '忙到爆', '有話快說!'], '用餐相關': ['一起吃飯吧', '吃飯', '開飯', '開動', '開吃', '好好吃', '好美味', '吃飽沒'], '休息睡覺': ['好睏', '好想睡', '我先睡了', '想睡覺', '小睡片刻', '補眠中', '補眠去'], '天氣感受': ['好熱', '好冷', '快中暑了', '瑟瑟發抖', '秋風氣爽'], '注意提醒': ['注意', '緊盯', '嗶嗶嗶', '提高警覺', '給我小心點'], '意見表達': ['YES', '沒錯', '就是這樣', '同意', 'NO', '不行啦', '不可以', '我拒絕', '放過我', '母湯'], '參與話題': ['加1', '+1', '加我一個', '一起一起', '我也要'], '表態行動': ['我會加油的', '交給我吧', '使命必達', '為你效勞'], '約定承諾': ['打勾勾', '一言為定', '成交', '說好囉', '就這麼說定', '+1+1'], '思考回應': ['這樣啊', '我想想', '晚點回', '晚點再說', '我考慮一下'], '請求拜託': ['拜託拜託', '麻煩你了', '求求你', '考慮考慮麻!'], '正向情緒': ['打起精神來', '一切都會越來越好', '一切都是最好的安排', '好感動', '好感人', '活在當下', '珍惜當下', '期待', '充滿希望', '羨慕', '好幸福', '小確幸', '真幸運'], '負面情緒': ['好累', '心累', '累歪', '已攤', '心好累', '好無奈', '別逼我', '讓我靜靜', '懷疑人生', '為什麼要逼我', '好衰', '衰衰的', '有夠衰', '好倒霉哦', '惡人退散', '也太衰了吧'], '緊張憤怒': ['生氣', '氣死', '森77', '超級不爽', '好可怕', '嚇到我', '嚇我一跳'], '逃避現實': ['裝死', '逃避', '不想面對', '不想努力', '來啊', '我就爛', '誰怕誰', '來互相傷害啊'], '職場學習': ['開會中', '忙碌中', '加班中', '信回不完', '事情做不完', '耍廢中', '休假中', '別吵我', '今天放假', '要正向', '馬上處理', '考試加油', '一起努力', '想下班', '想放假', '不想上班', '週末快樂', '放假愉快', '下班啦', '可以回家了', '現在是星期五晚上', '來杯咖啡', '打起精神吧'], '幽默趣味': ['穴穴尼', 'ㄎㄎ', 'ㄏㄏ', '喵', '哼', '啾咪', '就醬吧', '美麥', '好開勳', '轉圈圈', '棒棒der', '開玩笑的啦', '認真就輸了', '登愣', '蝦毀', '突破盲點', '我的老天鵝', '聽你在唬爛', '要不要聽聽你在說什麼', '腦波弱', '當仙女好累', '靜靜的看著你', '沒看過仙女嗎？', '給你尷尬又不失禮的微笑', '不要問 很可怕'], '戀愛表達': ['我愛你', '最愛你了', '喜歡你', '妳是最可愛的', '有妳好幸福', '啾', '親親', '抱抱', '吻你', '親一個', '好想抱抱你', '想你', '想念你', '好想你', '期待重逢', '期待見面', '期待約會', '陪我', '來接我', '一起吃飯吧']}
+V8_TEXT_EFFECT_CATALOG = {1: '胖胖貼紙字', 2: '棉花糖圓字', 3: '果凍QQ字', 4: '奶油餅乾字', 5: '糖霜甜點字', 6: '蠟筆童趣字', 7: '軟萌手寫字', 8: '日系手帳圓字', 9: '韓系軟萌字', 10: '漫畫衝擊字', 11: '對話泡泡字', 12: '貼紙白邊字', 13: '泡棉玩具字', 14: '橡膠軟墊字', 15: '樹脂亮面字', 16: '壓克力透明字', 17: '珐瑯徽章字', 18: '刺繡布章字', 19: '羊毛氈字', 20: '皮革壓印字', 21: '紙雕層疊字', 22: '摺紙立體字', 23: '陶瓷裂釉字', 24: '玉石浮雕字', 25: '大理石雕字', 26: '銀鋼浮雕字', 27: '黃金立體字', 28: '青銅復古字', 29: '冰晶透明字', 30: '水晶玻璃字', 31: '霓虹發光字', 32: '香港霓虹字', 33: '燈泡招牌字', 34: '木雕質感字', 35: '石刻厚重字', 36: '毛筆書法字', 37: '印章篆刻字', 38: '剪紙藝術字', 39: '復古海報字', 40: '打字機復古字', 41: '塗鴉潮流字', 42: '街頭塗鴉字', 43: '漫畫爆炸字', 44: '熱血漫畫字', 45: '手繪塗鴉字', 46: '極簡手寫字', 47: '浪漫手寫字', 48: '粉筆黑板字', 49: '神聖光輝字', 50: '暗黑哥德字', 51: '黏土手作字', 52: '拼布縫線字', 53: '珍珠貝殼字', 54: '羽毛飄逸字', 55: '竹編工藝字', 56: '稻草編織字', 57: '苔蘚森林字', 58: '藤蔓花園字', 59: '花瓣拼貼字', 60: '水彩暈染字', 61: '墨彩渲染字', 62: '彩鉛塗層字', 63: '蠟染布紋字', 64: '馬賽克磚字', 65: '植絨絨面字', 66: '蒸汽齒輪字', 67: '像素電玩字', 68: '八位元方塊字', 69: '故障數位字', 70: '全息雷射字', 71: '雲朵蓬鬆字', 72: '海鹽砂粒字', 73: '珊瑚海洋字', 74: '星砂夢幻字', 75: '宇宙星雲字', 76: '巧克力糖漿字', 77: '爆米花零食字', 78: '棉麻編織字', 79: '牛仔布貼字', 80: '蕾絲花邊字', 81: '鈕扣拼貼字', 82: '鉤針編織字', 83: '彩窗教堂字', 84: '鐵鐵鉚釘字', 85: '鐵鏽工業字', 86: '電路晶片字', 87: '液晶螢幕字', 88: '雷達掃描字', 89: '橡皮印刷字', 90: '油畫筆觸字', 91: '膠卷電影字', 92: '報紙剪貼字', 93: '牛皮紙包裝字', 94: '露珠葉脈字', 95: '螢火森林字', 96: '星座占卜字', 97: '草本藥鋪字', 98: '珍奶Q彈字', 99: '壽司食玩字', 100: '甜甜圈糖針字', 101: '水墨毛筆字', 102: '行書連筆字', 103: '潑墨寫意字', 104: '篆刻印章字', 105: '鋼筆流線字', 106: '打字機復古字', 107: '粉筆手繪字', 108: '彩虹手繪字', 109: '塗鴉手繪字', 110: '立體貼紙字', 111: '氣球立體字', 112: '布料拼貼字', 113: '草地綠植字', 114: '沙灘沙粒字', 115: '雲朵棉花字', 116: '寒霜冰裂字', 117: '熔岩裂石字', 118: '鏽蝕金屬字', 119: '乾裂泥土字', 120: '鑽石切割字', 121: '雷射幻彩字', 122: '液態金屬字', 123: '霓虹燈管字', 124: '復古燈泡字', 125: '像素點陣字'}
+V8_TEXT_STYLE_OPTIONS = ["高級立體金字","彩色漫畫爆炸","柔和立體氣泡","霓虹發光字","手寫貼紙字","清爽白底字"]
+V8_TEXT_EFFECT_VALUES = [f"{i:03d}｜{V8_TEXT_EFFECT_CATALOG[i]}" for i in range(1,126)]
+V8_FONT_PREVIEW_DIR = Path(__file__).with_name("font_reference") / "previews"
+
+POPULAR_STYLES = [
+    "↓ 請選擇風格","Q版黏土3D","Q版收藏公仔","3D收藏公仔",
+    "療癒系Cute Wstyle","大頭小身","LINE貼圖風","柔和光影",
+    "手作玩偶風","可愛漫畫風","立體卡通風",
+]
+
+CHARACTER_OPTIONS = [
+    "五官比例保留","服飾配件保留","人物辨識度保留",
+    "Q版收藏公仔","療癒系 Cute Wstyle","大頭小身",
+    "LINE貼圖風","柔和光影",
+]
+
+
+# ============================================================
+# V12｜STEP 01A①
+# Project 基礎資料骨架
+#
+# 本階段只建立「目前作品」的 Session 架構與 UI 導航。
+# 尚未寫入 Supabase / 伺服器 / 永久資料庫。
+# API Key 絕不納入 Project。
+# ============================================================
+from datetime import datetime, timezone, timedelta
+from uuid import uuid4
+
+_V12_TAIPEI_TZ = timezone(timedelta(hours=8))
+
+def _v12_format_display_time(value):
+    """將作品時間轉成使用者容易閱讀的台灣時間格式。"""
+    raw = str(value or "").strip()
+    if not raw:
+        return "未記錄"
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(_V12_TAIPEI_TZ)
+        return dt.strftime("%Y/%m/%d %H:%M")
+    except Exception:
+        return raw
+
+
+def _v12_now_iso():
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+def _v12_new_project_metadata():
+    """V12｜01B①：建立目前作品的標準化 metadata。
+
+    保留既有 flat keys，確保目前 UI / 打包流程完全相容；
+    同時新增 canonical nested schema，供後續搜尋、篩選、排序與持久化使用。
+    """
+    now = _v12_now_iso()
+    return {
+        # ---- Backward-compatible flat fields (existing UI reads these) ----
+        "project_id": str(uuid4()),
+        "project_name": "",
+        "style_name": "",
+        "font_name": "",
+        "text_style": "",
+        "created_at": now,
+        "updated_at": now,
+        "generation_method": "",
+        "transparent_background": False,
+        "sticker_texts": [""] * 8,
+        "sticker_color_segments": [],
+        "source_image": None,
+        "generated_grid": None,
+        "stickers": [],
+        "main_image": None,
+        "tab_image": None,
+
+        # ---- V12｜STEP 01B① canonical metadata ----
+        "schema_version": "v12.project.1",
+        "identity": {
+            "project_id": "",
+            "project_name": "",
+        },
+        "timestamps": {
+            "created_at": now,
+            "updated_at": now,
+        },
+        "creative_settings": {
+            "style": {"name": ""},
+            "font": {"name": ""},
+            "text_style": "",
+            "generation_method": "",
+            "transparent_background": False,
+            "sticker_texts": [""] * 8,
+            "sticker_color_segments": [],
+        },
+        "package_settings": {
+            "main_no": "",
+            "tab_no": "",
+            "sticker_count": 8,
+        },
+    }
+
+
+def _v12_normalize_project_metadata(metadata):
+    """Return canonical metadata while preserving all legacy flat fields.
+
+    This is intentionally non-destructive: old history records can be opened
+    without migration, while new records always receive the standard schema.
+    """
+    base = _v12_new_project_metadata()
+    data = dict(metadata or {})
+
+    # Identity / timestamps: canonical values may be supplied by newer records,
+    # otherwise fall back to the existing flat structure.
+    identity = data.get("identity") if isinstance(data.get("identity"), dict) else {}
+    timestamps = data.get("timestamps") if isinstance(data.get("timestamps"), dict) else {}
+    creative = data.get("creative_settings") if isinstance(data.get("creative_settings"), dict) else {}
+    package = data.get("package_settings") if isinstance(data.get("package_settings"), dict) else {}
+
+    style = creative.get("style") if isinstance(creative.get("style"), dict) else {}
+    font = creative.get("font") if isinstance(creative.get("font"), dict) else {}
+
+    project_id = str(data.get("project_id") or identity.get("project_id") or base["project_id"])
+    project_name = _v12_normalize_project_name(
+        data.get("project_name", identity.get("project_name", ""))
+    )
+    created_at = str(data.get("created_at") or timestamps.get("created_at") or base["created_at"])
+    updated_at = str(data.get("updated_at") or timestamps.get("updated_at") or created_at)
+
+    sticker_texts = data.get("sticker_texts", creative.get("sticker_texts", [""] * 8))
+    if not isinstance(sticker_texts, list):
+        sticker_texts = list(sticker_texts or [])
+    sticker_texts = [str(x) for x in sticker_texts[:8]]
+    sticker_texts += [""] * (8 - len(sticker_texts))
+
+    sticker_color_segments = data.get(
+        "sticker_color_segments",
+        creative.get("sticker_color_segments", [])
+    )
+    if not isinstance(sticker_color_segments, list):
+        sticker_color_segments = []
+    normalized_color_segments = []
+    for item in sticker_color_segments[:24]:
+        if not isinstance(item, dict):
+            continue
+        try:
+            si = int(item.get("sticker_index", 0))
+            ji = int(item.get("segment_index", 0))
+        except Exception:
+            continue
+        part = str(item.get("text", "") or "").strip()
+        color_name = str(item.get("color_name", "") or "").strip()
+        hex_code = str(item.get("hex", "") or "").strip()
+        if 1 <= si <= 8 and 1 <= ji <= 3 and part and color_name and hex_code:
+            normalized_color_segments.append({
+                "sticker_index": si,
+                "segment_index": ji,
+                "text": part,
+                "color_name": color_name,
+                "hex": hex_code,
+            })
+
+    normalized = dict(data)
+    normalized.update({
+        "project_id": project_id,
+        "project_name": project_name,
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "style_name": str(data.get("style_name", style.get("name", "")) or ""),
+        "font_name": str(data.get("font_name", font.get("name", "")) or ""),
+        "text_style": str(data.get("text_style", creative.get("text_style", "")) or ""),
+        "generation_method": str(data.get("generation_method", creative.get("generation_method", "")) or ""),
+        "transparent_background": bool(data.get("transparent_background", creative.get("transparent_background", False))),
+        "sticker_texts": sticker_texts,
+        "sticker_color_segments": normalized_color_segments,
+        "schema_version": "v12.project.1",
+    })
+
+    normalized["identity"] = {
+        "project_id": normalized["project_id"],
+        "project_name": normalized["project_name"],
+    }
+    normalized["timestamps"] = {
+        "created_at": normalized["created_at"],
+        "updated_at": normalized["updated_at"],
+    }
+    normalized["creative_settings"] = {
+        "style": {"name": normalized["style_name"]},
+        "font": {"name": normalized["font_name"]},
+        "text_style": normalized["text_style"],
+        "generation_method": normalized["generation_method"],
+        "transparent_background": normalized["transparent_background"],
+        "sticker_texts": list(normalized["sticker_texts"]),
+        "sticker_color_segments": list(normalized["sticker_color_segments"]),
+    }
+    normalized["package_settings"] = {
+        "main_no": str(data.get("main_no", package.get("main_no", "")) or ""),
+        "tab_no": str(data.get("tab_no", package.get("tab_no", "")) or ""),
+        "sticker_count": int(package.get("sticker_count", 8) or 8),
+    }
+    return normalized
+
+
+st.session_state.setdefault("v12_current_project", _v12_new_project_metadata())
+st.session_state.setdefault("v12_projects_local_index", [])
+
+# ============================================================
+# V12｜STEP 01A③｜作品暫存與歷史紀錄
+# V12｜STEP 01B①｜資料結構標準化
+# ============================================================
+V12_HISTORY_LIMIT = 12
+
+def _v12_png_bytes(image):
+    buf = BytesIO()
+    image.convert("RGBA").save(buf, "PNG", optimize=True)
+    return buf.getvalue()
+
+
+def _v12_build_assets_manifest(grid_bytes=None, main_bytes=None, tab_bytes=None,
+                               sticker_bytes=None, zip_bytes=None):
+    """Store lightweight asset descriptors only; binary data stays in legacy fields."""
+    sticker_bytes = dict(sticker_bytes or {})
+    return {
+        "grid": {"present": bool(grid_bytes), "bytes": len(grid_bytes or b"")},
+        "stickers": {
+            "count": len(sticker_bytes),
+            "numbers": sorted(str(k) for k in sticker_bytes.keys()),
+            "total_bytes": sum(len(v or b"") for v in sticker_bytes.values()),
+        },
+        "main": {"present": bool(main_bytes), "bytes": len(main_bytes or b"")},
+        "tab": {"present": bool(tab_bytes), "bytes": len(tab_bytes or b"")},
+        "zip": {"present": bool(zip_bytes), "bytes": len(zip_bytes or b"")},
+    }
+
+
+def _v12_history_record(metadata, zip_bytes, grid_bytes=None,
+                        main_bytes=None, tab_bytes=None,
+                        sticker_bytes=None, main_no=None, tab_no=None):
+    metadata = _v12_normalize_project_metadata(metadata)
+    project_id = str(metadata.get("project_id") or uuid4())
+    now = _v12_now_iso()
+
+    metadata["project_id"] = project_id
+    metadata["updated_at"] = now
+    metadata["package_settings"] = {
+        "main_no": str(main_no or metadata.get("package_settings", {}).get("main_no", "")),
+        "tab_no": str(tab_no or metadata.get("package_settings", {}).get("tab_no", "")),
+        "sticker_count": 8,
+    }
+    metadata = _v12_normalize_project_metadata(metadata)
+
+    record = dict(metadata)
+    record.update({
+        "main_no": metadata["package_settings"]["main_no"],
+        "tab_no": metadata["package_settings"]["tab_no"],
+        "zip_bytes": bytes(zip_bytes or b""),
+        "grid_bytes": bytes(grid_bytes or b""),
+        "main_bytes": bytes(main_bytes or b""),
+        "tab_bytes": bytes(tab_bytes or b""),
+        "sticker_bytes": dict(sticker_bytes or {}),
+    })
+    record["assets_manifest"] = _v12_build_assets_manifest(
+        grid_bytes=record["grid_bytes"],
+        main_bytes=record["main_bytes"],
+        tab_bytes=record["tab_bytes"],
+        sticker_bytes=record["sticker_bytes"],
+        zip_bytes=record["zip_bytes"],
+    )
+
+    projects = list(st.session_state.get("v12_projects_local_index", []))
+    projects = [p for p in projects if str(p.get("project_id")) != project_id]
+    projects.insert(0, record)
+    st.session_state["v12_projects_local_index"] = projects[:V12_HISTORY_LIMIT]
+
+    project = _v12_current_project()
+    project.update(_v12_normalize_project_metadata(metadata))
+    st.session_state["v12_current_project"] = project
+    return record
+
+
+def _v12_load_history_record(record):
+    record = dict(record or {})
+    metadata = _v12_normalize_project_metadata(record)
+
+    st.session_state["v12_current_project"] = metadata
+    st.session_state["v12_project_name_input"] = metadata.get("project_name", "")
+    st.session_state["generated_4x2_bytes"] = record.get("grid_bytes") or None
+
+    package = metadata.get("package_settings", {})
+    st.session_state["v12_loaded_history_main_no"] = str(
+        record.get("main_no") or package.get("main_no") or ""
+    )
+    st.session_state["v12_loaded_history_tab_no"] = str(
+        record.get("tab_no") or package.get("tab_no") or ""
+    )
+
+    texts = list(metadata.get("sticker_texts") or [""] * 8)
+    for i in range(8):
+        value = str(texts[i] if i < len(texts) else "")
+        st.session_state[f"sticker_text_{i}"] = value
+        st.session_state[f"v12_sticker_text_widget_{i}"] = value
+
+    _v12_clear_text_color_segments()
+    for item in metadata.get("sticker_color_segments", []) or []:
+        try:
+            si = int(item.get("sticker_index", 0)) - 1
+            ji = int(item.get("segment_index", 0)) - 1
+        except Exception:
+            continue
+        if 0 <= si < 8 and 0 <= ji < 3:
+            segs = _v12_get_color_segments(si)
+            segs[ji] = {
+                "text": str(item.get("text", "") or ""),
+                "color_name": str(item.get("color_name", "") or ""),
+                "hex": str(item.get("hex", "") or ""),
+            }
+            st.session_state[f"v12_text_color_count_{si}"] = max(
+                int(st.session_state.get(f"v12_text_color_count_{si}", 0)),
+                ji + 1
+            )
+            st.session_state[f"v12_text_color_enabled_{si}"] = True
+            st.session_state[f"v12_text_color_enabled_widget_{si}"] = True
+
+
+def _v12_delete_history_record(project_id):
+    projects = list(st.session_state.get("v12_projects_local_index", []))
+    st.session_state["v12_projects_local_index"] = [
+        p for p in projects if str(p.get("project_id")) != str(project_id)
+    ]
+
+
+def _v12_current_project():
+    project = st.session_state.get("v12_current_project")
+    if not isinstance(project, dict):
+        project = _v12_new_project_metadata()
+    project = _v12_normalize_project_metadata(project)
+    st.session_state["v12_current_project"] = project
+    return project
+
+def _v12_default_project_name():
+    return datetime.now().strftime("LINE貼圖_%Y%m%d_%H%M")
+
+def _v12_normalize_project_name(value):
+    value = str(value or "").strip()
+    return value[:80] if value else ""
+
+def _v12_safe_download_stem(value):
+    value = _v12_normalize_project_name(value) or _v12_default_project_name()
+    value = re.sub(r'[\\/:*?"<>|]+', "_", value)
+    value = re.sub(r"\s+", " ", value).strip(" ._")
+    return value[:80] or _v12_default_project_name()
+
+def _v12_project_name_on_change():
+    project = _v12_current_project()
+    project["project_name"] = _v12_normalize_project_name(
+        st.session_state.get("v12_project_name_input", "")
+    )
+    project["updated_at"] = _v12_now_iso()
+    st.session_state["v12_current_project"] = project
+
+def _v12_project_snapshot():
+    """取得目前作品的可保存 metadata 快照；絕不包含 API Key。"""
+    project = dict(_v12_current_project())
+    project["updated_at"] = _v12_now_iso()
+    project["project_name"] = _v12_normalize_project_name(
+        st.session_state.get("v12_project_name_input", project.get("project_name", ""))
+    )
+    project["sticker_texts"] = [
+        str(st.session_state.get(f"sticker_text_{i}", ""))
+        for i in range(8)
+    ]
+    project["sticker_color_segments"] = _v12_valid_color_segments(
+        project["sticker_texts"]
+    )
+    project["transparent_background"] = bool(
+        st.session_state.get("transparent_png_option", False)
+    )
+    # V12｜STEP 01A③ FIX：
+    # 若使用「⭐ 自定義風格」，作品庫不要只顯示泛稱，
+    # 而是記錄使用者實際選取的「已儲存風格名稱」。
+    _style_mode = str(
+        st.session_state.get("v10_style_mode", project.get("style_name", ""))
+    )
+    if _style_mode == "⭐ 自定義風格":
+        _saved_style_choice = str(
+            st.session_state.get(
+                "v12_saved_custom_style_choice",
+                st.session_state.get("v10_saved_custom_style_choice", ""),
+            )
+        ).strip()
+
+        if _saved_style_choice and _saved_style_choice != "✏️ 尚未選擇／新增":
+            # 下拉選單格式為「01｜暖芽測試」，
+            # 作品紀錄只保存真正的自定義風格名稱「暖芽測試」。
+            if "｜" in _saved_style_choice:
+                project["style_name"] = _saved_style_choice.split("｜", 1)[1].strip()
+            else:
+                project["style_name"] = _saved_style_choice
+        else:
+            project["style_name"] = _style_mode
+    else:
+        project["style_name"] = _style_mode
+
+    project["text_style"] = str(
+        st.session_state.get("v8_text_style", project.get("text_style", ""))
+    )
+    selected_font = st.session_state.get("v8_selected_font")
+    if selected_font:
+        try:
+            project["font_name"] = (
+                f"{int(selected_font):03d}｜"
+                f"{V8_TEXT_EFFECT_CATALOG[int(selected_font)]}"
+            )
+        except Exception:
+            project["font_name"] = str(selected_font)
+    else:
+        project["font_name"] = ""
+
+    # 僅記錄生成方式，不記錄 API Key。
+    api_mode = str(st.session_state.get("public_api_mode", ""))
+    if "自己的" in api_mode:
+        project["generation_method"] = "own_api"
+    elif "免費" in api_mode or "網站" in api_mode:
+        project["generation_method"] = "website_api"
+
+    st.session_state["v12_current_project"] = project
+    return dict(project)
+
+
+for i in range(8):
+    st.session_state.setdefault(f"sticker_text_{i}", "")
+    st.session_state.setdefault(
+        f"v12_sticker_text_widget_{i}",
+        st.session_state.get(f"sticker_text_{i}", ""),
+    )
+st.session_state.setdefault("uploaded_image_bytes", None)
+st.session_state.setdefault("generated_4x2_bytes", None)
+st.session_state.setdefault("last_prompt", "")
+st.session_state.setdefault("crop_boxes", None)
+st.session_state.setdefault("v12_ai_copy_candidates", [])
+st.session_state.setdefault("v12_ai_copy_topic", "")
+st.session_state.setdefault("v12_ai_copy_tone", "😂 搞笑自然")
+st.session_state.setdefault("v12_ai_copy_selected", [])
+
+# ============================================================
+# V12 試作版｜局部文字上色
+# 每格最多 3 段：使用者自行輸入文字片段，再用色卡點選顏色。
+# ============================================================
+V12_TEXT_COLOR_PALETTE = [
+    ("白色", "#FFFFFF", "⬜"),
+    ("黑色", "#111111", "⬛"),
+    ("紅色", "#F5222D", "🟥"),
+    ("橘色", "#FA8C16", "🟧"),
+    ("黃色", "#FADB14", "🟨"),
+    ("綠色", "#52C41A", "🟩"),
+    ("藍色", "#1677FF", "🟦"),
+    ("紫色", "#722ED1", "🟪"),
+]
+
+def _v12_default_color_segments():
+    return [{"text": "", "color_name": "", "hex": ""} for _ in range(3)]
+
+def _v12_sync_text_color_enabled(i):
+    """把局部文字上色 checkbox 的 widget 狀態同步到獨立 canonical state。
+    使用獨立 widget key，避免後續 rerun / 新增片段時直接改動已建立的 checkbox。
+    """
+    widget_key = f"v12_text_color_enabled_widget_{i}"
+    st.session_state[f"v12_text_color_enabled_{i}"] = bool(
+        st.session_state.get(widget_key, False)
+    )
+
+def _v12_init_color_segment_state():
+    for i in range(8):
+        canonical_key = f"v12_text_color_enabled_{i}"
+        widget_key = f"v12_text_color_enabled_widget_{i}"
+        st.session_state.setdefault(canonical_key, False)
+        # checkbox 使用獨立 widget key；只在第一次建立時從 canonical state 帶入。
+        st.session_state.setdefault(widget_key, bool(st.session_state.get(canonical_key, False)))
+        st.session_state.setdefault(f"v12_text_color_count_{i}", 0)
+        segs = st.session_state.get(f"v12_text_color_segments_{i}")
+        if not isinstance(segs, list):
+            segs = _v12_default_color_segments()
+        normalized = _v12_default_color_segments()
+        for j in range(min(3, len(segs))):
+            item = segs[j] if isinstance(segs[j], dict) else {}
+            normalized[j] = {
+                "text": str(item.get("text", "") or ""),
+                "color_name": str(item.get("color_name", "") or ""),
+                "hex": str(item.get("hex", "") or ""),
+            }
+        st.session_state[f"v12_text_color_segments_{i}"] = normalized
+
+def _v12_get_color_segments(i):
+    segs = st.session_state.get(f"v12_text_color_segments_{i}")
+    if not isinstance(segs, list):
+        segs = _v12_default_color_segments()
+        st.session_state[f"v12_text_color_segments_{i}"] = segs
+    return segs
+
+def _v12_set_segment_color(i, j, color_name, hex_code):
+    segs = _v12_get_color_segments(i)
+    if 0 <= j < 3:
+        segs[j]["color_name"] = str(color_name)
+        segs[j]["hex"] = str(hex_code)
+
+def _v12_valid_color_segments(texts):
+    out = []
+    for i in range(8):
+        source = str(texts[i] or "") if i < len(texts) else ""
+        if not source.strip():
+            continue
+        for j, seg in enumerate(_v12_get_color_segments(i)):
+            part = str(seg.get("text", "") or "").strip()
+            color_name = str(seg.get("color_name", "") or "").strip()
+            hex_code = str(seg.get("hex", "") or "").strip()
+            if part and color_name and hex_code and part in source:
+                out.append({
+                    "sticker_index": i + 1,
+                    "segment_index": j + 1,
+                    "text": part,
+                    "color_name": color_name,
+                    "hex": hex_code,
+                })
+    return out
+
+def _v12_clear_text_color_segments():
+    for i in range(8):
+        st.session_state[f"v12_text_color_enabled_{i}"] = False
+        st.session_state[f"v12_text_color_enabled_widget_{i}"] = False
+        st.session_state[f"v12_text_color_count_{i}"] = 0
+        st.session_state[f"v12_text_color_segments_{i}"] = _v12_default_color_segments()
+        for j in range(3):
+            st.session_state.pop(f"v12_text_color_segment_{i}_{j}", None)
+
+_v12_init_color_segment_state()
+
+def _v12_sync_sticker_text(i):
+    """把文字輸入 widget 的值同步到不受條件式 rerun 影響的 canonical state。"""
+    key = f"v12_sticker_text_widget_{i}"
+    st.session_state[f"sticker_text_{i}"] = str(st.session_state.get(key, "") or "")
+
+def get_texts():
+    return [st.session_state.get(f"sticker_text_{i}", "") for i in range(8)]
+
+def set_texts(values):
+    values = list(values)[:8] + [""] * 8
+    for i in range(8):
+        value = str(values[i])
+        st.session_state[f"sticker_text_{i}"] = value
+        # 同步到實際輸入 widget，避免後續任何 rerun 讓 01～08 文字回復成空白。
+        st.session_state[f"v12_sticker_text_widget_{i}"] = value
+    # 批次換字後清除舊的局部上色，避免顏色片段與新文字不一致。
+    _v12_clear_text_color_segments()
+
+def base_boxes(w, h):
+    boxes = []
+    for i in range(8):
+        c, r = i % 4, i // 4
+        x1 = round(c * w / 4)
+        x2 = round((c + 1) * w / 4)
+        y1 = round(r * h / 2)
+        y2 = round((r + 1) * h / 2)
+        boxes.append([x1, y1, x2, y2])
+    return boxes
+
+# ============================================================
+# V12｜AI 貼圖文案助手 V6.2
+# - 保留「主題＋文案語氣」介面
+# - 強化「文字構成畫面 → 找生活瞬間 → 真人反應 → 台灣語感／經典梗 → 短句化」流程
+# - 與 gpt-image-2 圖片生成分開，不改動原本圖片生成流程
+# - AI 文案助手測試階段：暫時不扣網站每日 AI 額度，開放不限次數
+# - 自有 API 模式：使用使用者自己的 OpenAI API，不扣網站額度
+# - 後續可再獨立加入「5 分鐘冷卻」限制，不與圖片生成額度綁定
+# ============================================================
+V12_AI_COPY_MODEL = "gpt-5.6-luna"
+V12_AI_COPY_TONES = [
+    "😂 搞笑自然",
+    "😤 憤憤不平",
+    "😈 嘲諷吐槽",
+    "☁️ 委屈可愛",
+    "👑 霸氣有梗",
+    "💬 台灣口語",
+    "✨ 溫暖療癒",
+]
+
+def _v12_ai_copy_generate(topic, tone, api_mode, user_api_key):
+    """V7.2｜AI 貼圖文字助手。
+    核心：優先幫使用者快速找到「真的會用」的貼圖字眼，
+    混合超日常、經典用語、主題場景與少量驚喜；不追求每句都想梗。
+
+    注意：API 呼叫結構刻意沿用已實測可工作的 V6.5，這一版只更換文案思考邏輯，
+    避免測試文案方向時同時改動 API 協定造成無法定位的錯誤。
+    """
+    topic = str(topic or "").strip()
+    tone = str(tone or "").strip()
+    if not topic:
+        raise ValueError("missing_topic")
+
+    if api_mode != "🔑 使用自己的 OpenAI API" or not user_api_key:
+        raise ValueError("missing_user_api_key")
+    _copy_client = OpenAI(api_key=user_api_key)
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "phrases": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 16,
+                "maxItems": 16,
+            }
+        },
+        "required": ["phrases"],
+        "additionalProperties": False,
+    }
+
+    _previous = st.session_state.get("v12_ai_copy_candidates", []) or []
+    _previous = [str(x).strip() for x in _previous if str(x).strip()][:16]
+
+    _pool_samples = []
+    try:
+        _theme_pools = st.session_state.get("v12_theme_pools", {}) or {}
+        for _theme_name, _phrases in _theme_pools.items():
+            for _phrase in (_phrases or []):
+                _phrase = str(_phrase).strip()
+                if _phrase and _phrase not in _pool_samples:
+                    _pool_samples.append(_phrase)
+                if len(_pool_samples) >= 80:
+                    break
+            if len(_pool_samples) >= 80:
+                break
+    except Exception:
+        _pool_samples = []
+
+    system_prompt = (
+        "你是一位非常懂台灣日常聊天與 LINE 貼圖的文字助手。"
+        "你的主要工作不是參加文案比賽，也不是每一句都想出新梗；"
+        "而是幫使用者快速找到『這句我平常真的會用』的貼圖文字。\n\n"
+        "【V7 核心任務】"
+        "使用者給你一個主題與語氣，你要整理出一批可以直接拿來做 LINE 貼圖的短句。"
+        "16 句放在一起時，使用者應該能很快挑出至少 8 句想留下。"
+        "超日常、很普通但很好用的句子是高價值結果，不要因為不夠有創意就淘汰。"
+        "經典老梗、熟悉的網路用語、台灣口語也可以直接使用；熟悉不代表不好用。"
+        "主題場景用語同樣重要。少量真正自然的意外句可以混進來，但驚喜只是調味。\n\n"
+        "【四種來源，自然混合】"
+        "1. 超日常：收到、好的、等一下、我看看、馬上、先這樣、沒問題、辛苦了、晚點回等。"
+        "2. 經典／網路語感：蛤？、傻眼、笑死、真的假的、不要鬧、先不要、修但幾勒、我就爛、是在哈囉、真的會謝等；符合情境即可使用。"
+        "3. 主題場景：從主題找大家真的會遇到的小事件，再給出自然反應。"
+        "4. 少量驚喜：偶爾加入反轉、擬人、比喻、雙關或有點怪但成立的短句。"
+        "不要刻意平均分配四類，讓結果自然混合。\n\n"
+        "【最重要的判斷標準】"
+        "每一句都先問：『如果今天真的遇到這件事，我會不會把這句傳給朋友、同事、家人或群組？』"
+        "如果會，就算普通也可以留下。"
+        "如果只是看起來很有創意、很像 AI 在努力寫金句，但真人不太會這樣說，就改掉。"
+        "不要為了顯得厲害，把正常的話硬改得很奇怪。\n\n"
+        "【台灣語感】"
+        "使用自然繁體中文與台灣聊天語感。啦、欸、齁、捏、咧等語助詞可以使用，但不要每句都塞。"
+        "經典老梗可以使用；不要刻意追新，也不要刻意避開老梗。"
+        "不要大量堆流行語來假裝台灣。\n\n"
+        "【短句】"
+        "以 2～10 個中文字為主要目標。口語碎句、反問、感嘆、半句話都可以。"
+        "貼圖文字要一眼讀完，不必像完整句子，也不要寫成文章、標語或雞湯。\n\n"
+        "【語氣】"
+        f"主題：{topic}。\n"
+        f"使用者選擇的語氣：{tone}。\n"
+        "語氣會影響措辭與反應，但不要因為選了搞笑自然就強迫每一句搞笑。"
+        "所有語氣都以真人會說、真的能拿來聊天為前提。\n\n"
+        "【不要做】"
+        "不要為了創新而創新。不要每句都想梗。不要過度文青、雞湯、廣告腔。"
+        "不要把主題硬塞進每句。不要只是同義詞替換。不要大量產生 AI 式金句。"
+        "不要刻意避開經典用語。不要因為一句很普通就淘汰它。\n\n"
+        "【輸出】"
+        "只輸出最後 16 句候選文案。不要輸出分析、分類、編號、引號、emoji 或其他說明。"
+    )
+
+    _avoid_text = ""
+    if _previous:
+        _avoid_text += (
+            "\n\n上一批已生成的 16 句。這次盡量換掉相同句子與高度相似的說法；"
+            "但如果某個經典或超常用語真的非常適合主題，可以自然再次出現：\n"
+            + "\n".join(f"- {x}" for x in _previous)
+        )
+    if _pool_samples:
+        _avoid_text += (
+            "\n\n使用者過去保存過的文案池。盡量補充不同的句子，不要機械重複：\n"
+            + "、".join(_pool_samples)
+        )
+
+    user_prompt = (
+        f"使用者主題：{topic}\n"
+        f"希望的文案語氣：{tone}\n\n"
+        "請產生 16 句可以直接拿來做 LINE 貼圖的候選文字。"
+        "先在內部想像這個主題下真實會發生的生活小情境，再決定人物最自然的第一反應。"
+        "結果可以混合：很普通但超好用的話、經典用語、台灣口語、主題場景反應，以及少量意外句。"
+        "不要把 16 句全部做成梗，也不要為了看起來厲害而把正常話改得很怪。"
+        "最重要的是：使用者看到結果後，可以快速勾出自己真的想用的 8 句。"
+        + _avoid_text
+    )
+
+    # 保持 V6.5 已實測的 API 呼叫結構，不在這一版改 API 協定。
+    response = _copy_client.responses.create(
+        model=V12_AI_COPY_MODEL,
+        input=[
+            {"role": "developer", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": "line_sticker_copy",
+                "strict": True,
+                "schema": schema,
+            }
+        },
+        max_output_tokens=1600,
+    )
+    raw = str(response.output_text or "").strip()
+    data = json.loads(raw)
+    phrases = data.get("phrases", []) if isinstance(data, dict) else []
+    phrases = [str(x).strip() for x in phrases if str(x).strip()]
+    phrases = list(dict.fromkeys(phrases))
+    if len(phrases) != 16:
+        raise ValueError("invalid_phrase_count")
+    return phrases
+
+def _v12_render_ai_copy_assistant(api_mode, user_api_key):
+    """V12｜AI 文案助手＋多主題暫存池（Session-only）。
+    規則：主題只在使用者完成 AI 生成並選擇儲存文案後建立；
+    每次 AI 產生 16 句，使用者可只勾選想保存的句子；
+    每個主題最多 30 句；本次創作最多同時使用 3 個已建立主題；
+    最後從已選主題的詞語池中挑選 8 句套用到 01～08。
+    """
+    st.session_state.setdefault("v12_theme_pools", {})
+    st.session_state.setdefault("v12_selected_themes", [])
+    st.session_state.setdefault("v12_ai_copy_candidates", [])
+    st.session_state.setdefault("v12_ai_copy_selected", [])
+    st.session_state.setdefault("v12_ai_copy_topic", "")
+    st.session_state.setdefault("v12_ai_copy_topic_used", "")
+    st.session_state.setdefault("v12_ai_copy_tone_used", "")
+
+    # ------------------------------------------------------------
+    # ① 主題：這裡只是「創作輸入」，不會因為打字就自動建立主題。
+    #    只有 AI 生成後，使用者實際儲存至少一個文案時，才建立主題。
+    # ------------------------------------------------------------
+    _topic_before = str(st.session_state.get("v12_ai_copy_topic", "") or "").strip()
+    _topic = st.text_input(
+        "💡 你想做什麼主題？",
+        key="v12_ai_copy_topic",
+        placeholder="例如：醫師日常篇、情侶吵架篇、媽媽的日常",
+    ).strip()
+
+    # 使用者修改尚未建立的創作主題時，清除上一批候選文案，避免拿舊主題的結果誤存到新主題。
+    if _topic != _topic_before:
+        st.session_state["v12_ai_copy_candidates"] = []
+        st.session_state["v12_ai_copy_selected"] = []
+        # 主題改變時，舊一批 16 句的 checkbox 狀態也一併清除。
+        for _i in range(16):
+            st.session_state.pop(f"v12_ai_copy_pick_{_i}", None)
+
+    # ------------------------------------------------------------
+    # ② 文案語氣
+    # ------------------------------------------------------------
+    _tone = st.selectbox(
+        "🎭 希望文案是什麼感覺？",
+        V12_AI_COPY_TONES,
+        key="v12_ai_copy_tone",
+    )
+
+    _generate = st.button(
+        "✨ AI 幫我想 16 句",
+        type="primary",
+        use_container_width=True,
+        key="v12_ai_copy_generate",
+    )
+    if _generate:
+        if not _topic:
+            st.warning("請先輸入一個主題，例如「職場的憤憤不平」。")
+        elif api_mode == "🔑 使用自己的 OpenAI API" and not user_api_key:
+            st.error("❌ 請先輸入自己的 OpenAI API Key。")
+        else:
+            try:
+                _live_api_mode = st.session_state.get("v12_saved_api_mode", api_mode)
+                _live_user_api_key = str(
+                    st.session_state.get("v11_user_api_key")
+                    or st.session_state.get("v12_saved_user_api_key")
+                    or user_api_key
+                    or ""
+                ).strip()
+                if _live_api_mode == "🔑 使用自己的 OpenAI API" and not _live_user_api_key:
+                    st.error("❌ 請先輸入自己的 OpenAI API Key。")
+                else:
+                    with st.spinner("🤖 AI 正在延伸主題與生活情境……"):
+                        _phrases = _v12_ai_copy_generate(
+                            _topic, _tone, _live_api_mode, _live_user_api_key
+                        )
+                    st.session_state["v12_ai_copy_candidates"] = _phrases
+                    st.session_state["v12_ai_copy_topic_used"] = _topic
+                    st.session_state["v12_ai_copy_tone_used"] = _tone
+                    st.session_state["v12_ai_copy_selected"] = []
+                    for _i in range(16):
+                        st.session_state[f"v12_ai_copy_pick_{_i}"] = False
+            except RuntimeError as _e:
+                st.error("❌ AI 文案服務目前無法使用。")
+                st.caption(f"錯誤資訊：{_e}")
+            except Exception:
+                st.error("❌ AI 文案產生失敗，請稍後再試。")
+
+    # ------------------------------------------------------------
+    # ③ 本次 AI 生成結果：只勾選想保存的，不自動建立主題或全部進池。
+    # ------------------------------------------------------------
+    _candidates = list(st.session_state.get("v12_ai_copy_candidates") or [])
+    if _candidates:
+        _used_topic = str(st.session_state.get("v12_ai_copy_topic_used", "") or "").strip()
+        _used_tone = st.session_state.get("v12_ai_copy_tone_used", _tone)
+        st.markdown("#### 🆕 本次 AI 生成結果")
+        st.caption(f"主題：{_used_topic}　｜　語氣：{_used_tone}　｜　請勾選想保存的文案")
+
+        _gen_selected = st.session_state.get("v12_ai_copy_selected", [])
+        if not isinstance(_gen_selected, list):
+            _gen_selected = []
+        _gen_selected = [
+            int(i) for i in _gen_selected
+            if isinstance(i, int) and 0 <= i < len(_candidates)
+        ]
+
+        # 「全選／全部取消」必須在 checkbox widget 建立前修改 widget state。
+        # 使用 on_click callback，避免 Streamlit 在 widget 已建立後再次寫入同一個 key，
+        # 造成 StreamlitWidgetAlreadyInstantiatedError。
+        def _v12_ai_copy_select_all_cb():
+            _indices = list(range(len(st.session_state.get("v12_ai_copy_candidates") or [])))
+            st.session_state["v12_ai_copy_selected"] = _indices
+            for _i in _indices:
+                st.session_state[f"v12_ai_copy_pick_{_i}"] = True
+
+        def _v12_ai_copy_clear_all_cb():
+            _count = len(st.session_state.get("v12_ai_copy_candidates") or [])
+            st.session_state["v12_ai_copy_selected"] = []
+            for _i in range(_count):
+                st.session_state[f"v12_ai_copy_pick_{_i}"] = False
+
+        _cols = st.columns(4)
+        for _idx, _phrase in enumerate(_candidates):
+            with _cols[_idx % 4]:
+                _pick_key = f"v12_ai_copy_pick_{_idx}"
+                # 此處仍可安全初始化，因為 callback 已在本次 rerun 開始前執行。
+                if _pick_key not in st.session_state:
+                    st.session_state[_pick_key] = _idx in _gen_selected
+                st.checkbox(
+                    f"{_idx+1:02d}. {_phrase}",
+                    key=_pick_key,
+                )
+
+        # 以 widget 的最新值重新整理目前選擇。
+        _new_gen_selected = [
+            _idx for _idx in range(len(_candidates))
+            if bool(st.session_state.get(f"v12_ai_copy_pick_{_idx}", False))
+        ]
+        st.session_state["v12_ai_copy_selected"] = _new_gen_selected
+        st.caption(f"本次準備保存：{len(_new_gen_selected)} / 16 句")
+
+        _ga, _gb, _gc = st.columns(3)
+        with _ga:
+            st.button(
+                "☑️ 全選",
+                key="v12_ai_copy_select_all",
+                use_container_width=True,
+                on_click=_v12_ai_copy_select_all_cb,
+            )
+        with _gb:
+            st.button(
+                "↩️ 全部取消",
+                key="v12_ai_copy_clear_all",
+                use_container_width=True,
+                on_click=_v12_ai_copy_clear_all_cb,
+            )
+        with _gc:
+            if st.button(
+                f"💾 儲存勾選文案到「{_used_topic}」主題",
+                key="v12_ai_copy_save_pool",
+                use_container_width=True,
+            ):
+                if not _used_topic:
+                    st.warning("⚠️ 沒有可儲存的主題。請重新輸入主題並生成 16 句。")
+                elif not _new_gen_selected:
+                    st.warning("⚠️ 請至少勾選 1 句想保存的文案。")
+                else:
+                    _pools = st.session_state["v12_theme_pools"]
+                    _pool = list(_pools.get(_used_topic, []))[:30]
+                    _chosen_phrases = [_candidates[i] for i in _new_gen_selected]
+                    _new_unique = [x for x in _chosen_phrases if x not in _pool]
+                    _remaining = 30 - len(_pool)
+                    if _remaining <= 0:
+                        st.warning(f"⚠️「{_used_topic}」主題用語池已達上限 30 句。")
+                    elif len(_new_unique) > _remaining:
+                        st.warning(
+                            f"⚠️「{_used_topic}」目前已有 {len(_pool)}/30 句，這次最多還能儲存 {_remaining} 句。\n"
+                            f"目前勾選 {len(_new_unique)} 句，請取消 {len(_new_unique)-_remaining} 句後再儲存。"
+                        )
+                    elif not _new_unique:
+                        st.info("ℹ️ 勾選的文案都已存在於這個主題用語池，不會重複儲存。")
+                    else:
+                        _pool.extend(_new_unique)
+                        _pools[_used_topic] = _pool[:30]
+
+                        # 只有在真正儲存文案後，才建立主題紀錄。
+                        _selected = [
+                            x for x in st.session_state.get("v12_selected_themes", [])
+                            if x in _pools
+                        ][:3]
+                        if _used_topic not in _selected and len(_selected) < 3:
+                            _selected.append(_used_topic)
+                        st.session_state["v12_selected_themes"] = _selected[:3]
+                        st.session_state["v12_ai_copy_selected"] = []
+                        st.success(
+                            f"✅ 已將 {len(_new_unique)} 句加入「{_used_topic}」主題用語池，"
+                            f"目前 {len(_pools[_used_topic])}/30 句。"
+                        )
+
+    # ------------------------------------------------------------
+    # ④ 主題用語池：只有真正儲存過文案的主題才會出現在這裡。
+    #    每個主題可勾選「加入本次創作」，最多同時 3 個主題。
+    # ------------------------------------------------------------
+    st.markdown("#### 📚 主題用語池")
+    _pool_themes = list(st.session_state["v12_theme_pools"].keys())
+    if not _pool_themes:
+        st.info("目前尚未建立主題用語池。先輸入主題、生成 16 句，再勾選想保存的文案即可。")
+    else:
+        # 清掉已不存在的選擇，並限制最多 3 個。
+        st.session_state["v12_selected_themes"] = [
+            x for x in st.session_state.get("v12_selected_themes", [])
+            if x in _pool_themes
+        ][:3]
+
+        st.caption(
+            f"選擇本次創作要參考的主題（最多 3 個）。目前已選："
+            f"{len(st.session_state['v12_selected_themes'])} / 3"
+        )
+
+        for _theme_i, _theme in enumerate(_pool_themes):
+            _pool = list(st.session_state["v12_theme_pools"].get(_theme, []))[:30]
+            _theme_key = f"v12_theme_use_{_theme_i}"
+            if _theme_key not in st.session_state:
+                st.session_state[_theme_key] = _theme in st.session_state["v12_selected_themes"]
+
+            _currently_selected = _theme in st.session_state["v12_selected_themes"]
+            _can_select = _currently_selected or len(st.session_state["v12_selected_themes"]) < 3
+            _use_theme = st.checkbox(
+                f"🎯 加入本次創作：{_theme}（{len(_pool)}/30）",
+                key=_theme_key,
+                disabled=not _can_select,
+            )
+
+            if _use_theme and _theme not in st.session_state["v12_selected_themes"]:
+                if len(st.session_state["v12_selected_themes"]) < 3:
+                    st.session_state["v12_selected_themes"].append(_theme)
+                else:
+                    st.session_state[_theme_key] = False
+            elif not _use_theme and _theme in st.session_state["v12_selected_themes"]:
+                st.session_state["v12_selected_themes"].remove(_theme)
+
+            with st.expander(f"📚 {_theme}｜{len(_pool)}/30 句", expanded=False):
+                if not _pool:
+                    st.caption("目前沒有保存的文案。")
+                else:
+                    st.caption("勾選要刪除的句子；刪除前會再次確認。")
+                    _delete_refs = []
+                    _pcols = st.columns(2)
+                    for _pi, _phrase in enumerate(_pool):
+                        with _pcols[_pi % 2]:
+                            if st.checkbox(
+                                f"{_pi+1:02d}. {_phrase}",
+                                key=f"v12_theme_pool_del_{_theme_i}_{_pi}",
+                            ):
+                                _delete_refs.append(_pi)
+                    if _delete_refs:
+                        st.warning(f"已選擇刪除 {len(_delete_refs)} 句。")
+                        if st.button(
+                            f"🗑️ 刪除勾選的 {len(_delete_refs)} 句",
+                            key=f"v12_theme_pool_delete_{_theme_i}",
+                            use_container_width=True,
+                        ):
+                            _remaining_pool = [
+                                x for i, x in enumerate(_pool) if i not in _delete_refs
+                            ]
+                            st.session_state["v12_theme_pools"][_theme] = _remaining_pool
+                            st.success(f"✅ 已刪除 {len(_delete_refs)} 句。")
+                            st.rerun()
+
+        st.caption(
+            f"🎯 本次創作已選擇：{len(st.session_state['v12_selected_themes'])} / 3 個主題"
+        )
+
+    # ------------------------------------------------------------
+    # ⑤ 從本次已選的最多 3 個主題中挑最終 8 句。
+    # ------------------------------------------------------------
+    st.markdown("#### 🎯 從已選主題用語池選擇 8 句")
+    _active_selected_themes = [
+        x for x in st.session_state.get("v12_selected_themes", [])
+        if x in st.session_state["v12_theme_pools"]
+    ][:3]
+    if not _active_selected_themes:
+        st.info("請先在上面的主題用語池勾選本次創作要使用的主題。")
+    else:
+        _final_refs = st.session_state.get("v12_theme_final_selected", [])
+        if not isinstance(_final_refs, list):
+            _final_refs = []
+        _current_refs = []
+        _final_new = []
+        for _si, _theme in enumerate(_active_selected_themes):
+            _pool = list(st.session_state["v12_theme_pools"].get(_theme, []))[:30]
+            with st.expander(f"{_theme}｜{len(_pool)}/30 句", expanded=True):
+                for _pi, _phrase in enumerate(_pool):
+                    _ref = f"{_theme}\x1f{_pi}"
+                    _current_refs.append(_ref)
+                    _checked = _ref in _final_refs
+                    if st.checkbox(
+                        _phrase,
+                        value=_checked,
+                        key=f"v12_theme_final_{_si}_{_pi}",
+                    ):
+                        _final_new.append(_ref)
+        st.session_state["v12_theme_final_selected"] = _final_new
+        st.caption(f"目前已選 {_final_new.__len__()} / 8 句")
+        if len(_final_new) > 8:
+            st.warning("⚠️ 最多只能選 8 句，請取消多出的選項。")
+        if st.button(
+            "🎯 套用所選 8 句到 01～08",
+            key="v12_ai_copy_apply_pool",
+            use_container_width=True,
+        ):
+            if len(_final_new) != 8:
+                st.warning("請從已選主題用語池中剛好選擇 8 句，再套用到 01～08。")
+            else:
+                _phrase_map = {}
+                for _theme in _active_selected_themes:
+                    for _pi, _phrase in enumerate(
+                        st.session_state["v12_theme_pools"].get(_theme, [])[:30]
+                    ):
+                        _phrase_map[f"{_theme}\x1f{_pi}"] = _phrase
+                _final_phrases = [
+                    _phrase_map[_ref] for _ref in _final_new if _ref in _phrase_map
+                ]
+                if len(_final_phrases) == 8:
+                    set_texts(_final_phrases)
+                    st.session_state["v12_ai_copy_last_applied"] = True
+                    st.success("✅ 已將主題用語池選出的 8 句套用到 01～08。")
+
+    if st.session_state.get("v12_ai_copy_last_applied", False):
+        st.caption("💡 已套用完成；你仍然可以手動修改 01～08 的任何一句。")
+        st.session_state["v12_ai_copy_last_applied"] = False
+
+def build_prompt(style, custom_style, selected_character, custom_character,
+                 texts, transparent, color_segments=None, ai_copy_topic="", ai_copy_tone="", ai_copy_topics=None):
+    p = [
+        "請以我提供的人物照片作為主要人物參考。",
+        "保留人物身份辨識特徵，不任意改變人物核心外觀。",
+        "請一次生成一張清楚的4×2八格LINE貼圖總圖。",
+        "第一排四格、第二排四格；依使用者輸入順序由左至右、由上至下對應。",
+        "八格人物維持同一人物身份與主要視覺風格。",
+        "每格人物完整呈現，不要裁切頭部、臉部、身體或四肢。",
+        "人物與該格邊界保持安全距離。",
+        "不要拉伸、變形或壓縮人物。",
+        "非常重要：圖片中禁止出現01、02、03、04、05、06、07、08等編號。",
+        "禁止加入格號、序號、位置標籤或數字標記。",
+        "只有使用者指定的貼圖文字可以出現在圖片中。",
+    ]
+    if style != "↓ 請選擇風格":
+        p.append(f"主要貼圖風格：{style}。")
+    if custom_style.strip():
+        p.append(f"使用者自定風格：{custom_style.strip()}。")
+    if selected_character:
+        p.append("人物與畫面特色：" + "、".join(selected_character) + "。")
+    if custom_character.strip():
+        p.append(f"使用者自定人物／場景要求：{custom_character.strip()}。")
+    _topic_list = [str(x).strip() for x in (ai_copy_topics or []) if str(x).strip()]
+    if not _topic_list and str(ai_copy_topic or "").strip():
+        _topic_list = [str(ai_copy_topic).strip()]
+    if _topic_list:
+        p.append("AI 貼圖創作主題（本次最多三個主題共同參考）：" + "、".join(dict.fromkeys(_topic_list)) + "。")
+        p.append("本次貼圖可同時採用上述多個主題；它們不是互相衝突的不同世界，而是同一套貼圖的不同主題切面。請依各格文字情境自然參考相關主題，並維持整組人物與視覺一致性。")
+    if str(ai_copy_tone or "").strip():
+        p.append(f"AI 貼圖文案語氣方向：{str(ai_copy_tone).strip()}。")
+    for i, t in enumerate(texts):
+        p.append(f"第{i+1}格的指定貼圖文字為：「{t.strip() or '（此格未指定文字）'}」。")
+
+    color_segments = color_segments or []
+    for item in color_segments:
+        p.append(
+            f"第{item['sticker_index']}格的文字片段「{item['text']}」"
+            f"必須使用{item['color_name']}（{item['hex']}）。"
+        )
+    if color_segments:
+        p.append(
+            "局部文字上色規則：只對上述指定文字片段套用指定顏色；"
+            "其他文字維持一般文字顏色。請不要自行增加其他彩色文字。"
+        )
+    if transparent:
+        p.append("請使用透明背景PNG，背景保持真正透明，不要以白色或黑色填滿。")
+    p.append("整體具有LINE貼圖的清楚、可讀、可愛與完整構圖感。")
+    return "\n".join(p)
+
+# ------------------------------------------------------------
+# UI
+# ------------------------------------------------------------
+st.markdown("""<style>
+.v10-rainbow-title{padding:8px 14px;border-radius:12px;margin:8px 0 12px;font-weight:700;background:linear-gradient(90deg,#fff1f2,#fff7ed,#fefce8,#f0fdf4,#eff6ff,#f5f3ff);}
+.v10-soft-box{padding:8px 12px;border-radius:10px;background:#fafafa;border:1px solid #e5e7eb;}
+
+/* V12 微調：OpenAI API 教學連結按鈕，沿用「開始製作」紅色。 */
+.st-key-v12_api_help button{
+  width:100% !important;
+  min-height:52px !important;
+  border-radius:10px !important;
+  font-size:18px !important;
+  font-weight:800 !important;
+  background:#FF4B4B !important;
+  background-color:#FF4B4B !important;
+  color:#FFFFFF !important;
+  border:1px solid #FF4B4B !important;
+  box-shadow:none !important;
+}
+.st-key-v12_api_help button:hover{
+  background:#FF3333 !important;
+  background-color:#FF3333 !important;
+  border-color:#FF3333 !important;
+  color:#FFFFFF !important;
+}
+.st-key-v12_api_help button p{
+  color:#FFFFFF !important;
+  font-weight:800 !important;
+}
+</style>""",unsafe_allow_html=True)
+
+
+# ============================================================
+# V12｜STEP 01A①
+# 主導航：開始製作 / 我的作品
+# ============================================================
+st.markdown(
+    """
+    <style>
+    .v12-nav-wrap{
+      width:min(920px,100%);
+      margin:0 auto 1.1rem;
+      padding:.45rem;
+      border:1px solid rgba(120,120,120,.16);
+      border-radius:18px;
+      background:color-mix(in srgb,#64748b 6%, transparent);
+    }
+
+    /* V12｜01B① UI 微調：主導航與 LINE 連結按鈕使用同一套紅色視覺。 */
+    .st-key-v12_nav_create button,
+    .st-key-v12_nav_library button,
+    .st-key-v12_footer_library button{
+      width:100% !important;
+      min-height:52px !important;
+      border-radius:10px !important;
+      font-size:18px !important;
+      font-weight:800 !important;
+      background:#FF4B4B !important;
+      background-color:#FF4B4B !important;
+      color:#FFFFFF !important;
+      border:1px solid #FF4B4B !important;
+      box-shadow:none !important;
+    }
+    .st-key-v12_nav_create button:hover,
+    .st-key-v12_nav_library button:hover,
+    .st-key-v12_footer_library button:hover{
+      background:#FF3333 !important;
+      background-color:#FF3333 !important;
+      border-color:#FF3333 !important;
+      color:#FFFFFF !important;
+    }
+    .st-key-v12_nav_create button p,
+    .st-key-v12_nav_library button p,
+    .st-key-v12_footer_library button p{
+      color:#FFFFFF !important;
+      font-weight:800 !important;
+    }
+    </style>
+    <div class="v12-nav-wrap"></div>
+    """,
+    unsafe_allow_html=True,
+)
+
+_v12_nav_cols = st.columns(2)
+with _v12_nav_cols[0]:
+    # V12 微調：創作頁上方改為「聯繫作者」；進入「我的作品」後保留「開始製作」。
+    _v12_current_view = st.session_state.get("v12_view", "create")
+    if _v12_current_view == "library":
+        if st.button("✨ 開始製作", key="v12_nav_create", use_container_width=True):
+            st.session_state["v12_view"] = "create"
+            st.rerun()
+    else:
+        st.link_button(
+            "💬 聯繫作者",
+            "https://www.threads.com/@tuwillson",
+            use_container_width=True,
+        )
+with _v12_nav_cols[1]:
+    if st.button("📚 我的作品", key="v12_nav_library", use_container_width=True):
+        # FIX11: leave-create navigation explicitly commits the dedicated style bank
+        # before conditional editor widgets disappear.
+        _public02a_sync_style_bank_from_widgets()
+        _save_v10_presets()
+        st.session_state["v12_view"] = "library"
+        st.rerun()
+
+st.session_state.setdefault("v12_view", "create")
+
+if st.session_state["v12_view"] == "library":
+    st.markdown('<div class="v10-main-title">📚 我的作品</div>', unsafe_allow_html=True)
+    st.caption("本次瀏覽期間完成打包的作品會暫存在這裡。你可以查看設定、重新下載 ZIP，或載回創作頁繼續使用。")
+
+    _projects_all = list(st.session_state.get("v12_projects_local_index", []))
+    _top_a, _top_b = st.columns([4, 1])
+    with _top_a:
+        _search_name = st.text_input(
+            "🔎 搜尋作品名稱",
+            placeholder="輸入作品名稱搜尋…",
+            key="v12_project_search",
+        )
+    with _top_b:
+        st.metric("暫存作品", len(_projects_all))
+
+    _projects = list(_projects_all)
+    if _search_name.strip():
+        needle = _search_name.strip().lower()
+        _projects = [p for p in _projects if needle in str(p.get("project_name", "")).lower()]
+
+    if not _projects:
+        st.info("📭 目前還沒有保存的作品")
+        st.caption("完成「裁切＋製作貼圖檔案＋一鍵打包」後，作品會自動出現在這裡。")
+    else:
+        for _idx, _project in enumerate(_projects):
+            _pid = str(_project.get("project_id", _idx))
+            _name = str(_project.get("project_name") or _v12_default_project_name())
+
+            _card_left, _card_right = st.columns([1, 2.4], vertical_alignment="top")
+
+            with _card_left:
+                if _project.get("main_bytes"):
+                    st.image(_project["main_bytes"], caption=f"⭐ MAIN {_project.get('main_no') or '—'}", use_container_width=True)
+                elif _project.get("grid_bytes"):
+                    st.image(_project["grid_bytes"], caption="4×2 原始總圖", use_container_width=True)
+                else:
+                    st.info("🖼️ 尚無預覽圖")
+
+            with _card_right:
+                st.markdown(f"### 🏷️ {_name}")
+
+                _meta_parts = []
+                if _project.get("style_name"):
+                    _meta_parts.append(f"🎨 {_project['style_name']}")
+                if _project.get("font_name"):
+                    _meta_parts.append(f"🔤 {_project['font_name']}")
+                if _project.get("transparent_background"):
+                    _meta_parts.append("🖼️ 透明背景 PNG")
+                if _project.get("main_no"):
+                    _meta_parts.append(f"⭐ MAIN={_project['main_no']}")
+                if _project.get("tab_no"):
+                    _meta_parts.append(f"🏷️ TAB={_project['tab_no']}")
+                if _meta_parts:
+                    st.caption("　｜　".join(_meta_parts))
+
+                st.caption(f"最後打包：{_v12_format_display_time(_project.get('updated_at', ''))}")
+
+                _act1, _act2, _act3 = st.columns(3)
+                with _act1:
+                    if _project.get("zip_bytes"):
+                        st.download_button(
+                            "⬇️ 重新下載 ZIP",
+                            data=_project["zip_bytes"],
+                            file_name=f"{_v12_safe_download_stem(_name)}.zip",
+                            mime="application/zip",
+                            use_container_width=True,
+                            key=f"v12_redownload_{_pid}",
+                        )
+                with _act2:
+                    if st.button("↩️ 載回創作頁", key=f"v12_load_{_pid}", use_container_width=True):
+                        _v12_load_history_record(_project)
+                        st.session_state["v12_view"] = "create"
+                        st.rerun()
+                with _act3:
+                    if st.button("🗑️ 刪除", key=f"v12_delete_{_pid}", use_container_width=True):
+                        _v12_delete_history_record(_pid)
+                        st.rerun()
+
+                with st.expander("🔍 查看這組作品詳細設定", expanded=False):
+                    st.write(f"**作品名稱：** {_name}")
+                    st.write(f"**生成方式：** {_project.get('generation_method') or '未記錄'}")
+                    st.write(f"**文字風格：** {_project.get('text_style') or '未記錄'}")
+                    st.write(f"**建立時間：** {_project.get('created_at') or '未記錄'}")
+
+                    _texts = list(_project.get("sticker_texts") or [])
+                    if any(str(x).strip() for x in _texts):
+                        st.markdown("**8 張貼圖文字：**")
+                        for _n, _txt in enumerate(_texts, start=1):
+                            st.write(f"{_n:02d}. {_txt or '（未設定）'}")
+
+                    if _project.get("grid_bytes"):
+                        st.markdown("**4×2 原始總圖：**")
+                        st.image(_project["grid_bytes"], use_container_width=True)
+
+            st.divider()
+
+    st.caption(f"V12｜STEP 01A③｜目前最多暫存 {V12_HISTORY_LIMIT} 組作品，不保存 API Key，也不寫入網站每日 AI 額度資料。")
+    st.stop()
+
+
+st.markdown('<div id="v12-page-top"></div>', unsafe_allow_html=True)
+st.markdown('<div class="v10-main-title">🎨 LINE 貼圖創作工作室</div>', unsafe_allow_html=True)
+st.caption("V11｜公開版｜快速完成 LINE 貼圖創作")
+
+
+# API 使用模式常數必須在所有 callback / widget 使用前先建立。
+# Streamlit 會由上而下執行整個 script，因此不可放在 AI 文案區之後。
+_ALLOWED_API_MODES = ["🔑 使用自己的 OpenAI API"]
+
+def _v12_sync_api_mode():
+    """把 API 使用模式同步到獨立 canonical Session state。"""
+    value = str(st.session_state.get("v12_api_mode_widget", "") or "")
+    if value not in _ALLOWED_API_MODES:
+        value = "🔑 使用自己的 OpenAI API"
+    st.session_state["v12_saved_api_mode"] = value
+    st.session_state["v11_api_mode"] = value
+
+def _v12_sync_user_api_key():
+    """把 API Key 同步到兩個 Session 狀態，避免 widget rerun 後遺失。"""
+    value = str(st.session_state.get("v11_user_api_key", "") or "").strip()
+    st.session_state["v11_user_api_key"] = value
+    st.session_state["v12_saved_user_api_key"] = value
+
+
+# ============================================================
+# V11 STEP 02B-3A｜使用者自有 OpenAI API
+#
+# 安全原則：
+# 1. 獨立預覽版只使用使用者自己的 OpenAI API。
+# 2. API Key 僅放在目前 Streamlit Session。
+# 3. 不寫入 Supabase / JSON / GitHub / Streamlit Secrets。
+# 4. 預設隱碼；可由使用者自行切換顯示。
+# ============================================================
+v10_section("🤖 AI 生成方式", "#6366f1")
+st.caption("📌 Sticker Studio Next 預覽版目前使用你自己的 OpenAI API；會員免費額度與訂閱點數功能開發中。")
+
+# 重要：不要再直接把 radio 綁在 v11_api_mode。
+# 字型快速選擇／開關 125 種總覽都會觸發 Streamlit rerun，
+# 因此先由 canonical Session state 恢復 widget，再由 callback 寫回 canonical state。
+_saved_api_mode = str(st.session_state.get("v12_saved_api_mode", "") or "")
+if _saved_api_mode not in _ALLOWED_API_MODES:
+    _saved_api_mode = "🔑 使用自己的 OpenAI API"
+st.session_state["v12_api_mode_widget"] = _saved_api_mode
+_api_mode = st.radio(
+    "請選擇生成方式",
+    _ALLOWED_API_MODES,
+    key="v12_api_mode_widget",
+    on_change=_v12_sync_api_mode,
+)
+# 兼容原本其他程式區塊仍讀取 v11_api_mode。
+st.session_state["v11_api_mode"] = _api_mode
+st.session_state["v12_saved_api_mode"] = _api_mode
+
+# API 教學連結：固定顯示，讓不熟悉 API 的使用者也能先了解申請方式。
+st.link_button(
+    "申請API教學連結-**HKT實驗室**",
+    "https://vocus.cc/article/69ed5612fd897800010cffde",
+    type="primary",
+    use_container_width=True,
+    key="v12_api_help",
+)
+
+st.caption("💡 目前不連線至舊版網站的每日額度或 Supabase。")
+
+# 若 API Key widget 曾因 rerun 被 Streamlit 暫時清除，從 Session backup 還原。
+if not str(st.session_state.get("v11_user_api_key", "") or "").strip():
+    _saved_key = str(st.session_state.get("v12_saved_user_api_key", "") or "").strip()
+    if _saved_key:
+        st.session_state["v11_user_api_key"] = _saved_key
+
+st.info(
+    "🔐 **隱私提醒**\n\n"
+    "本網站只將這組 Key 用於目前這個瀏覽器 Session；不會儲存至 GitHub、Supabase 或 Streamlit Secrets。"
+)
+
+_show_v11_key = st.checkbox(
+    "👁️ 顯示 API Key（再次點擊即可隱藏）",
+    value=False,
+    key="v11_show_api_key",
+)
+
+_v11_user_api_key = st.text_input(
+    "OpenAI API Key",
+    type="default" if _show_v11_key else "password",
+    placeholder="sk-••••••••••••••••••••",
+    key="v11_user_api_key",
+    help="請輸入你自己的 OpenAI API Key。",
+    on_change=_v12_sync_user_api_key,
+).strip()
+
+# 以 Session 中的值作為後續圖片生成與 AI 文案助手的唯一來源。
+_v11_user_api_key = str(st.session_state.get("v11_user_api_key", "") or "").strip()
+
+if _v11_user_api_key:
+    st.success("🔒 已取得本次 Session 的 API Key。")
+else:
+    st.warning("⚠️ 請先輸入自己的 OpenAI API Key。")
+
+
+st.markdown("""
+<div class="v11-onboarding">
+  <div class="v11-onboarding-title">✨ 第一次使用？照著 3 個步驟就可以開始</div>
+  <div class="v11-onboarding-grid">
+    <div class="v11-onboarding-card">
+      <div class="v11-onboarding-step">① 上傳照片＋設定貼圖</div>
+      <div class="v11-onboarding-text">依序選擇風格、人物特色、貼圖文字、字型與背景。</div>
+    </div>
+    <div class="v11-onboarding-card">
+      <div class="v11-onboarding-step">② 選擇 AI 生成方式</div>
+      <div class="v11-onboarding-text">Sticker Studio Next 預覽版請輸入自己的 OpenAI API Key。</div>
+    </div>
+    <div class="v11-onboarding-card">
+      <div class="v11-onboarding-step">③ 生成 → 裁切 → 下載</div>
+      <div class="v11-onboarding-text">生成八格總圖後，再調整裁切範圍並完成下載。</div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+st.markdown('<div class="v11-section-tip">💡 <b>小提醒：</b>第一次使用只要依照畫面上的 ①～⑧ 順序往下設定即可，不需要先閱讀複雜說明。</div>', unsafe_allow_html=True)
+st.divider()
+
+v10_section("📷 ① 上傳人物照片", "#ff5c7a")
+st.caption("📌 先上傳一張清楚的人物照片，後續所有貼圖都會以這張照片作為主要參考。")
+uploaded = st.file_uploader("選擇人物照片", type=["jpg","jpeg","png","webp"])
+if uploaded:
+    try:
+        uploaded.seek(0)
+        im = Image.open(uploaded)
+        im.load()
+        b = BytesIO()
+        im.convert("RGBA").save(b, "PNG")
+        st.session_state.uploaded_image_bytes = b.getvalue()
+        _img_c1,_img_c2,_img_c3=st.columns([1,2,1])
+        with _img_c2:
+            st.image(im, caption="人物照片", width=420)
+        st.success("✅ 人物照片已載入")
+    except Exception as e:
+        st.error("❌ 無法讀取人物照片")
+        st.code(str(e))
+
+st.divider()
+V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
+
+v10_section("🎨 ② 貼圖風格", "#ff9f43")
+st.caption("🌈 預設風格與「自定義風格」二選一。選擇自定義後，才會出現可套用的 10 組儲存風格。")
+
+# 自定義風格放在第 2 個位置，方便快速選擇。
+_v8_style_items=[x for x in V8_STYLES if not x.startswith("⭐ 自訂")]
+_style_options=["↓ 請選擇風格", "⭐ 自定義風格"] + _v8_style_items
+
+style_mode=st.selectbox(
+    "🌈 貼圖風格",
+    _style_options,
+    key="v10_style_mode",
+)
+
+if style_mode=="⭐ 自定義風格":
+    style="↓ 請選擇風格"
+    st.success("✨ 已切換到「自定義風格」模式")
+
+    # V12 REFACTOR｜Style Bank is the only source of truth.
+    _style_bank = _public02a_get_style_bank()
+    _custom_style_slots = [
+        (_i, str(_style_bank[str(_i)]["name"]).strip() or f"使用者自定{_i}",
+         str(_style_bank[str(_i)]["prompt"]).strip())
+        for _i in range(1, 11)
+        if str(_style_bank[str(_i)]["prompt"]).strip()
+    ]
+
+    _saved_labels = ["↓ 請選擇已儲存風格"] + [
+        f"{i:02d}｜{name}" for i, name, _ in _custom_style_slots
+    ]
+    _saved_choice = st.selectbox(
+        "💾 選擇已儲存的自定義風格",
+        _saved_labels,
+        key="v12_saved_custom_style_choice",
+    )
+
+    custom_style = ""
+    if _saved_choice != "↓ 請選擇已儲存風格":
+        _pos = _saved_labels.index(_saved_choice) - 1
+        custom_style = _custom_style_slots[_pos][2]
+        st.info(f"💾 已套用：{_custom_style_slots[_pos][0]:02d}｜{_custom_style_slots[_pos][1]}")
+    else:
+        st.info("👆 請選擇一個已儲存風格；或先在下方建立新的風格。")
+
+    # Single fixed editor: only two text widgets are ever used.
+    with st.expander("✏️ 管理我的自定義風格", expanded=False):
+        st.caption("選擇 01～10 的一個位置進行編輯。風格內容只儲存在 Style Bank，不依賴 10 組條件式 Widget。")
+
+        # Initialize the fixed editor before creating its widgets.
+        st.session_state.setdefault("v12_style_editor_slot", 1)
+        if (
+            "v12_style_editor_name" not in st.session_state
+            or "v12_style_editor_prompt" not in st.session_state
+        ):
+            _v12_load_style_editor_from_slot()
+
+        st.selectbox(
+            "📁 編輯哪一組風格",
+            list(range(1, 11)),
+            format_func=lambda x: f"{x:02d}｜{str(_public02a_get_style_bank()[str(x)]['name']).strip() or f'使用者自定{x}'}",
+            key="v12_style_editor_slot",
+            on_change=_v12_load_style_editor_from_slot,
+        )
+
+        st.text_input(
+            "🏷️ 風格名稱",
+            key="v12_style_editor_name",
+            placeholder="例如：童趣手繪漫畫",
+        )
+
+        st.text_area(
+            "🎨 自定義風格 Prompt",
+            key="v12_style_editor_prompt",
+            height=180,
+            placeholder="在這裡輸入完整的風格 Prompt…",
+        )
+
+        _ea, _eb = st.columns(2)
+        with _ea:
+            if st.button("💾 儲存此風格", key="v12_save_single_style", use_container_width=True):
+                _v12_save_style_editor()
+                st.success("✅ 此風格已儲存")
+                st.rerun()
+        with _eb:
+            if st.button("🧹 清空此風格", key="v12_clear_single_style", use_container_width=True):
+                try:
+                    _slot = int(st.session_state.get("v12_style_editor_slot", 1))
+                except Exception:
+                    _slot = 1
+                _bank = _public02a_get_style_bank()
+                _bank[str(_slot)] = {
+                    "name": f"使用者自定{_slot}",
+                    "prompt": "",
+                }
+                _public02a_set_style_bank(_bank)
+                _save_v10_presets()
+                _v12_load_style_editor_from_slot()
+                st.success("🧹 此風格已清空")
+                st.rerun()
+
+    st.warning("ℹ️ 目前只使用「自定義風格」，不會同時套用其他預設風格。")
+else:
+    style=style_mode
+    custom_style=""
+
+with st.expander("📚 查看全部預設風格",expanded=False):
+    st.write("、".join(_style_options[2:]))
+
+v10_section("👤 ③ 人物與畫面特色", "#2ecc71")
+st.caption("可複選；以下 3 組自定義人物／場景需求，只有打勾才會啟用。")
+selected_character=st.multiselect("🎯 人物／畫面特色（可複選）",CHARACTER_OPTIONS,key="v10_character_options")
+for _i in range(1,4):
+    _c1,_c2=st.columns([1,8])
+    with _c1:
+        st.checkbox("啟用",key=f"v10_character_enabled_{_i}")
+    with _c2:
+        st.text_area(f"自定義人物／場景需求 {_i}",key=f"v10_character_custom_{_i}",height=70)
+_custom_character_values=[st.session_state.get(f"v10_character_custom_{_i}","").strip() for _i in range(1,4) if st.session_state.get(f"v10_character_enabled_{_i}",False)]
+custom_character="\n".join(_custom_character_values)
+if st.button("💾 儲存人物／場景設定",key="v10_save_character",use_container_width=True):
+    if _save_v10_presets():
+        st.success("✅ 3 組人物／場景設定已儲存")
+    else:
+        st.error("❌ 儲存失敗")
+
+v10_section('💬 ④ 01～08 貼圖文字<br><span style="font-size:.72em;">使用「✨ 主題 AI 幫想」或「🎲 隨機用語」</span>', '#3498db')
+st.caption("先選擇你想使用的文字來源；01～08 文字格會一直保留顯示。")
+
+# V12｜文字來源面板：只有使用者主動點選後，才展開對應功能，
+# 避免 AI 文案與隨機用語區塊同時堆在畫面上。
+st.session_state.setdefault("v12_text_source_panel", "")
+
+def _v12_toggle_text_source(_panel):
+    if st.session_state.get("v12_text_source_panel", "") == _panel:
+        st.session_state["v12_text_source_panel"] = ""
+    else:
+        st.session_state["v12_text_source_panel"] = _panel
+
+_src_a, _src_b = st.columns(2)
+with _src_a:
+    st.button(
+        "✨ AI 幫想 8 句貼圖文字",
+        key="v12_open_ai_copy_panel",
+        use_container_width=True,
+        type="primary" if st.session_state.get("v12_text_source_panel") == "ai" else "secondary",
+        on_click=_v12_toggle_text_source,
+        args=("ai",),
+    )
+with _src_b:
+    st.button(
+        "🎲 隨機用語與自定義語詞池",
+        key="v12_open_random_panel",
+        use_container_width=True,
+        type="primary" if st.session_state.get("v12_text_source_panel") == "random" else "secondary",
+        on_click=_v12_toggle_text_source,
+        args=("random",),
+    )
+
+# V12｜AI 貼圖文案助手 V1：只負責文字，不碰原本圖片生成流程。
+#
+# API 狀態穩定化：
+# Streamlit 每次互動都會 rerun 整個 script。除了 API Key 之外，
+# 生成方式必須有獨立 canonical Session state，避免點選字型、
+# 開關字型總覽等 widget 造成 rerun 後回到預設值。
+st.session_state.setdefault("v11_api_mode", "🔑 使用自己的 OpenAI API")
+st.session_state.setdefault("v12_saved_api_mode", "")
+# 第一次建立 canonical state 時，沿用目前既有的 v11_api_mode。
+if st.session_state.get("v12_saved_api_mode") not in _ALLOWED_API_MODES:
+    _legacy_api_mode = str(st.session_state.get("v11_api_mode", "") or "")
+    st.session_state["v12_saved_api_mode"] = (
+        _legacy_api_mode if _legacy_api_mode in _ALLOWED_API_MODES
+        else "🔑 使用自己的 OpenAI API"
+    )
+st.session_state.setdefault("v11_user_api_key", "")
+# 額外保留一份 Session-level backup，避免 API Key widget 因 rerun /
+# 條件式顯示暫時未渲染而被 Streamlit 清除。
+st.session_state.setdefault("v12_saved_user_api_key", "")
+if st.session_state.get("v11_user_api_key"):
+    st.session_state["v12_saved_user_api_key"] = str(st.session_state.get("v11_user_api_key") or "").strip()
+_v12_current_api_mode = st.session_state.get("v12_saved_api_mode", "🔑 使用自己的 OpenAI API")
+st.session_state["v11_api_mode"] = _v12_current_api_mode
+_v12_current_user_api_key = str(
+    st.session_state.get("v11_user_api_key")
+    or st.session_state.get("v12_saved_user_api_key")
+    or ""
+).strip()
+
+def _v12_render_text_slot(i):
+    _widget_key = f"v12_sticker_text_widget_{i}"
+    # 以獨立 widget key 保留輸入內容；canonical sticker_text_* 由 callback 同步。
+    st.session_state.setdefault(
+        _widget_key,
+        str(st.session_state.get(f"sticker_text_{i}", "") or ""),
+    )
+    st.text_input(
+        f"{i+1:02d}",
+        key=_widget_key,
+        on_change=_v12_sync_sticker_text,
+        args=(i,),
+        placeholder="例如：我知道你還有錢",
+    )
+    # 本輪 widget 可能剛被渲染；canonical state 直接取目前 widget 值，
+    # 確保後續局部上色 rerun 仍保有最新的 01～08 文字。
+    st.session_state[f"sticker_text_{i}"] = str(
+        st.session_state.get(_widget_key, "") or ""
+    )
+
+    _color_enabled_widget_key = f"v12_text_color_enabled_widget_{i}"
+    _color_enabled = st.checkbox(
+        "🎨 啟用局部文字上色",
+        key=_color_enabled_widget_key,
+        on_change=_v12_sync_text_color_enabled,
+        args=(i,),
+    )
+    # checkbox 本身使用 widget key；canonical state 只作為穩定資料來源。
+    st.session_state[f"v12_text_color_enabled_{i}"] = bool(_color_enabled)
+
+    if _color_enabled:
+        count = int(st.session_state.get(f"v12_text_color_count_{i}", 0))
+        if count < 1:
+            count = 1
+            st.session_state[f"v12_text_color_count_{i}"] = 1
+
+        st.caption("💡 輸入要變色的文字片段，再點選色卡；每格最多 3 段。")
+
+        for j in range(count):
+            segs = _v12_get_color_segments(i)
+            current = segs[j]
+            _a, _b = st.columns([1.35, 1])
+
+            with _a:
+                st.session_state.setdefault(
+                    f"v12_text_color_segment_{i}_{j}",
+                    current.get("text", ""),
+                )
+                # 讓使用者在文字片段旁邊直接看到目前套用的顏色。
+                if current.get("color_name") and current.get("hex"):
+                    _chip_name = str(current["color_name"])
+                    _chip_hex = str(current["hex"])
+                    _chip_border = "#777777" if _chip_hex.upper() == "#FFFFFF" else _chip_hex
+                    st.markdown(
+                        f"""
+                        <div style="display:flex;align-items:center;gap:8px;
+                                    margin:0 0 6px 0;font-weight:700;">
+                            <span>文字片段 {j+1}</span>
+                            <span style="display:inline-flex;align-items:center;gap:5px;
+                                         padding:2px 8px 2px 6px;border-radius:999px;
+                                         background:rgba(127,127,127,.10);
+                                         font-size:13px;font-weight:600;">
+                                <span style="width:14px;height:14px;border-radius:50%;
+                                             background:{_chip_hex};
+                                             border:2px solid {_chip_border};
+                                             display:inline-block;"></span>
+                                {_chip_name}
+                            </span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        f'<div style="margin:0 0 6px 0;font-weight:700;">文字片段 {j+1}</div>',
+                        unsafe_allow_html=True,
+                    )
+                st.text_input(
+                    f"文字片段 {j+1}",
+                    key=f"v12_text_color_segment_{i}_{j}",
+                    placeholder="例如：你還有",
+                    label_visibility="collapsed",
+                )
+                segs[j]["text"] = str(
+                    st.session_state.get(f"v12_text_color_segment_{i}_{j}", "")
+                )
+
+            with _b:
+                st.markdown("**🎨 選擇顏色**")
+                color_cols = st.columns(4)
+                for k, (name, hex_code, icon) in enumerate(V12_TEXT_COLOR_PALETTE):
+                    with color_cols[k % 4]:
+                        is_selected = current.get("hex") == hex_code
+                        label = f"✓ {name}" if is_selected else f"{icon} {name}"
+                        if is_selected:
+                            wrapper_key = (
+                                f"v12_color_selected_white_{i}_{j}_{k}"
+                                if k == 0
+                                else f"v12_color_selected_{i}_{j}_{k}"
+                            )
+                            with st.container(key=wrapper_key):
+                                if st.button(
+                                    label,
+                                    key=f"v12_text_color_pick_{i}_{j}_{k}",
+                                    use_container_width=True,
+                                ):
+                                    _v12_set_segment_color(i, j, name, hex_code)
+                                    st.rerun()
+                        else:
+                            if st.button(
+                                label,
+                                key=f"v12_text_color_pick_{i}_{j}_{k}",
+                                use_container_width=True,
+                            ):
+                                _v12_set_segment_color(i, j, name, hex_code)
+                                st.rerun()
+
+
+        if count < 3:
+            if st.button(
+                "＋ 新增一段文字顏色",
+                key=f"v12_text_color_add_{i}",
+                use_container_width=True,
+            ):
+                st.session_state[f"v12_text_color_count_{i}"] = count + 1
+                st.rerun()
+
+        # 精簡預覽：直接把整句文字中已設定的片段顯示成實際顏色。
+        # 不再顯示原本的綠色「已設定」說明框，避免手機版過度拉長。
+        source_text = str(st.session_state.get(f"sticker_text_{i}", "") or "")
+        if source_text.strip():
+            import html as _html
+            matches = []
+            search_from = 0
+            for seg in _v12_get_color_segments(i):
+                part = str(seg.get("text", "") or "").strip()
+                color_hex = str(seg.get("hex", "") or "").strip()
+                if not part or not color_hex:
+                    continue
+                pos = source_text.find(part, search_from)
+                if pos < 0:
+                    pos = source_text.find(part)
+                if pos >= 0:
+                    end = pos + len(part)
+                    if not any(pos < e and end > st_ for st_, e, _, _ in matches):
+                        matches.append((pos, end, part, color_hex))
+                        search_from = end
+
+            if matches:
+                matches.sort(key=lambda x: x[0])
+                parts = []
+                cursor = 0
+                for start, end, part, color_hex in matches:
+                    if start > cursor:
+                        parts.append(_html.escape(source_text[cursor:start]))
+                    border = "#777777" if color_hex.upper() == "#FFFFFF" else color_hex
+                    parts.append(
+                        f'<span style="color:{_html.escape(color_hex)};font-weight:800;'
+                        f'border-bottom:2px solid {border};">{_html.escape(part)}</span>'
+                    )
+                    cursor = end
+                if cursor < len(source_text):
+                    parts.append(_html.escape(source_text[cursor:]))
+                preview_html = "".join(parts)
+                st.markdown(
+                    f'<div style="margin:8px 0 2px 0;padding:8px 10px;'
+                    f'border-radius:10px;background:rgba(127,127,127,.08);'
+                    f'font-size:18px;font-weight:700;line-height:1.5;">{preview_html}</div>',
+                    unsafe_allow_html=True,
+                )
+
+
+if st.session_state.get("v12_text_source_panel") == "ai":
+    st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；文案助手目前暫時不限次數，不占用網站每日 AI 額度。")
+    _v12_render_ai_copy_assistant(
+        _v12_current_api_mode,
+        _v12_current_user_api_key,
+    )
+
+
+if st.session_state.get("v12_text_source_panel") == "random":
+    _pool_names=list(V8_RANDOM_POOLS.keys())
+    _pool_choice=st.selectbox(
+        "🎲 隨機用語池",
+        ["↓ 請選擇語詞池", "⭐ 我的自定義語詞池", "全部內建語詞"] + _pool_names,
+        key="v10_phrase_pool_choice",
+    )
+
+    if _pool_choice=="⭐ 我的自定義語詞池":
+        with st.expander("💾 我的自定義語詞池",expanded=True):
+            _new_phrase=st.text_input(
+                "➕ 新增一句語詞",
+                key="v10_new_phrase",
+                placeholder="例如：今天也要加油！",
+            )
+            _pa,_pb,_pc=st.columns(3)
+            with _pa:
+                if st.button("➕ 加入語詞池",key="v10_add_phrase",use_container_width=True):
+                    if _new_phrase.strip():
+                        V10_CUSTOM_PHRASE_POOL.append(_new_phrase.strip())
+                        V10_CUSTOM_PHRASE_POOL[:]=list(dict.fromkeys(V10_CUSTOM_PHRASE_POOL))
+                        if _save_v10_phrase_pool(V10_CUSTOM_PHRASE_POOL):
+                            st.success("✅ 已加入並儲存")
+                            st.rerun()
+                        else:
+                            st.error("❌ 儲存失敗")
+            with _pb:
+                if st.button("🎲 從我的池子抽 8 句",key="v10_random_my_pool",use_container_width=True):
+                    if V10_CUSTOM_PHRASE_POOL:
+                        vals=random.sample(V10_CUSTOM_PHRASE_POOL,min(8,len(V10_CUSTOM_PHRASE_POOL)))
+                        while len(vals)<8:
+                            vals.append(random.choice(V10_CUSTOM_PHRASE_POOL))
+                        random.shuffle(vals)
+                        set_texts(vals)
+                        st.rerun()
+                    else:
+                        st.warning("目前自定義語詞池是空的。")
+            with _pc:
+                if st.button("🗑️ 清空我的池子",key="v10_clear_my_pool",use_container_width=True):
+                    V10_CUSTOM_PHRASE_POOL.clear()
+                    if _save_v10_phrase_pool(V10_CUSTOM_PHRASE_POOL):
+                        st.success("✅ 已清空")
+                        st.rerun()
+
+            if V10_CUSTOM_PHRASE_POOL:
+                st.caption(f"目前共有 {len(V10_CUSTOM_PHRASE_POOL)} 句")
+                st.write("、".join(V10_CUSTOM_PHRASE_POOL))
+            else:
+                st.info("尚未建立自定義語詞。")
+
+        _active_pool=V10_CUSTOM_PHRASE_POOL
+    else:
+        if _pool_choice=="↓ 請選擇語詞池":
+            _active_pool=[]
+            st.info("👆 請先選擇一個語詞池。")
+        elif _pool_choice=="全部內建語詞":
+            _active_pool=[x for vals in V8_RANDOM_POOLS.values() for x in vals]
+        else:
+            _active_pool=V8_RANDOM_POOLS.get(_pool_choice,[])
+
+        a,b,c=st.columns(3)
+        with a:
+            if st.button("🎲 隨機填入 8 格",use_container_width=True,key="v10_random_v8"):
+                if _active_pool:
+                    vals=random.sample(_active_pool,min(8,len(_active_pool)))
+                    while len(vals)<8:
+                        vals.append(random.choice(_active_pool))
+                    random.shuffle(vals)
+                    set_texts(vals)
+                    st.rerun()
+        with b:
+            st.write(f"目前語詞池：{len(_active_pool)} 句")
+        with c:
+            st.write("內建語詞分類")
+
+    # 內建的「分類→語句→指定格」功能保留。
+    if _pool_choice not in ("⭐ 我的自定義語詞池", "↓ 請選擇語詞池"):
+        p1,p2,p3=st.columns([1.2,2.4,0.8])
+        with p1:
+            _common_cat=st.selectbox("常用語分類",_pool_names,key="v8_common_cat")
+        with p2:
+            _common_phrase=st.selectbox("常用語參考",V8_RANDOM_POOLS.get(_common_cat,[]),key="v8_common_phrase")
+        with p3:
+            _target_slot=st.selectbox("放入第",[f"{i:02d}" for i in range(1,9)],key="v8_target_slot")
+        if st.button("➕ 放入選定格",key="v8_insert_phrase"):
+            set_texts([
+                _common_phrase if i==int(_target_slot)-1 else st.session_state.get(f"sticker_text_{i}","")
+                for i in range(8)
+            ])
+            st.rerun()
+
+cols=st.columns(4)
+for i,col in enumerate(cols):
+    with col:
+        _v12_render_text_slot(i)
+
+cols=st.columns(4)
+for i,col in enumerate(cols,start=4):
+    with col:
+        _v12_render_text_slot(i)
+
+texts=get_texts()
+filled=sum(bool(x.strip()) for x in texts)
+st.info(f"已填寫 {filled} / 8 格")
+
+with st.expander("📚 查看全部語詞分類與內容",expanded=False):
+    for cat,vals in V8_RANDOM_POOLS.items():
+        st.markdown(f"**{cat}**")
+        st.write("、".join(vals))
+
+st.divider()
+v10_section("🔤 ⑤ 貼圖字型＋125 種帶圖字型", "#8e67d8")
+
+v10_subsection("✏️ 一般貼圖字型效果", "#8e67d8")
+text_style = st.selectbox(
+    "文字貼圖效果",
+    V8_TEXT_STYLE_OPTIONS,
+    index=0,
+    key="v8_text_style"
+)
+
+_selected_font = st.session_state.get("v8_selected_font", None)
+# 選完字型後的回跳定位點：刻意放在「125 種帶圖字型」標題之前，
+# 讓回跳後可直接看到「已選擇 125 字型」成功提示，而不是停在提示下方。
+st.markdown('<div id="v10-font-result-anchor" style="scroll-margin-top: 72px;"></div>', unsafe_allow_html=True)
+v10_subsection("🔤 125 種帶圖字型", "#8e67d8")
+if _selected_font:
+    st.success(f"🎨 已選擇 125 字型：{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}")
+else:
+    st.info("尚未指定 125 種字型；可從下方總覽選用。")
+
+# ------------------------------------------------------------
+# ------------------------------------------------------------
+# 選字後真正跳回「已選字型」位置
+# 使用 Streamlit Components v2 的原生 DOM JavaScript。
+# ------------------------------------------------------------
+if st.session_state.pop("v10_scroll_to_font_result", False):
+    import streamlit.components.v2 as components
+    _v10_font_scroll = components.component(
+        "v10_font_scroll",
+        html="<span aria-hidden='true'></span>",
+        js="""
+        export default function(component) {
+            const anchor = document.querySelector("#v10-font-result-anchor");
+            if (!anchor) return;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    // 直接定位到「125 種帶圖字型」區塊的上方定位點。
+                    // 這個定位點比成功提示更上面，因此回跳後會保留完整的
+                    // 「已選擇 125 字型：XXX｜名稱」提示在可視範圍內。
+                    anchor.scrollIntoView({
+                        behavior: "instant",
+                        block: "start"
+                    });
+                });
+            });
+        }
+        """,
+        isolate_styles=False,
+    )
+    _v10_font_scroll(key="font_scroll_once")
+
+# 125 種帶圖字型｜快速選擇＋分頁圖卡總覽
+# 手機不再一次渲染 125 張大圖，降低滑動成本。
+# ------------------------------------------------------------
+_font_labels = [
+    f"{_i:03d}｜{V8_TEXT_EFFECT_CATALOG[_i]}"
+    for _i in range(1, 126)
+]
+
+if "v12_font_quick_pick" not in st.session_state:
+    st.session_state["v12_font_quick_pick"] = "— 快速選擇字型｜可直接輸入數字 —"
+
+_quick_font_choice = st.selectbox(
+    "⚡ 快速選擇 125 種字型",
+    ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
+    key="v12_font_quick_pick",
+)
+
+if _quick_font_choice != "— 快速選擇字型｜可直接輸入數字 —":
+    _quick_font_no = int(_quick_font_choice.split("｜", 1)[0])
+    if st.session_state.get("v8_selected_font") != _quick_font_no:
+        st.session_state["v8_selected_font"] = _quick_font_no
+        st.session_state["v10_font_gallery_open"] = False
+        st.session_state["v10_scroll_to_font_result"] = True
+        st.rerun()
+
+if "v10_font_gallery_open" not in st.session_state:
+    st.session_state.v10_font_gallery_open = False
+if "v12_font_gallery_page" not in st.session_state:
+    st.session_state.v12_font_gallery_page = 1
+
+if st.button(
+    "📚 開啟 125 種帶圖字型總覽" if not st.session_state.v10_font_gallery_open
+    else "📖 關閉 125 種帶圖字型總覽",
+    key="v10_font_gallery_toggle",
+    use_container_width=True,
+):
+    st.session_state.v10_font_gallery_open = not st.session_state.v10_font_gallery_open
+    st.rerun()
+
+if st.session_state.v10_font_gallery_open:
+    st.markdown(
+        '<div class="v12-font-gallery-note">📱 手機版已改為分頁瀏覽，每頁 12 種；點選後會立即關閉總覽並回到已選結果。</div>',
+        unsafe_allow_html=True,
+    )
+
+    _font_per_page = 12
+    _font_total_pages = (125 + _font_per_page - 1) // _font_per_page
+    _page_options = list(range(1, _font_total_pages + 1))
+
+    # 使用單一 Session State key 管理頁數，避免 widget 建立後
+    # 再直接寫入另一個同輪 widget key 而觸發 StreamlitAPIException。
+    if "v12_font_gallery_page_select" not in st.session_state:
+        st.session_state["v12_font_gallery_page_select"] = 1
+
+    _current_page = st.selectbox(
+        "📄 瀏覽頁數",
+        _page_options,
+        key="v12_font_gallery_page_select",
+    )
+    st.session_state.v12_font_gallery_page = _current_page
+
+    _start_no = (_current_page - 1) * _font_per_page + 1
+    _end_no = min(125, _start_no + _font_per_page - 1)
+    st.caption(f"目前顯示 {_start_no:03d}～{_end_no:03d} ／ 125")
+
+    # --------------------------------------------------------
+    # V12｜STEP 01B③
+    # 響應式字型圖卡牆：
+    # 桌機 4 欄、平板 3 欄、手機固定 2 欄。
+    #
+    # 不再使用 st.columns() 直接承載圖片，避免手機版把 4 欄
+    # 全部垂直堆成超長單欄。
+    # 圖卡改由 HTML/CSS Grid 顯示；選擇動作集中到下方數字輸入，
+    # 讓手機使用者可以「快速瀏覽 → 輸入編號 → 立即選用」。
+    # --------------------------------------------------------
+    # --------------------------------------------------------
+    # V12｜STEP 01B③-2
+    # 可直接點選的原生 Streamlit 字型圖卡。
+    # 圖片維持原生 st.image，編號就是選取按鈕。
+    # --------------------------------------------------------
+    # 用具名 container 包住原生 Streamlit 欄位，讓手機 CSS 能精準覆寫成雙欄。
+    with st.container(key="v12_font_card_grid"):
+        _font_cols = st.columns(4)
+
+        for _i in range(_start_no, _end_no + 1):
+            _p = V8_FONT_PREVIEW_DIR / f"{_i:03d}.jpg"
+            if not _p.exists():
+                continue
+
+            with _font_cols[(_i - _start_no) % 4]:
+                st.image(str(_p), use_container_width=True)
+
+                # 直接點選編號即可選取該字型。
+                # callback 先在 widget 建立前更新狀態，避免 Streamlit
+                # 禁止在同一次 rerun 中直接修改已建立的 selectbox key。
+                def _v12_pick_font_from_card(font_no=_i):
+                    st.session_state["v8_selected_font"] = font_no
+                    st.session_state["v10_scroll_to_font_result"] = True
+                    st.session_state["v10_font_gallery_open"] = False
+
+                    # v12_font_quick_pick 是上方已建立的 widget key。
+                    # 不直接寫入它，改由後續初始化／同步邏輯依 v8_selected_font
+                    # 自動顯示目前選擇的字型，避免 StreamlitAPIException。
+
+                st.button(
+                    f"{_i:03d}",
+                    key=f"font_card_pick_{_i}",
+                    use_container_width=True,
+                    on_click=_v12_pick_font_from_card,
+                )
+
+                st.caption(V8_TEXT_EFFECT_CATALOG[_i])
+    # callback 會在 Streamlit 下一次完整執行前更新頁數，
+    # 不會在 widget 已實例化後直接修改其 key。
+    def _v12_font_change_page(delta):
+        current = int(st.session_state.get("v12_font_gallery_page_select", 1))
+        target = max(1, min(_font_total_pages, current + delta))
+        st.session_state["v12_font_gallery_page_select"] = target
+        st.session_state["v12_font_gallery_page"] = target
+
+    _prev_col, _page_col, _next_col = st.columns([1, 1.2, 1])
+    with _prev_col:
+        st.button(
+            "⬅️ 上一頁",
+            key="v12_font_prev",
+            use_container_width=True,
+            disabled=_current_page <= 1,
+            on_click=_v12_font_change_page,
+            args=(-1,),
+        )
+    with _page_col:
+        st.markdown(
+            f'<div style="text-align:center;padding:.55rem 0;font-weight:800;">第 {_current_page} / {_font_total_pages} 頁</div>',
+            unsafe_allow_html=True,
+        )
+    with _next_col:
+        st.button(
+            "下一頁 ➡️",
+            key="v12_font_next",
+            use_container_width=True,
+            disabled=_current_page >= _font_total_pages,
+            on_click=_v12_font_change_page,
+            args=(1,),
+        )
+
+
+with st.expander("🔎 已選字型大圖", expanded=False):
+    if _selected_font:
+        _p = V8_FONT_PREVIEW_DIR / f"{_selected_font:03d}.jpg"
+        if _p.exists():
+            st.image(str(_p), caption=f"{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}", use_container_width=True)
+            st.caption("以上為參考效果；實際生成會由 AI 依人物、文字與整體風格重新詮釋。")
+    else:
+        st.write("尚未選擇。")
+
+st.divider()
+v10_section("🌈 ⑥ 背景設定", "#16a085")
+st.markdown('<div class="v11-transparent-title">🖼️ 透明背景</div>', unsafe_allow_html=True)
+with st.container(key="transparent_png_option"):
+    transparent = st.checkbox("使用透明背景 PNG", value=False)
+
+v10_subsection("🌈 貼圖設定查看", "#ff9f43")
+style_mode = st.session_state.get("v10_style_mode", "↓ 請選擇風格")
+
+_prompt_color_segments = _v12_valid_color_segments(texts)
+prompt = build_prompt(
+    style,
+    custom_style,
+    selected_character,
+    custom_character,
+    texts,
+    transparent,
+    color_segments=_prompt_color_segments,
+    ai_copy_topic=st.session_state.get("v12_ai_copy_topic_used", st.session_state.get("v12_ai_copy_topic", "")),
+    ai_copy_tone=st.session_state.get("v12_ai_copy_tone_used", st.session_state.get("v12_ai_copy_tone", "")),
+    ai_copy_topics=st.session_state.get("v12_selected_themes", []),
+)
+
+if style_mode == V8_STYLE_CUSTOM_OPTION:
+    prompt += (
+        "\n【V10 風格模式】目前使用「自定義風格」模式。"
+        "請不要另外套用任何 預設風格，只依照使用者自定義風格描述生成。"
+    )
+else:
+    prompt += (
+        f"\n【V10 風格模式】目前使用預設風格：「{style_mode}」。"
+        "不要把未選取的自定義風格加入生成。"
+    )
+
+_selected_font_for_prompt = st.session_state.get("v8_selected_font")
+if text_style:
+    prompt += f"\n文字貼圖效果：{text_style}。"
+if _selected_font_for_prompt:
+    prompt += (
+        f"\n125種帶圖字型參考：{_selected_font_for_prompt:03d}｜"
+        f"{V8_TEXT_EFFECT_CATALOG[_selected_font_for_prompt]}。"
+        "\n請把此字型當作文字材質與視覺參考，不要照搬參考圖中的人物或其他內容。"
+    )
+with st.expander("🔍 點選查看貼圖設定"):
+    st.markdown(
+        """
+        <div style="
+            background:linear-gradient(135deg,#171c27,#202735);
+            border:1px solid #394457;
+            border-left:6px solid #58a6ff;
+            border-radius:12px;
+            padding:18px 22px;
+            margin:8px 0 14px;
+        ">
+            <div style="font-size:24px;font-weight:800;color:#ffffff;margin-bottom:8px;">
+                📝 AI 實際生成 Prompt（完整內容）
+            </div>
+            <div style="font-size:15px;color:#b9c4d4;line-height:1.6;">
+                以下保留實際送給 AI 的完整 Prompt；只改善閱讀呈現，不修改生成內容。
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    _prompt_text = str(prompt or "").strip()
+
+    if _prompt_text:
+        # 以「內容主題」分段，而不是只替少數標題上色。
+        # 每個邏輯區塊都有自己的標題色、背景與分隔線。
+        _lines = [x.strip() for x in _prompt_text.splitlines() if x.strip()]
+
+        _groups = []
+        _current = []
+        _section_keywords = (
+            "使用者自定義風格",
+            "風格：", "角色：", "人物：", "構圖：", "色彩：",
+            "整體氛圍：", "避免：", "人物與畫面特色：",
+            "文字貼圖效果：", "125種帶圖字型參考：",
+            "請使用透明背景PNG", "整體具有LINE貼圖",
+            "第1格的指定貼圖文字", "第2格的指定貼圖文字",
+            "第3格的指定貼圖文字", "第4格的指定貼圖文字",
+            "第5格的指定貼圖文字", "第6格的指定貼圖文字",
+            "第7格的指定貼圖文字", "第8格的指定貼圖文字",
+            "目前使用",
+        )
+
+        for _line in _lines:
+            # 只有真正的「主題開頭」才建立新區塊。
+            # 第1～8格指定貼圖文字視為同一個「01～08 貼圖文字」區塊。
+            _is_text_slot = bool(re.match(r"^第[1-8]格的指定貼圖文字", _line))
+            _is_section = any(_line.startswith(k) for k in _section_keywords)
+
+            if _is_text_slot:
+                if _current and not any(
+                    bool(re.match(r"^第[1-8]格的指定貼圖文字", x))
+                    for x in _current
+                ):
+                    _groups.append(_current)
+                    _current = []
+                _current.append(_line)
+                continue
+
+            if _is_section and _current:
+                _groups.append(_current)
+                _current = []
+            _current.append(_line)
+
+        if _current:
+            _groups.append(_current)
+
+        # 若 Prompt 沒有明確換行，至少把常見主題標籤切出來。
+        if len(_groups) == 1 and len(_lines) > 5:
+            _raw = _lines[0]
+            for _kw in _section_keywords:
+                if _kw in _raw:
+                    _parts = re.split(
+                        r'(?=' + re.escape(_kw) + r')',
+                        _raw
+                    )
+                    if len(_parts) > 1:
+                        _groups = [[p.strip()] for p in _parts if p.strip()]
+                        break
+
+        _palette = [
+            ("#67e8f9", "#10252d", "#1e5361"),  # 青
+            ("#86efac", "#10281e", "#27623d"),  # 綠
+            ("#f9a8d4", "#2d1726", "#70405a"),  # 粉
+            ("#c4b5fd", "#211a35", "#51427c"),  # 紫
+            ("#fde68a", "#2b2510", "#6b5b1e"),  # 黃
+            ("#fdba74", "#2d1d11", "#704622"),  # 橘
+            ("#93c5fd", "#13243a", "#365f91"),  # 藍
+        ]
+
+        _html = [
+            '<div style="background:#0f141d;border:1px solid #303a4a;'
+            'border-radius:14px;padding:10px 14px;'
+            'font-family:Arial,Microsoft JhengHei,sans-serif;">'
+        ]
+
+        for _idx, _group in enumerate(_groups):
+            _accent, _bg, _border = _palette[_idx % len(_palette)]
+            _title = _group[0]
+
+            # 01～08 指定貼圖文字統一使用一個彩色區塊。
+            _is_slot_group = bool(
+                re.match(r"^第[1-8]格的指定貼圖文字", _title)
+            )
+            if _is_slot_group:
+                _heading = "01～08 指定貼圖文字"
+                _rest = ""
+                _title_is_custom = True
+            else:
+                _title_is_custom = False
+
+            # 將「主題：內容」拆成彩色標題＋內容。
+            _m = re.match(r'^([^：:]{1,24}[：:])(.*)$', _title)
+            if not _title_is_custom:
+                if _m:
+                    _heading = _m.group(1)
+                    _rest = _m.group(2).strip()
+                else:
+                    _heading = _title if len(_title) <= 28 else "Prompt 內容"
+                    _rest = "" if _heading == _title else _title
+
+            _safe_heading = (
+                _heading.replace("&","&amp;")
+                        .replace("<","&lt;")
+                        .replace(">","&gt;")
+            )
+
+            _html.append(
+                f'<div style="margin:10px 0 14px;background:{_bg};'
+                f'border:1px solid {_border};border-left:5px solid {_accent};'
+                f'border-radius:10px;overflow:hidden;">'
+                f'<div style="padding:9px 14px;font-size:18px;font-weight:800;'
+                f'color:{_accent};border-bottom:1px solid {_border};">'
+                f'{_safe_heading}</div>'
+                f'<div style="padding:9px 14px 11px;">'
+            )
+
+            if _rest:
+                _safe = (
+                    _rest.replace("&","&amp;")
+                         .replace("<","&lt;")
+                         .replace(">","&gt;")
+                )
+                _html.append(
+                    f'<div style="font-size:16px;line-height:1.85;'
+                    f'color:#f1f5f9;padding:2px 0 5px;">{_safe}</div>'
+                )
+
+            for _line in _group[1:]:
+                _safe = (
+                    _line.replace("&","&amp;")
+                         .replace("<","&lt;")
+                         .replace(">","&gt;")
+                )
+                _html.append(
+                    f'<div style="font-size:16px;line-height:1.85;'
+                    f'color:#e7edf5;padding:3px 0;">{_safe}</div>'
+                )
+
+            _html.append("</div></div>")
+
+        _html.append("</div>")
+
+        st.markdown(
+            "".join(_html),
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("目前尚未產生 AI Prompt。")
+
+
+
+v10_section("✨ ⑦ 生成 4×2 原始總圖", "#e67e22")
+st.markdown('<div class="v11-section-tip">📌 <b>準備完成後：</b>按一次生成即可。生成期間按鈕會自動鎖定，請耐心等待。</div>', unsafe_allow_html=True)
+
+# ============================================================
+# V11｜STEP 02C-2｜兩階段生成鎖定（正式版）
+#
+# 核心設計：
+# ① 使用者第一次按下生成：只設定 pending lock，立即 st.rerun()
+#    → 本次不呼叫 AI。
+# ② 下一次 rerun：先把真正的 st.button 以 disabled=True 畫出來，
+#    → 此時按鈕已經是不可點擊狀態，再開始 AI 生成。
+# ③ 成功／失敗後解除 lock。
+#
+# 不依賴 JavaScript，不嘗試修改 Streamlit DOM。
+# 後端 Session Lock + Supabase quota / RPC / RLS 仍是安全主防線。
+# ============================================================
+st.session_state.setdefault("v11_generation_pending", False)
+st.session_state.setdefault("v11_generation_in_progress", False)
+
+_generation_pending = bool(st.session_state.get("v11_generation_pending", False))
+_generation_in_progress = bool(st.session_state.get("v11_generation_in_progress", False))
+_generation_locked = _generation_pending or _generation_in_progress
+
+# ------------------------------------------------------------
+# 第一階段：使用者按下按鈕
+# 只做必要的輸入檢查，設定 pending lock，立即 rerun。
+# 這樣下一次畫面重繪時，按鈕會先以 disabled=True 呈現，
+# 然後才進入長時間 AI 工作。
+# ------------------------------------------------------------
+if st.button(
+    "🔄 AI 正在生成，請稍候……" if _generation_locked else "✨ 生成 4×2 八格總圖",
+    type="primary",
+    use_container_width=True,
+    disabled=_generation_locked,
+    key="v11_generate_4x2",
+):
+    if not st.session_state.uploaded_image_bytes:
+        st.warning("請先上傳人物照片。")
+        st.stop()
+
+    if not filled:
+        st.warning("請至少輸入一格貼圖文字。")
+        st.stop()
+
+    if not _v11_user_api_key:
+        st.error("❌ 請先輸入自己的 OpenAI API Key。")
+        st.stop()
+
+    # 先鎖定，再立即重新繪製畫面；本次不呼叫 AI。
+    st.session_state["v11_generation_pending"] = True
+    st.session_state["v11_generation_started_at"] = __import__("time").time()
+    st.rerun()
+
+# ------------------------------------------------------------
+# 第二階段：只有 pending lock 存在時才進入真正生成。
+# 此時上面的 st.button 已經先以 disabled=True 呈現。
+# 因此使用者看到的是「不可按」的生成中按鈕，再開始 AI 工作。
+# ------------------------------------------------------------
+if st.session_state.get("v11_generation_pending", False):
+    st.session_state["v11_generation_pending"] = False
+    st.session_state["v11_generation_in_progress"] = True
+    _generation_locked = True
+
+    st.info("🔒 AI 生成進行中，本次操作已鎖定，請稍候……")
+
+    try:
+        if not _v11_user_api_key:
+            st.error("❌ 請先輸入自己的 OpenAI API Key。")
+            raise RuntimeError("missing_user_api_key")
+
+        _generation_client = OpenAI(api_key=_v11_user_api_key)
+
+        with st.spinner("AI 正在生成 4×2 原始總圖……"):
+            ib = BytesIO(st.session_state.uploaded_image_bytes)
+            # V11｜STEP 02C-4②
+            # 等待提示是「等待體驗」，不代表 OpenAI 真實完成百分比。
+            # 180 秒後逾時；不自動 retry，沿用原本的例外／退款路徑。
+            _progress = st.progress(0)
+            _status = st.empty()
+            _started_at = time.monotonic()
+            _progress.progress(0.05)
+            _status.info("🎨 正在分析你的照片……")
+
+            try:
+                _progress.progress(0.18)
+                _status.info("🖌️ 正在準備貼圖構圖……")
+
+                # OpenAI SDK timeout：最長等待 180 秒。
+                # V12｜透明背景連動測試版
+                # 只有使用者勾選「使用透明背景 PNG」時，才送出 transparent 參數
+                # 與透明 Alpha 強制提示；未勾選時完全不傳 background。
+                _generation_prompt = prompt
+                _image_edit_kwargs = {
+                    # V12｜模型分流：一般背景沿用 gpt-image-2；
+                    # 原生透明 PNG 使用已實測支援 Alpha 的 gpt-image-2.5-sunburst。
+                    "model": "gpt-image-2.5-sunburst" if transparent else "gpt-image-2",
+                    "image": ("person.png", ib, "image/png"),
+                    "size": "1536x1024",
+                    "output_format": "png",
+                }
+
+                if transparent:
+                    _generation_prompt += (
+                        "\n\n【透明背景強制要求】"
+                        "\n輸出必須是真正的透明 PNG Alpha 背景。"
+                        "\n背景區域必須為 Alpha=0，不得繪製白色、灰色或任何棋盤格圖案。"
+                        "\n絕對不要用棋盤格、灰白方格或任何圖案來模擬透明背景。"
+                        "\n人物、物件與文字保留正常不透明像素，只有背景透明。"
+                    )
+                    _image_edit_kwargs["background"] = "transparent"
+
+                _image_edit_kwargs["prompt"] = _generation_prompt
+                result = _generation_client.with_options(timeout=180).images.edit(
+                    **_image_edit_kwargs
+                )
+
+                # V11｜02C-4④｜異常回應資料防護
+                # API 呼叫成功不代表一定取得有效圖片；空 data / 缺少 b64_json
+                # 必須視為生成失敗，交回原本的 exception / refund 流程。
+                if not getattr(result, "data", None):
+                    raise RuntimeError("AI 回應成功，但沒有取得有效圖片資料，請重新操作。")
+                
+                _image_item = result.data[0]
+                _b64_json = getattr(_image_item, "b64_json", None)
+                if not _b64_json:
+                    raise RuntimeError("AI 回應成功，但圖片資料不完整，請重新操作。")
+
+                _progress.progress(0.88)
+                _status.info("🖼️ 原始總圖處理中……")
+                _progress.progress(0.96)
+                _status.info("✂️ 正在準備 8 張貼圖……")
+                _progress.progress(1.0)
+                _status.success("🎉 AI 生成完成，正在進行最後圖片處理……")
+            except Exception as _gen_exc:
+                _elapsed = time.monotonic() - _started_at
+
+                # 診斷修正版：只有真正等待達 180 秒以上，才顯示逾時。
+                # 其他 OpenAI / SDK / 參數 / 權限 / 網路錯誤保留原始例外，
+                # 避免所有錯誤都被誤包裝成 TimeoutError。
+                if _elapsed >= 180:
+                    _v11_clear_generation_state()
+                    raise TimeoutError(
+                        "AI 生成逾時（超過 3 分鐘），請重新操作。"
+                    ) from _gen_exc
+
+                # 在 Streamlit 畫面顯示診斷資訊，方便定位真正原因。
+                st.error(
+                    f"❌ AI 生成失敗｜{type(_gen_exc).__name__}: {_gen_exc}"
+                )
+                st.caption(f"診斷資訊：失敗發生於 {_elapsed:.1f} 秒；這不是 3 分鐘逾時。")
+                raise
+            raw = base64.b64decode(result.data[0].b64_json)
+            img = Image.open(BytesIO(raw)).convert("RGBA")
+            out = BytesIO()
+            img.save(out, "PNG")
+            st.session_state.generated_4x2_bytes = out.getvalue()
+            st.session_state.crop_boxes = None
+            st.success("🎉 4×2 原始總圖生成成功！")
+
+    except Exception as e:
+        if str(e) != "missing_user_api_key":
+            st.info(
+                "ℹ️ 這次使用的是你自己的 OpenAI API；"
+                "不涉及舊版網站的每日額度或 Supabase。"
+            )
+
+        if str(e) != "missing_user_api_key":
+            st.error("❌ 生成失敗")
+            st.caption(f"錯誤類型：{type(e).__name__}")
+
+    finally:
+        # 成功、失敗、額度不足、例外都解除鎖定。
+        # 下一次正常 rerun 時，生成按鈕恢復可用。
+        st.session_state["v11_generation_in_progress"] = False
+        st.session_state["v11_generation_pending"] = False
+        st.session_state["v11_generation_finished_at"] = __import__("time").time()
+
+# ------------------------------------------------------------
+# STEP 10C native component
+# ------------------------------------------------------------
+# ------------------------------------------------------------
+if st.session_state.generated_4x2_bytes:
+    st.divider()
+    v10_section("✂️ ⑧ 直接用滑鼠調整 8 個裁切框", "#e74c3c")
+
+    src = Image.open(BytesIO(st.session_state.generated_4x2_bytes)).convert("RGBA")
+    w, h = src.size
+
+    if st.session_state.crop_boxes is None:
+        st.session_state.crop_boxes = base_boxes(w, h)
+
+    st.info(
+        "直接拖曳：移動裁切框。拖曳四角：改變大小。"
+        "拖曳四邊：單方向調整。8 個框同時顯示，不需要逐張打開。"
+    )
+
+    # --------------------------------------------------------
+    # 明確顯示原始 4×2 圖
+    # 不依賴 Canvas 是否成功載入圖片。
+    # 固定預覽寬度，避免隨網頁容器無限放大。
+    # --------------------------------------------------------
+    v10_subsection("🖼️ 原始 4×2 圖片", "#e74c3c")
+    _orig_left, _orig_center, _orig_right = st.columns([1, 5, 1])
+    with _orig_center:
+        st.image(
+            st.session_state.generated_4x2_bytes,
+            caption=f"原始生成圖：{w} × {h} px",
+            use_container_width=True,
+        )
+
+    st.caption(
+        "上方是原始圖片預覽；下方 Canvas 才是可直接拖曳的裁切操作區。"
+    )
+
+    _CROP_HTML_TEMPLATE = '<!doctype html>\n<html><head><meta charset="utf-8">\n<style>\n*{box-sizing:border-box}\nbody{margin:0;font-family:Arial,"Microsoft JhengHei",sans-serif;color:#333}\n.help{font-size:14px;line-height:1.6;background:#f5f7fa;padding:10px;border-radius:8px}\n.viewer{position:relative;width:720px;max-width:100%;margin:10px auto 0;border:1px solid #bbb;border-radius:8px;overflow:hidden;background:#eee}\n#cv{display:block;width:720px;max-width:100%;height:auto;touch-action:none;user-select:none}\n.status{font-size:28px;line-height:1.45;font-weight:700;padding:12px 0;color:#fff;text-align:center}\n.actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}\nbutton{border:0;border-radius:8px;padding:9px 13px;cursor:pointer}\nbutton.primary{background:#222;color:#fff}\nbutton.lock{background:#333;color:#fff}\nbutton:disabled{opacity:.45;cursor:not-allowed}\n.coords{font:20px/1.6 Consolas,monospace;white-space:pre-wrap;background:#1b2028;color:#fff;padding:14px;border-radius:10px;text-align:center}\n.legend{font-size:26px;line-height:1.5;font-weight:700;padding:10px 0;color:#fff;text-align:center}\n</style></head><body>\n<div class="help">\n<b>📍 定位點裁切</b><br>\n3 條上半部＋3 條下半部垂直定位線＋1 條水平定位線。\n上下 6 條藍色垂直線可各自獨立拖曳；按「🔒 鎖定定位」後產生 01～08 裁切框。\n</div>\n<div class="viewer"><canvas id="cv"></canvas></div>\n<div class="status" id="status">正在建立定位線……</div>\n<div class="legend">🔴 固定外框\u3000🔵 上下 6 條獨立垂直分隔線\u3000🟠 水平分隔線\u3000｜\u3000🔒 鎖定後可進行裁切</div>\n<div class="actions">\n<button onclick="resetGuides()">↩️ 恢復分隔線位置</button>\n<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>\n<button id="downloadBtn" class="primary" onclick="downloadAll()" disabled>✂️ 裁切並依序下載01～08(手機下載)</button>\n</div>\n\n<script>\nconst B64="__IMAGE_B64__", IW=__IW__, IH=__IH__;\nconst cv=document.getElementById("cv"),ctx=cv.getContext("2d");\nconst statusEl=document.getElementById("status"),coordsEl=document.getElementById("coords");\nconst lockBtn=document.getElementById("lockBtn"),downloadBtn=document.getElementById("downloadBtn");\nconst colors=["#ff4040","#3987ff","#32ad61","#ff922e"];\nlet scale=1,locked=false,active=-1,startX=0,startY=0,snap=null;\n\nfunction clamp(v,a,b){return Math.max(a,Math.min(b,v))}\nfunction guidesDefault(){\n  return {\n    xTop:[IW/4,IW/2,3*IW/4],\n    xBottom:[IW/4,IW/2,3*IW/4],\n    y:[0,IH/2,IH]\n  };\n}\nlet g=guidesDefault();\n\nconst image=new Image();\nimage.src="data:image/png;base64,"+B64;\n\nfunction resize(){\n  const viewer=cv.parentElement;\n  const mw=Math.min(720,Math.max(320,viewer.clientWidth||720));\n  cv.width=Math.round(mw);\n  cv.height=Math.round(mw*IH/IW);\n  scale=cv.width/IW;\n  draw();\n}\n\nfunction boxes(){\n  const out=[];\n  const xt=[0,g.xTop[0],g.xTop[1],g.xTop[2],IW];\n  const xb=[0,g.xBottom[0],g.xBottom[1],g.xBottom[2],IW];\n  for(let c=0;c<4;c++) out.push([xt[c],g.y[0],xt[c+1],g.y[1]]);\n  for(let c=0;c<4;c++) out.push([xb[c],g.y[1],xb[c+1],g.y[2]]);\n  return out;\n}\n\nfunction draw(){\n  ctx.clearRect(0,0,cv.width,cv.height);\n  ctx.drawImage(image,0,0,cv.width,cv.height);\n\n  // Slight guide shading.\n  ctx.save();\n  ctx.fillStyle="rgba(255,255,255,.08)";\n  ctx.fillRect(0,0,cv.width,cv.height);\n  ctx.restore();\n\n  // 上下各 3 條：六條垂直線完全獨立。\n  for(let i=0;i<3;i++){\n    const xt=g.xTop[i]*scale;\n    const xb=g.xBottom[i]*scale;\n    ctx.save();\n    ctx.strokeStyle="#3987ff";\n    ctx.lineWidth=2.5;\n    ctx.setLineDash([10,7]);\n    ctx.beginPath();ctx.moveTo(xt,0);ctx.lineTo(xt,g.y[1]*scale);ctx.stroke();\n    ctx.beginPath();ctx.moveTo(xb,g.y[1]*scale);ctx.lineTo(xb,cv.height);ctx.stroke();\n    ctx.setLineDash([]);\n    ctx.fillStyle="#3987ff";\n    ctx.fillRect(xt-5,4,10,18);\n    ctx.fillRect(xb-5,g.y[1]*scale+4,10,18);\n    ctx.restore();\n  }\n\n  // 左右外框固定。\n  ctx.save();\n  ctx.strokeStyle="#ff4040";\n  ctx.lineWidth=2.5;\n  ctx.setLineDash([10,7]);\n  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,cv.height);ctx.stroke();\n  ctx.beginPath();ctx.moveTo(cv.width,0);ctx.lineTo(cv.width,cv.height);ctx.stroke();\n  ctx.setLineDash([]);\n  ctx.fillStyle="#ff4040";\n  ctx.fillRect(0,4,10,18);\n  ctx.fillRect(cv.width-10,4,10,18);\n  ctx.restore();  // Draw 3 horizontal guide lines.\n  for(let i=0;i<3;i++){\n    const y=g.y[i]*scale;\n    ctx.save();\n    ctx.strokeStyle="#ff922e";\n    ctx.lineWidth=i===1?2.5:2;\n    ctx.setLineDash([10,7]);\n    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cv.width,y);ctx.stroke();\n    ctx.setLineDash([]);\n    ctx.fillStyle="#ff922e";\n    ctx.fillRect(4,y-5,22,10);\n    ctx.restore();\n  }\n\n  // Number each derived cell; these are guide labels only.\n  const b=boxes();\n  const cellColors=["#ff4040","#3987ff","#32ad61","#a04bd0","#ff922e","#25aeb0","#db3f9b","#956c3c"];\n  for(let i=0;i<8;i++){\n    const x=b[i][0]*scale,y=b[i][1]*scale;\n    ctx.save();\n    ctx.font="bold 17px Arial";\n    ctx.lineWidth=3;\n    ctx.strokeStyle="rgba(255,255,255,.95)";\n    ctx.strokeText(String(i+1).padStart(2,"0"),x+8,y+21);\n    ctx.fillStyle=cellColors[i];\n    ctx.fillText(String(i+1).padStart(2,"0"),x+8,y+21);\n    ctx.restore();\n  }\n\n  updateCoords();\n}\n\nfunction updateCoords(){\n  // 座標資訊已從使用者介面移除；保留函式避免影響既有裁切流程。\n}\n\nfunction pointerPos(e){\n  const r=cv.getBoundingClientRect();\n  return {x:(e.clientX-r.left)*IW/r.width,y:(e.clientY-r.top)*IH/r.height};\n}\n\nfunction nearestGuide(p){\n  const tol=Math.max(18,18/scale);\n  let best=-1,bd=Infinity,type="";\n  const arr=p.y<g.y[1] ? g.xTop : g.xBottom;\n  const segType=p.y<g.y[1] ? "xTop" : "xBottom";\n  for(let i=0;i<3;i++){\n    const d=Math.abs(p.x-arr[i]);\n    if(d<tol&&d<bd){best=i;bd=d;type=segType;}\n  }\n  const dy=Math.abs(p.y-g.y[1]);\n  if(dy<tol&&dy<bd){best=1;bd=dy;type="y";}\n  return {index:best,type:type};\n}cv.addEventListener("pointerdown",e=>{\n  if(locked)return;\n  const p=pointerPos(e),h=nearestGuide(p);\n  if(h.index<0)return;\n  e.preventDefault();\n  try{cv.setPointerCapture(e.pointerId)}catch(_){}\n  active=h.index;startX=p.x;startY=p.y;snap={xTop:[...g.xTop],xBottom:[...g.xBottom],y:[...g.y],type:h.type};\n  statusEl.textContent="🖱️ 正在調整定位線……";\n});\n\ncv.addEventListener("pointermove",e=>{\n  if(active<0||locked)return;\n  e.preventDefault();\n  const p=pointerPos(e);\n  if(snap.type==="xTop" || snap.type==="xBottom"){\n    const arr=snap.type==="xTop" ? g.xTop : g.xBottom;\n    const snapArr=snap.type==="xTop" ? snap.xTop : snap.xBottom;\n    const min=30;\n    const lo=(active===0 ? 0 : arr[active-1])+min;\n    const hi=(active===2 ? IW : arr[active+1])-min;\n    arr[active]=clamp(snapArr[active]+(p.x-startX),lo,hi);\n  }else{\n    const min=30;\n    g.y[1]=clamp(snap.y[1]+(p.y-startY),g.y[0]+min,g.y[2]-min);\n  }\n  draw();\n});\n\ncv.addEventListener("pointerup",e=>{\n  if(active>=0){try{cv.releasePointerCapture(e.pointerId)}catch(_){}}\n  active=-1;\n  if(!locked)statusEl.textContent="✅ 定位線已更新";\n});\n\nfunction resetGuides(){\n  locked=false;\n  g=guidesDefault();\n  lockBtn.textContent="🔒 鎖定定位";\n  downloadBtn.disabled=true;\n  statusEl.textContent="↩️ 已恢復標準4×2定位";\n  draw();\n}\n\nfunction toggleLock(){\n  locked=!locked;\n  if(locked){\n    lockBtn.textContent="🔓 解鎖定位";\n    downloadBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，可以開始裁切";\n  }else{\n    lockBtn.textContent="🔒 鎖定定位";\n    downloadBtn.disabled=true;\n    statusEl.textContent="🛠️ 定位已解鎖，可以繼續微調";\n  }\n  draw();\n}\n\nfunction saveBlob(blob,name){\n  const u=URL.createObjectURL(blob),a=document.createElement("a");\n  a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();\n  setTimeout(()=>URL.revokeObjectURL(u),1000);\n}\n\n// V10 STEP 10C.6：移植 V8「邊界連通背景移除」邏輯。\n// 只移除從圖片邊緣連通、且接近背景色的區域；不整片刪除人物/文字中的白色。\nfunction removeConnectedBackground(canvas, tolerance=30){\n  const ctx2=canvas.getContext("2d",{willReadFrequently:true});\n  const W=canvas.width,H=canvas.height;\n  const img=ctx2.getImageData(0,0,W,H);\n  const px=img.data;\n\n  const pts=[\n    [0,0],[W-1,0],[0,H-1],[W-1,H-1],\n    [Math.min(4,W-1),Math.min(4,H-1)],\n    [Math.max(0,W-5),Math.min(4,H-1)],\n    [Math.min(4,W-1),Math.max(0,H-5)],\n    [Math.max(0,W-5),Math.max(0,H-5)]\n  ];\n\n  let sr=0,sg=0,sb=0,count=0;\n  for(const [x,y] of pts){\n    const k=(y*W+x)*4;\n    if(px[k+3]===0) continue;\n    sr+=px[k]; sg+=px[k+1]; sb+=px[k+2]; count++;\n  }\n  if(count===0) return;\n\n  const bg=[sr/count,sg/count,sb/count];\n  const tol2=tolerance*tolerance;\n\n  function nearBg(k){\n    if(px[k+3]===0) return true;\n    const dr=px[k]-bg[0],dg=px[k+1]-bg[1],db=px[k+2]-bg[2];\n    return dr*dr+dg*dg+db*db<=tol2;\n  }\n\n  const seen=new Uint8Array(W*H);\n  const qx=[],qy=[];\n  let head=0;\n\n  function push(x,y){\n    if(x<0||x>=W||y<0||y>=H) return;\n    const n=y*W+x;\n    if(seen[n]) return;\n    seen[n]=1;\n    qx.push(x);qy.push(y);\n  }\n\n  for(let x=0;x<W;x++){push(x,0);push(x,H-1);}\n  for(let y=0;y<H;y++){push(0,y);push(W-1,y);}\n\n  while(head<qx.length){\n    const x=qx[head],y=qy[head++];\n    const k=(y*W+x)*4;\n    if(!nearBg(k)) continue;\n    px[k+3]=0;\n    push(x-1,y);push(x+1,y);push(x,y-1);push(x,y+1);\n  }\n\n  ctx2.putImageData(img,0,0);\n}\n\nfunction makeSticker(i){\n  const b=boxes()[i].map(v=>Math.round(v));\n  const x1=clamp(b[0],0,IW-2),y1=clamp(b[1],0,IH-2);\n  const x2=clamp(b[2],x1+2,IW),y2=clamp(b[3],y1+2,IH);\n  const cw=370,ch=320,sw=x2-x1,sh=y2-y1;\n  const rat=Math.min(cw/sw,ch/sh),nw=Math.max(1,Math.round(sw*rat)),nh=Math.max(1,Math.round(sh*rat));\n\n  const o=document.createElement("canvas");\n  o.width=cw;o.height=ch;\n  const octx=o.getContext("2d",{willReadFrequently:true});\n  octx.clearRect(0,0,cw,ch);\n\n  // 保留 V10 原本的定位點裁切、等比例縮放、置中。\n  octx.drawImage(\n    image,x1,y1,sw,sh,\n    Math.round((cw-nw)/2),Math.round((ch-nh)/2),nw,nh\n  );\n\n  // 只有勾選「透明背景 PNG」時才套用 V8 邏輯。\n  if(__TRANSPARENT__){\n    removeConnectedBackground(o,30);\n  }\n\n  return new Promise(r=>o.toBlob(r,"image/png"));\n}\n\nasync function downloadAll(){\n  if(!locked)return;\n  statusEl.textContent="⏳ 正在製作01～08 PNG……";\n  for(let i=0;i<8;i++){\n    saveBlob(await makeSticker(i),String(i+1).padStart(2,"0")+".png");\n    await new Promise(r=>setTimeout(r,180));\n  }\n  statusEl.textContent="🎉 01～08 已全部裁切並下載！";\n}\n\nimage.onload=()=>{\n  resize();\n  statusEl.textContent="✅ 定位線已建立：上 3 條＋下 3 條藍色垂直線可獨立拖曳";\n};\nwindow.addEventListener("resize",resize);\n</script></body></html>'
+    _image_b64 = base64.b64encode(st.session_state.generated_4x2_bytes).decode("ascii")
+    _boxes_json = __import__("json").dumps(st.session_state.crop_boxes, ensure_ascii=False)
+    _crop_html = _CROP_HTML_TEMPLATE.replace("__IMAGE_B64__", _image_b64).replace("__IW__", str(int(w))).replace("__IH__", str(int(h))).replace("__BOXES__", _boxes_json).replace("__TRANSPARENT__", "true" if transparent else "false")
+    import streamlit.components.v1 as components
+    components.html(
+        _crop_html,
+        height=760,
+        scrolling=False,
+    )
+
+
+    # ============================================================
+    # V10 STEP 11B.1
+    # 直接從 01～08 選擇 MAIN / TAB＋一鍵打包
+    #
+    # 設計原則：
+    # 1. 不重新上傳 01～08。
+    # 2. 不修改 STEP 10C.8 的 AI 生成、透明、定位核心。
+    # 3. 使用目前原始 4×2 圖＋定位座標直接在伺服器端裁切。
+    # 4. main/tab 選擇與裁切在同一頁完成。
+    # ============================================================
+    st.divider()
+    v10_section("⭐ STEP 11B｜選擇 MAIN / TAB（電腦版下載）", "#9b59b6")
+    st.markdown(
+        '<div style="font-size:28px;line-height:1.5;font-weight:700;'
+        'text-align:center;color:#fff;margin:10px 0 22px;">'
+        '調整好定位線後，直接指定哪一格做 MAIN、哪一格做 TAB。'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # The browser editor keeps the guide coordinates in JS. For this first
+    # stable version, provide a simple 01～08 selector tied to the standard
+    # 4×2 positions. The final crop package still uses the original image.
+    _main_tab_cols = st.columns(4)
+    _main_tab_options = [f"{i:02d}" for i in range(1,9)]
+
+    _v12_loaded_main = str(st.session_state.pop("v12_loaded_history_main_no", "") or "")
+    _v12_loaded_tab = str(st.session_state.pop("v12_loaded_history_tab_no", "") or "")
+
+    if _v12_loaded_main in _main_tab_options:
+        st.session_state["step11b1_main"] = _v12_loaded_main
+    elif "step11b1_main" not in st.session_state:
+        st.session_state.step11b1_main = "01"
+
+    if _v12_loaded_tab in _main_tab_options:
+        st.session_state["step11b1_tab"] = _v12_loaded_tab
+    elif "step11b1_tab" not in st.session_state:
+        st.session_state.step11b1_tab = "02"
+
+    with _main_tab_cols[0]:
+        st.markdown("### ⭐ MAIN")
+    with _main_tab_cols[1]:
+        st.markdown("### 🏷️ TAB")
+    with _main_tab_cols[2]:
+        st.markdown("### 📦 完整套件")
+    with _main_tab_cols[3]:
+        st.markdown("### 🖼️ 透明背景")
+
+    cmain, ctab = st.columns(2)
+    with cmain:
+        main_no = st.selectbox(
+            "選擇 MAIN",
+            _main_tab_options,
+            index=_main_tab_options.index(st.session_state.step11b1_main),
+            key="step11b1_main_select",
+            help="此格會製作 main.png（240×240）"
+        )
+        st.session_state.step11b1_main = main_no
+
+    with ctab:
+        tab_choices = [x for x in _main_tab_options if x != main_no]
+        if st.session_state.step11b1_tab not in tab_choices:
+            st.session_state.step11b1_tab = tab_choices[0]
+        tab_no = st.selectbox(
+            "選擇 TAB",
+            tab_choices,
+            index=tab_choices.index(st.session_state.step11b1_tab),
+            key="step11b1_tab_select",
+            help="此格會製作 tab.png（96×74）"
+        )
+        st.session_state.step11b1_tab = tab_no
+
+    st.info(
+        f"目前設定：⭐ MAIN = {main_no}　｜　🏷️ TAB = {tab_no}　｜　"
+        f"其他 6 張照正常 01～08 輸出"
+    )
+
+    # Server-side crop helper based on the current original 4x2 image.
+    # The initial guide grid is standard 4x2; this is intentionally isolated
+    # so the successful STEP 10C.8 browser editor is not changed.
+    def _v11b1_crop_cell(sheet, idx):
+        sw, sh = sheet.size
+        col = idx % 4
+        row = idx // 4
+        x1 = round(col * sw / 4)
+        x2 = round((col + 1) * sw / 4)
+        y1 = round(row * sh / 2)
+        y2 = round((row + 1) * sh / 2)
+
+        crop = sheet.crop((x1, y1, x2, y2)).convert("RGBA")
+        out = Image.new("RGBA", (370, 320), (255,255,255,0))
+        scale = min(370 / crop.width, 320 / crop.height)
+        nw = max(1, round(crop.width * scale))
+        nh = max(1, round(crop.height * scale))
+        crop = crop.resize((nw, nh), Image.Resampling.LANCZOS)
+        out.alpha_composite(crop, ((370-nw)//2, (320-nh)//2))
+        return out
+
+    def _v11b1_special(im, size):
+        out = Image.new("RGBA", size, (255,255,255,0))
+        scale = min(size[0]/im.width, size[1]/im.height)
+        nw=max(1,round(im.width*scale))
+        nh=max(1,round(im.height*scale))
+        im=im.resize((nw,nh),Image.Resampling.LANCZOS)
+        out.alpha_composite(im,((size[0]-nw)//2,(size[1]-nh)//2))
+        return out
+
+
+    # ============================================================
+    # V12｜STEP 01A②｜作品名稱
+    # 放在最後打包按鈕正上方
+    # ============================================================
+    st.markdown("### 🏷️ 作品名稱")
+    st.caption("此名稱會同時用於「我的作品」紀錄與 ZIP 下載檔案名稱。")
+    st.text_input(
+        "為這組作品命名",
+        key="v12_project_name_input",
+        placeholder="例如：阿土的日常貼圖",
+        max_chars=80,
+        on_change=_v12_project_name_on_change,
+    )
+    _v12_name_preview = _v12_project_snapshot().get("project_name", "")
+    if not _v12_name_preview:
+        st.caption(f"未填寫時，會自動使用：{_v12_default_project_name()}")
+
+    if st.button("📦 完成裁切＋製作貼圖檔案＋一鍵打包", type="primary", use_container_width=True):
+        try:
+            _sheet = Image.open(BytesIO(st.session_state.generated_4x2_bytes)).convert("RGBA")
+            _zipbuf = BytesIO()
+
+            with zipfile.ZipFile(_zipbuf, "w", zipfile.ZIP_DEFLATED) as _zip:
+                cropped_images = {}
+                for i in range(8):
+                    im = _v11b1_crop_cell(_sheet, i)
+                    cropped_images[i+1] = im
+                    _b = BytesIO()
+                    im.save(_b, "PNG", optimize=True)
+                    _zip.writestr(f"{i+1:02d}.png", _b.getvalue())
+
+                main_im = _v11b1_special(cropped_images[int(main_no)], (240,240))
+                tab_im = _v11b1_special(cropped_images[int(tab_no)], (96,74))
+
+                _mb=BytesIO(); _tb=BytesIO()
+                main_im.save(_mb,"PNG",optimize=True,dpi=(72,72))
+                tab_im.save(_tb,"PNG",optimize=True,dpi=(72,72))
+                _zip.writestr("main.png",_mb.getvalue())
+                _zip.writestr("tab.png",_tb.getvalue())
+
+            _zipbuf.seek(0)
+
+            # V12｜STEP 01A③：打包成功後自動加入「我的作品」暫存。
+            _history_stickers = {}
+            for _no, _im in cropped_images.items():
+                _history_stickers[f"{_no:02d}"] = _v12_png_bytes(_im)
+
+            _history_project = _v12_project_snapshot()
+            _history_project["project_name"] = (
+                _history_project.get("project_name") or _v12_default_project_name()
+            )
+
+            _v12_history_record(
+                metadata=_history_project,
+                zip_bytes=_zipbuf.getvalue(),
+                grid_bytes=st.session_state.get("generated_4x2_bytes"),
+                main_bytes=_mb.getvalue(),
+                tab_bytes=_tb.getvalue(),
+                sticker_bytes=_history_stickers,
+                main_no=main_no,
+                tab_no=tab_no,
+            )
+
+            st.success(
+                f"🎉 完成！MAIN={main_no}、TAB={tab_no}，"
+                "已將 01～08＋main.png＋tab.png 打包，並加入「我的作品」。"
+            )
+            st.download_button(
+                "⬇️ 下載完整 LINE 套件 ZIP",
+                data=_zipbuf.getvalue(),
+                file_name=f"{_v12_safe_download_stem(_v12_project_snapshot().get('project_name'))}.zip",
+                mime="application/zip",
+                use_container_width=True,
+                key="step11b1_download"
+            )
+        except Exception as e:
+            st.error(f"打包失敗：{e}")
+    st.caption("")
+st.divider()
+st.caption("")
+
+
+# ─────────────────────────────────────────────
+# LINE 貼圖官方網站
+# ─────────────────────────────────────────────
+st.markdown("""
+<style>
+div[data-testid="stLinkButton"] > a,
+div[data-testid="stLinkButton"] > a:visited,
+div[data-testid="stLinkButton"] > a:hover,
+div[data-testid="stLinkButton"] > a:active {
+    width: 100% !important;
+    min-height: 52px !important;
+    border-radius: 10px !important;
+    font-size: 18px !important;
+    font-weight: 800 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #FF4B4B !important;
+    background-color: #FF4B4B !important;
+    background-image: none !important;
+    color: #FFFFFF !important;
+    border: 1px solid #FF4B4B !important;
+    box-shadow: none !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+}
+div[data-testid="stLinkButton"] > a span,
+div[data-testid="stLinkButton"] > a p {
+    color: #FFFFFF !important;
+    font-weight: 800 !important;
+}
+div[data-testid="stLinkButton"] > a:hover {
+    background: #FF3333 !important;
+    background-color: #FF3333 !important;
+    border-color: #FF3333 !important;
+    color: #FFFFFF !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# ============================================================
+# V11｜STEP 02C-1 FIX4｜UI 主題交給 Streamlit 原生 Light/Dark
+# 不在 Python 內硬覆蓋 App 背景；避免「文字已變白、背景仍是白色」。
+# ============================================================
+st.markdown("""
+<style>
+/* 只處理我們自己建立的舊版自訂元件；不接管整個 Streamlit App。 */
+.v10-soft-box{
+  background:var(--secondary-background-color, #fafafa) !important;
+  border-color:var(--border-color, #e5e7eb) !important;
+}
+
+.v10-section-title,
+.v10-subsection,
+.v10-note{
+  color:var(--text-color, inherit);
+}
+
+/* section 的彩色框線保留原本設計，不設定整頁背景。 */
+</style>
+""", unsafe_allow_html=True)
+
+
+
+st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
+_link_col = st.columns([1, 2, 1])[1]
+with _link_col:
+    if st.button(
+        "📚 我的作品",
+        key="v12_footer_library",
+        use_container_width=True,
+    ):
+        _public02a_sync_style_bank_from_widgets()
+        _save_v10_presets()
+        st.session_state["v12_view"] = "library"
+        st.rerun()
+
+    st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
+
+    st.link_button(
+        "🔗 連結 LINE 貼圖網頁",
+        "https://creator.line.me/zh-hant/",
+        use_container_width=True,
+    )
+
+
+# ============================================================
+# PUBLIC STEP 02A｜個人設定匯出／匯入
+# ============================================================
+def _public02a_settings_panel():
+    """
+    V12｜STEP 01B②｜個人設定區（重新整理版）
+
+    設計原則：
+    - 完全移除針對 Streamlit file_uploader 內部 DOM 的偽元素、文字覆蓋與強制定位。
+    - 不再用 CSS 假裝一個檔案選擇按鈕。
+    - 匯出使用 Streamlit 原生 download_button。
+    - 匯入使用 Streamlit 原生 file_uploader。
+    - 兩者共用同一個乾淨的卡片版型，讓功能與版面分離。
+    """
+
+    settings = _public02a_get_settings()
+    export_data = json.dumps(
+        settings,
+        ensure_ascii=False,
+        indent=2,
+    ).encode("utf-8")
+
+    # ------------------------------------------------------------
+    # 區塊標題
+    # ------------------------------------------------------------
+    st.markdown(
+        """
+        <div class="v12-settings-shell">
+            <div class="v12-settings-title">🔐 我的個人設定</div>
+            <div class="v12-settings-subtitle">
+                自定義風格、詞語與人物／場景需求只屬於目前使用者。
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ------------------------------------------------------------
+    # 本區專用 CSS
+    #
+    # 注意：不再碰 file_uploader 內部 button / span / ::after。
+    # 只控制「外部卡片」與原生 Streamlit 元件的正常寬度。
+    # ------------------------------------------------------------
+    st.markdown(
+        """
+        <style>
+        .v12-settings-shell{
+            max-width:760px;
+            margin:28px auto 30px;
+            padding:18px 22px;
+            border-radius:16px;
+            border:2px solid #4b5563;
+            background:#151b26;
+            text-align:center;
+            box-sizing:border-box;
+        }
+
+        .v12-settings-title{
+            font-size:28px;
+            font-weight:800;
+            line-height:1.25;
+            color:#ffffff;
+        }
+
+        .v12-settings-subtitle{
+            margin-top:8px;
+            font-size:16px;
+            line-height:1.5;
+            color:#cbd5e1;
+        }
+
+        /* 只控制我們自己建立的兩張功能卡片。 */
+        div.st-key-v12_settings_export_card,
+        div.st-key-v12_settings_import_card{
+            width:min(620px, calc(100vw - 2rem));
+            max-width:620px;
+            margin:0 auto 24px;
+            padding:20px 24px;
+            border:1px solid #394150;
+            border-radius:16px;
+            background:#1c222c;
+            box-sizing:border-box;
+        }
+
+        div.st-key-v12_settings_export_card .v12-settings-card-heading,
+        div.st-key-v12_settings_import_card .v12-settings-card-heading{
+            margin:0 0 6px;
+            text-align:center;
+            font-size:22px;
+            font-weight:800;
+            line-height:1.35;
+        }
+
+        /*
+        匯出按鈕只設定它自己的 Streamlit 元件。
+        不影響 uploader。
+        */
+        div.st-key-v12_settings_export_card [data-testid="stDownloadButton"],
+        div.st-key-v12_settings_export_card [data-testid="stDownloadButton"] > button{
+            width:100%;
+            box-sizing:border-box;
+        }
+
+        div.st-key-v12_settings_export_card [data-testid="stDownloadButton"] > button{
+            min-height:48px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            text-align:center;
+            font-size:17px;
+            font-weight:700;
+        }
+
+        /*
+        匯入區完全保留 Streamlit 原生 uploader 的內部結構。
+        只讓最外層在卡片內正常填滿。
+        不設定 button::after、不隱藏 span、不做 absolute。
+        */
+        div.st-key-v12_settings_import_card [data-testid="stFileUploader"]{
+            width:100%;
+            box-sizing:border-box;
+        }
+
+        div.st-key-v12_settings_import_card [data-testid="stFileUploaderDropzone"]{
+            width:100%;
+            box-sizing:border-box;
+        }
+
+        @media (max-width:640px){
+            .v12-settings-shell{
+                width:calc(100vw - 1.25rem);
+                margin:18px auto 22px;
+                padding:16px 14px;
+            }
+
+            .v12-settings-title{
+                font-size:24px;
+            }
+
+            .v12-settings-subtitle{
+                font-size:15px;
+            }
+
+            div.st-key-v12_settings_export_card,
+            div.st-key-v12_settings_import_card{
+                width:calc(100vw - 1.25rem);
+                padding:18px 14px;
+                border-radius:14px;
+            }
+
+            div.st-key-v12_settings_export_card .v12-settings-card-heading,
+            div.st-key-v12_settings_import_card .v12-settings-card-heading{
+                font-size:20px;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ============================================================
+    # 📤 匯出卡片
+    # ============================================================
+    with st.container(key="v12_settings_export_card"):
+        st.markdown(
+            '<div class="v12-settings-card-heading">📤 匯出自定義</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.download_button(
+            label="匯出自定義",
+            data=export_data,
+            file_name="LINE貼圖工具_自定義設定.json",
+            mime="application/json",
+            use_container_width=True,
+            key="public02a_export_settings",
+        )
+
+    # ============================================================
+    # 📥 匯入卡片
+    # ============================================================
+    with st.container(key="v12_settings_import_card"):
+        st.markdown(
+            '<div class="v12-settings-card-heading">📥 匯入自定義</div>',
+            unsafe_allow_html=True,
+        )
+
+        # 使用原生 uploader，不再對它的內部 button 做文字或定位覆蓋。
+        imported = st.file_uploader(
+            "匯入自定義",
+            type=["json"],
+            key="public02a_import_settings",
+            help="選擇之前匯出的 LINE貼圖工具_自定義設定.json",
+        )
+
+    # ============================================================
+    # 匯入處理邏輯：保持原有功能
+    # ============================================================
+    if imported is not None:
+        try:
+            raw = imported.getvalue()
+            import_hash = hashlib.sha256(raw).hexdigest()
+            last_hash = st.session_state.get("public02a_last_import_hash")
+
+            # Streamlit rerun 後會保留 uploader 值，
+            # 只有新檔案才真正套用一次。
+            if import_hash != last_hash:
+                data = json.loads(raw.decode("utf-8"))
+                _public02a_apply_settings(data)
+                st.session_state["public02a_last_import_hash"] = import_hash
+                st.session_state["public02a_import_success"] = True
+                st.rerun()
+
+            elif st.session_state.get("public02a_import_success"):
+                st.success("✅ 自定義設定已匯入")
+
+        except Exception as exc:
+            st.error(f"❌ 匯入失敗：{exc}")
+
+
+# PUBLIC STEP 02A｜顯示個人設定匯出／匯入
+_public02a_settings_panel()
