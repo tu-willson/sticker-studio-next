@@ -1735,6 +1735,69 @@ def _beta_finish_generation(session, job_id, failure_code=None):
     return _beta_rpc(function_name, payload, access_token=session["access_token"])
 
 
+def _beta_copy_usage_status(session):
+    """Read the logged-in member's Taiwan-day copywriting allowance."""
+    response = _beta_rpc(
+        "get_my_copy_usage_status", {}, access_token=session["access_token"]
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("beta_invalid_copy_status")
+    try:
+        daily_limit = max(1, int(response.get("daily_limit", 2)))
+        used_count = max(0, int(response.get("used_count", 0)))
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("beta_invalid_copy_status") from exc
+    return {
+        "usage_date": str(response.get("usage_date", "") or ""),
+        "daily_limit": daily_limit,
+        "used_count": min(used_count, daily_limit),
+        "remaining_count": max(0, int(response.get("remaining_count", 0) or 0)),
+        "entitlement_kind": str(response.get("entitlement_kind", "free") or "free"),
+        "entitlement_expires_at": str(
+            response.get("entitlement_expires_at", "") or ""
+        ),
+    }
+
+
+def _beta_reserve_copy_generation(session):
+    """Reserve one daily copywriting use before the station API is called."""
+    response = _beta_rpc(
+        "reserve_copy_generation",
+        {"p_idempotency_key": str(__import__("uuid").uuid4())},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("beta_invalid_copy_reservation")
+    try:
+        daily_limit = max(1, int(response.get("daily_limit", 2)))
+        remaining_count = max(0, int(response.get("remaining_count", 0) or 0))
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("beta_invalid_copy_reservation") from exc
+    return {
+        "job_id": str(response.get("job_id", "") or ""),
+        "granted": bool(response.get("granted", False)),
+        "usage_date": str(response.get("usage_date", "") or ""),
+        "daily_limit": daily_limit,
+        "remaining_count": min(remaining_count, daily_limit),
+        "entitlement_kind": str(response.get("entitlement_kind", "free") or "free"),
+        "entitlement_expires_at": str(
+            response.get("entitlement_expires_at", "") or ""
+        ),
+    }
+
+
+def _beta_finish_copy_generation(session, job_id, failure_code=None):
+    function_name = "fail_copy_generation" if failure_code else "complete_copy_generation"
+    payload = {"p_job_id": job_id}
+    if failure_code:
+        payload["p_failure_code"] = str(failure_code)[:80]
+    return _beta_rpc(function_name, payload, access_token=session["access_token"])
+
+
 def _beta_is_admin(session):
     """Ask the database, rather than the UI, whether this account is an administrator."""
     response = _beta_rpc("is_beta_admin", {}, access_token=session["access_token"])
@@ -1861,6 +1924,14 @@ def _beta_render_account_panel():
             st.success(f"已登入：{email}　｜　可用體驗額度：{balance} 次")
         except Exception:
             st.warning(f"已登入：{email}　｜　點數暫時無法讀取，請稍後再試。")
+        try:
+            copy_status = _beta_copy_usage_status(session)
+            st.caption(
+                "AI 文案今日額度（台灣時間）："
+                f"剩 {copy_status['remaining_count']} / {copy_status['daily_limit']} 次"
+            )
+        except Exception:
+            st.caption("AI 文案今日額度暫時無法讀取。")
         if st.button("登出會員 Beta", key="beta_logout"):
             st.session_state.pop("beta_auth_session", None)
             st.session_state.pop("beta_pending_login_url", None)
@@ -2636,7 +2707,7 @@ V12_AI_COPY_TONES = [
     "✨ 溫暖療癒",
 ]
 
-def _v12_ai_copy_generate(topic, tone, api_mode, user_api_key):
+def _v12_ai_copy_generate(topic, tone, api_key):
     """V7.2｜AI 貼圖文字助手。
     核心：優先幫使用者快速找到「真的會用」的貼圖字眼，
     混合超日常、經典用語、主題場景與少量驚喜；不追求每句都想梗。
@@ -2649,9 +2720,9 @@ def _v12_ai_copy_generate(topic, tone, api_mode, user_api_key):
     if not topic:
         raise ValueError("missing_topic")
 
-    if api_mode != OWN_API_MODE or not user_api_key:
-        raise ValueError("missing_user_api_key")
-    _copy_client = OpenAI(api_key=user_api_key)
+    if not api_key:
+        raise ValueError("missing_api_key")
+    _copy_client = OpenAI(api_key=api_key)
 
     schema = {
         "type": "object",
@@ -2828,39 +2899,83 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
     if _generate:
         if not _topic:
             st.warning("請先輸入一個主題，例如「職場的憤憤不平」。")
-        elif api_mode != OWN_API_MODE:
-            st.info("AI 文案助手目前維持自備 Key 模式，不會使用或扣除會員圖片點數。")
-        elif not user_api_key:
-            st.error("❌ 請先輸入自己的 OpenAI API Key。")
         else:
-            try:
-                _live_api_mode = st.session_state.get("v12_saved_api_mode", api_mode)
-                _live_user_api_key = str(
+            _live_api_mode = st.session_state.get("v12_saved_api_mode", api_mode)
+            _copy_session = None
+            _copy_reservation = None
+            _copy_api_key = ""
+            if _live_api_mode == OWN_API_MODE:
+                _copy_api_key = str(
                     st.session_state.get("v11_user_api_key")
                     or st.session_state.get("v12_saved_user_api_key")
                     or user_api_key
                     or ""
                 ).strip()
-                if _live_api_mode != OWN_API_MODE:
-                    st.info("AI 文案助手目前維持自備 Key 模式，不會使用或扣除會員圖片點數。")
-                elif not _live_user_api_key:
+                if not _copy_api_key:
                     st.error("❌ 請先輸入自己的 OpenAI API Key。")
+            else:
+                _copy_session = _beta_current_user()
+                if not _copy_session:
+                    st.warning("請先完成 Google 登入，才能使用會員 AI 文案額度。")
                 else:
+                    _copy_api_key = _beta_site_openai_key()
+                    if not _copy_api_key:
+                        st.error("❌ 站方 AI 文案服務尚未完成設定，請先使用自備 Key 測試。")
+                    else:
+                        try:
+                            _copy_reservation = _beta_reserve_copy_generation(_copy_session)
+                        except Exception:
+                            st.error("❌ 今日文案額度暫時無法確認，請稍後再試。")
+                        else:
+                            if not _copy_reservation["granted"]:
+                                st.warning(
+                                    "今日 AI 文案額度已用完"
+                                    f"（每日 {_copy_reservation['daily_limit']} 次），"
+                                    "將在台灣時間午夜重置。"
+                                )
+                                _copy_api_key = ""
+
+            if _copy_api_key:
+                try:
                     with st.spinner("🤖 AI 正在延伸主題與生活情境……"):
-                        _phrases = _v12_ai_copy_generate(
-                            _topic, _tone, _live_api_mode, _live_user_api_key
-                        )
+                        _phrases = _v12_ai_copy_generate(_topic, _tone, _copy_api_key)
+                except RuntimeError as _e:
+                    if _copy_session and _copy_reservation and _copy_reservation["job_id"]:
+                        try:
+                            _beta_finish_copy_generation(
+                                _copy_session,
+                                _copy_reservation["job_id"],
+                                "copy_api_runtime_error",
+                            )
+                        except Exception:
+                            pass
+                    st.error("❌ AI 文案服務目前無法使用。")
+                    st.caption(f"錯誤資訊：{_e}")
+                except Exception:
+                    if _copy_session and _copy_reservation and _copy_reservation["job_id"]:
+                        try:
+                            _beta_finish_copy_generation(
+                                _copy_session,
+                                _copy_reservation["job_id"],
+                                "copy_generation_failed",
+                            )
+                        except Exception:
+                            pass
+                    st.error("❌ AI 文案產生失敗，請稍後再試。")
+                else:
+                    if _copy_session and _copy_reservation and _copy_reservation["job_id"]:
+                        try:
+                            _beta_finish_copy_generation(
+                                _copy_session, _copy_reservation["job_id"]
+                            )
+                        except Exception:
+                            st.warning("文案已生成，但今日額度狀態暫時無法更新。")
                     st.session_state["v12_ai_copy_candidates"] = _phrases
                     st.session_state["v12_ai_copy_topic_used"] = _topic
                     st.session_state["v12_ai_copy_tone_used"] = _tone
                     st.session_state["v12_ai_copy_selected"] = []
                     for _i in range(16):
                         st.session_state[f"v12_ai_copy_pick_{_i}"] = False
-            except RuntimeError as _e:
-                st.error("❌ AI 文案服務目前無法使用。")
-                st.caption(f"錯誤資訊：{_e}")
-            except Exception:
-                st.error("❌ AI 文案產生失敗，請稍後再試。")
 
     # ------------------------------------------------------------
     # ③ 本次 AI 生成結果：只勾選想保存的，不自動建立主題或全部進池。
@@ -3974,7 +4089,10 @@ def _v12_render_text_slot(i):
 
 
 if st.session_state.get("v12_text_source_panel") == "ai":
-    st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；文案助手目前暫時不限次數，不占用網站每日 AI 額度。")
+    if _v12_current_api_mode == OWN_API_MODE:
+        st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；自備 Key 模式不使用會員每日文案額度。")
+    else:
+        st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；會員模式會使用每日 AI 文案額度，不會扣除圖片生成點數。")
     _v12_render_ai_copy_assistant(
         _v12_current_api_mode,
         _v12_current_user_api_key,
