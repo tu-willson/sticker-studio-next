@@ -1371,7 +1371,11 @@ def _beta_http(method, path, payload=None, access_token=None):
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             raw = response.read().decode("utf-8")
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+    except urllib.error.HTTPError as exc:
+        # Only retain the HTTP status.  It is enough to diagnose an RPC
+        # deployment/cache problem without exposing Supabase response bodies.
+        raise RuntimeError(f"beta_http_{exc.code}") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
         raise RuntimeError("beta_request_failed") from exc
 
     if not raw:
@@ -1930,8 +1934,8 @@ def _beta_render_account_panel():
                 "AI 文案今日額度（台灣時間）："
                 f"剩 {copy_status['remaining_count']} / {copy_status['daily_limit']} 次"
             )
-        except Exception:
-            st.caption("AI 文案今日額度暫時無法讀取。")
+        except Exception as exc:
+            st.caption(f"AI 文案今日額度暫時無法讀取（{exc}）。")
         if st.button("登出會員 Beta", key="beta_logout"):
             st.session_state.pop("beta_auth_session", None)
             st.session_state.pop("beta_pending_login_url", None)
@@ -2890,6 +2894,24 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
         key="v12_ai_copy_tone",
     )
 
+    # 在點選生成前就先讓會員看見今日剩餘額度；自備 Key 不受此帳本限制。
+    if api_mode != OWN_API_MODE:
+        _copy_status_session = _beta_current_user()
+        if _copy_status_session:
+            try:
+                _copy_status = _beta_copy_usage_status(_copy_status_session)
+                st.info(
+                    "✨ 今日 AI 文案額度（台灣時間）："
+                    f"剩 {_copy_status['remaining_count']} / {_copy_status['daily_limit']} 次"
+                )
+            except Exception as _copy_status_error:
+                st.warning(
+                    "今日文案額度暫時無法確認，請稍後再試。"
+                    f"（診斷代碼：{_copy_status_error}）"
+                )
+        else:
+            st.info("完成 Google 登入後，即可查看並使用每日 AI 文案額度。")
+
     _generate = st.button(
         "✨ AI 幫我想 16 句",
         type="primary",
@@ -2974,6 +2996,12 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
                     st.session_state["v12_ai_copy_topic_used"] = _topic
                     st.session_state["v12_ai_copy_tone_used"] = _tone
                     st.session_state["v12_ai_copy_selected"] = []
+                    if _copy_reservation:
+                        st.success(
+                            "文案已生成；今日剩餘 "
+                            f"{_copy_reservation['remaining_count']} / "
+                            f"{_copy_reservation['daily_limit']} 次。"
+                        )
                     for _i in range(16):
                         st.session_state[f"v12_ai_copy_pick_{_i}"] = False
 
