@@ -1492,8 +1492,13 @@ def _beta_library_metadata(record):
     return {key: metadata[key] for key in keep if key in metadata}
 
 
-def _beta_save_library_project(session, record):
+def _beta_save_library_project(session, record, progress_callback=None):
     """Reserve one library slot, then upload exactly three private objects."""
+    def _report(progress, message):
+        if progress_callback:
+            progress_callback(progress, message)
+
+    _report(5, "正在建立雲端作品保存空間…")
     metadata = _beta_library_metadata(record)
     project_id = str(metadata.get("project_id") or __import__("uuid").uuid4())
     title = str(metadata.get("project_name") or _v12_default_project_name())[:80]
@@ -1518,13 +1523,18 @@ def _beta_save_library_project(session, record):
         raise RuntimeError("beta_invalid_session")
     prefix = f"{user_id}/{project_id}/"
     paths = [prefix + "grid.webp", prefix + "package.zip", prefix + "preview.webp"]
+    _report(15, "正在壓縮作品預覽圖…")
     grid_webp = _v12_webp_bytes(record.get("grid_bytes") or b"")
     preview_webp = _v12_webp_bytes(record.get("main_bytes") or record.get("grid_bytes") or b"")
     package_zip = bytes(record.get("zip_bytes") or b"")
     try:
+        _report(35, "正在上傳原始總圖…")
         _beta_storage_upload(session, paths[0], grid_webp, "image/webp")
+        _report(60, "正在上傳 LINE 貼圖 ZIP…")
         _beta_storage_upload(session, paths[1], package_zip, "application/zip")
+        _report(82, "正在上傳作品預覽圖…")
         _beta_storage_upload(session, paths[2], preview_webp, "image/webp")
+        _report(94, "正在確認雲端作品資料…")
         _beta_rpc(
             "complete_library_project_upload",
             {
@@ -1548,6 +1558,7 @@ def _beta_save_library_project(session, record):
         except Exception:
             pass
         raise
+    _report(100, "雲端作品保存完成！")
     return {
         "saved": True,
         "saved_count": int(slot.get("saved_count", 0) or 0),
@@ -3256,7 +3267,7 @@ st.session_state.setdefault("v12_view", "create")
 
 if st.session_state["v12_view"] == "library":
     st.markdown('<div class="v10-main-title">📚 我的作品</div>', unsafe_allow_html=True)
-    st.caption("登入會員完成打包後，作品會保存到私人雲端作品庫；本機暫存只在這次瀏覽期間保留。")
+    st.caption("打包時勾選雲端保存的會員作品會保存在私人雲端作品庫；本機暫存只在這次瀏覽期間保留。")
 
     _cloud_session = _beta_current_user() if _beta_config() else None
     if _cloud_session:
@@ -3347,9 +3358,9 @@ if st.session_state["v12_view"] == "library":
                                     st.error("作品尚未刪除，請稍後再試。")
                 st.divider()
         else:
-            st.caption("☁️ 雲端作品庫尚未有作品。完成打包後會自動保存；空間滿時請先下載並刪除一組。")
+            st.caption("☁️ 雲端作品庫尚未有作品。打包時勾選「同步保存」即可保存；空間滿時請先下載並刪除一組。")
     else:
-        st.info("登入會員後，完成打包的作品才會保存到私人雲端作品庫。")
+        st.info("登入會員後，打包時可選擇保存到私人雲端作品庫。")
 
     _projects_all = list(st.session_state.get("v12_projects_local_index", []))
     _top_a, _top_b = st.columns([4, 1])
@@ -4914,6 +4925,18 @@ if st.session_state.generated_4x2_bytes:
     if not _v12_name_preview:
         st.caption(f"未填寫時，會自動使用：{_v12_default_project_name()}")
 
+    _cloud_sync_session = _beta_current_user() if _beta_config() else None
+    _save_to_cloud = st.checkbox(
+        "☁️ 同步保存到雲端「我的作品」",
+        value=False,
+        key="v12_save_to_cloud_on_package",
+        disabled=not bool(_cloud_sync_session),
+    )
+    if _cloud_sync_session:
+        st.caption("勾選後會同步保存到雲端，需要等候較久時間，請勿重新整理網頁。")
+    else:
+        st.caption("登入會員後可選擇同步保存到雲端「我的作品」。未勾選時，作品僅暫存於本次瀏覽。")
+
     if st.button("📦 完成裁切＋製作貼圖檔案＋一鍵打包", type="primary", use_container_width=True):
         try:
             _sheet = Image.open(BytesIO(st.session_state.generated_4x2_bytes)).convert("RGBA")
@@ -4964,24 +4987,38 @@ if st.session_state.generated_4x2_bytes:
                 f"🎉 完成！MAIN={main_no}、TAB={tab_no}，"
                 "已將 01～08＋main.png＋tab.png 打包，並加入「我的作品」。"
             )
-            _cloud_session = _beta_current_user() if _beta_config() else None
-            if _cloud_session:
+            _cloud_session = _beta_current_user() if _save_to_cloud and _beta_config() else None
+            if _save_to_cloud and _cloud_session:
                 try:
-                    _cloud_save = _beta_save_library_project(_cloud_session, _history_record)
+                    _cloud_progress = st.progress(
+                        0,
+                        text="正在準備同步保存到雲端，請勿重新整理網頁…",
+                    )
+                    _cloud_save = _beta_save_library_project(
+                        _cloud_session,
+                        _history_record,
+                        progress_callback=lambda progress, message: _cloud_progress.progress(
+                            progress, text=message + " 請勿重新整理網頁。"
+                        ),
+                    )
                     if _cloud_save.get("saved"):
+                        _cloud_progress.progress(100, text="雲端作品保存完成！")
                         st.success(
                             f"☁️ 已同步保存至雲端作品庫（{_cloud_save['saved_count']}／"
                             f"{_cloud_save['library_capacity']} 組）。"
                         )
                     else:
+                        _cloud_progress.empty()
                         st.warning(
                             f"雲端作品庫已達 {_cloud_save['saved_count']}／"
                             f"{_cloud_save['library_capacity']} 組；請到「我的作品」下載並刪除一組後再保存。"
                         )
                 except Exception:
                     st.warning("本次作品已保留在本機暫存，但雲端保存暫時未完成。請稍後重新打包再試。")
+            elif _save_to_cloud:
+                st.warning("雲端保存尚未執行：請重新登入會員後再試。")
             else:
-                st.info("登入會員後，完成打包的作品會自動保存到私人雲端作品庫。")
+                st.caption("本次未同步保存到雲端；作品仍可在本次瀏覽的「我的作品」中下載。")
             st.download_button(
                 "⬇️ 下載完整 LINE 套件 ZIP",
                 data=_zipbuf.getvalue(),
