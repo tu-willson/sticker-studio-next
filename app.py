@@ -1391,6 +1391,191 @@ def _beta_rpc(function_name, payload, access_token=None):
     )
 
 
+def _beta_raw_http(method, path, body=None, access_token=None,
+                   content_type=None, extra_headers=None):
+    """Authenticated binary Storage requests; never use a service-role key."""
+    config = _beta_config()
+    if not config:
+        raise RuntimeError("beta_not_configured")
+    headers = {"apikey": config["anon_key"]}
+    if access_token:
+        headers["Authorization"] = f"Bearer {access_token}"
+    if content_type:
+        headers["Content-Type"] = content_type
+    if extra_headers:
+        headers.update(extra_headers)
+    request = urllib.request.Request(
+        f"{config['url']}{path}", data=body, headers=headers, method=method
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=45) as response:
+            return response.read()
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError("beta_storage_request_failed") from exc
+
+
+def _beta_storage_upload(session, object_path, content, content_type):
+    if not content:
+        raise RuntimeError("library_asset_empty")
+    return _beta_raw_http(
+        "POST",
+        "/storage/v1/object/member-projects/" + urllib.parse.quote(object_path, safe="/"),
+        body=bytes(content),
+        access_token=session["access_token"],
+        content_type=content_type,
+        extra_headers={"x-upsert": "false"},
+    )
+
+
+def _beta_storage_download(session, object_path):
+    return _beta_raw_http(
+        "GET",
+        "/storage/v1/object/member-projects/" + urllib.parse.quote(object_path, safe="/"),
+        access_token=session["access_token"],
+    )
+
+
+def _beta_storage_delete(session, object_paths):
+    paths = [str(path) for path in object_paths if path]
+    if not paths:
+        return
+    _beta_http(
+        "DELETE",
+        "/storage/v1/object/member-projects",
+        payload={"prefixes": paths},
+        access_token=session["access_token"],
+    )
+
+
+def _beta_library_status(session):
+    response = _beta_rpc("get_my_library_status", {}, access_token=session["access_token"])
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("library_status_invalid")
+    return {
+        "saved_count": max(0, int(response.get("saved_count", 0) or 0)),
+        "library_capacity": max(1, int(response.get("library_capacity", 5) or 5)),
+    }
+
+
+def _beta_list_library_projects(session):
+    query = (
+        "/rest/v1/library_projects?select=id,title,metadata,grid_path,package_path,"
+        "preview_path,created_at,updated_at,completed_at&status=eq.active"
+        "&order=created_at.desc"
+    )
+    response = _beta_http("GET", query, access_token=session["access_token"])
+    return response if isinstance(response, list) else []
+
+
+def _v12_webp_bytes(image_or_bytes, quality=86):
+    """Compact persistent project assets without altering the downloadable PNG ZIP."""
+    image = image_or_bytes
+    if not isinstance(image, Image.Image):
+        image = Image.open(BytesIO(bytes(image_or_bytes)))
+    image = image.convert("RGBA")
+    buf = BytesIO()
+    image.save(buf, "WEBP", quality=quality, method=6)
+    return buf.getvalue()
+
+
+def _beta_library_metadata(record):
+    """Keep project settings only; asset bytes and all session-only data stay out."""
+    metadata = _v12_normalize_project_metadata(record)
+    keep = (
+        "project_id", "project_name", "created_at", "updated_at", "style_name",
+        "font_name", "text_style", "generation_method", "transparent_background",
+        "sticker_texts", "sticker_color_segments", "schema_version", "identity",
+        "timestamps", "creative_settings", "package_settings", "main_no", "tab_no",
+    )
+    return {key: metadata[key] for key in keep if key in metadata}
+
+
+def _beta_save_library_project(session, record):
+    """Reserve one library slot, then upload exactly three private objects."""
+    metadata = _beta_library_metadata(record)
+    project_id = str(metadata.get("project_id") or __import__("uuid").uuid4())
+    title = str(metadata.get("project_name") or _v12_default_project_name())[:80]
+    slot = _beta_rpc(
+        "create_library_project_slot",
+        {"p_project_id": project_id, "p_title": title, "p_metadata": metadata},
+        access_token=session["access_token"],
+    )
+    if isinstance(slot, list):
+        slot = slot[0] if slot else {}
+    if not isinstance(slot, dict):
+        raise RuntimeError("library_slot_invalid")
+    if not slot.get("project_id"):
+        return {
+            "saved": False,
+            "saved_count": int(slot.get("saved_count", 0) or 0),
+            "library_capacity": int(slot.get("library_capacity", 5) or 5),
+        }
+
+    user_id = str(session.get("user", {}).get("id", "") or "")
+    if not user_id:
+        raise RuntimeError("beta_invalid_session")
+    prefix = f"{user_id}/{project_id}/"
+    paths = [prefix + "grid.webp", prefix + "package.zip", prefix + "preview.webp"]
+    grid_webp = _v12_webp_bytes(record.get("grid_bytes") or b"")
+    preview_webp = _v12_webp_bytes(record.get("main_bytes") or record.get("grid_bytes") or b"")
+    package_zip = bytes(record.get("zip_bytes") or b"")
+    try:
+        _beta_storage_upload(session, paths[0], grid_webp, "image/webp")
+        _beta_storage_upload(session, paths[1], package_zip, "application/zip")
+        _beta_storage_upload(session, paths[2], preview_webp, "image/webp")
+        _beta_rpc(
+            "complete_library_project_upload",
+            {
+                "p_project_id": project_id,
+                "p_grid_bytes": len(grid_webp),
+                "p_package_bytes": len(package_zip),
+                "p_preview_bytes": len(preview_webp),
+            },
+            access_token=session["access_token"],
+        )
+    except Exception:
+        # The slot remains only if cleanup itself fails; it is reclaimed server-side
+        # after 30 minutes and never appears as a finished member project.
+        try:
+            _beta_storage_delete(session, paths)
+            _beta_rpc(
+                "finalize_my_library_project_delete",
+                {"p_project_id": project_id},
+                access_token=session["access_token"],
+            )
+        except Exception:
+            pass
+        raise
+    return {
+        "saved": True,
+        "saved_count": int(slot.get("saved_count", 0) or 0),
+        "library_capacity": int(slot.get("library_capacity", 5) or 5),
+    }
+
+
+def _beta_delete_library_project(session, project_id):
+    response = _beta_rpc(
+        "get_my_library_project_delete_paths",
+        {"p_project_id": str(project_id)},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict) or not response.get("grid_path"):
+        raise RuntimeError("library_project_not_found")
+    _beta_storage_delete(
+        session,
+        [response.get("grid_path"), response.get("package_path"), response.get("preview_path")],
+    )
+    _beta_rpc(
+        "finalize_my_library_project_delete",
+        {"p_project_id": str(project_id)},
+        access_token=session["access_token"],
+    )
+
+
 def _beta_b64url(value):
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
@@ -1671,6 +1856,17 @@ def _beta_render_account_panel():
             st.rerun()
         if not _beta_site_openai_key():
             st.info("會員登入與點數帳本已啟用；站方生成 API 正在進行最後設定，自備 Key 模式不受影響。")
+        with st.expander("📜 點數與雲端作品庫規則", expanded=False):
+            st.markdown(
+                """
+                **生成點數**與**作品庫空間**是兩套獨立額度。\n\n
+                - 目前 Beta：每位登入會員最多保存 **5 組**雲端作品。
+                - 單次購買點數包：作品庫滿 5 組時，需先下載並刪除 1 組才能保存新作品。
+                - 未來訂閱：例如每月 15 點方案，可同時保存最多 **15 組**；空間不會累計。
+                - 訂閱未用點數可保留 1 個帳務週期，系統優先使用最早到期的點數。
+                - 方案到期後，超過新上限的作品不會被自動刪除，但需先整理作品庫才能新增。
+                """
+            )
         return session
 
     login_error = st.session_state.pop("beta_login_error", "")
@@ -3060,7 +3256,100 @@ st.session_state.setdefault("v12_view", "create")
 
 if st.session_state["v12_view"] == "library":
     st.markdown('<div class="v10-main-title">📚 我的作品</div>', unsafe_allow_html=True)
-    st.caption("本次瀏覽期間完成打包的作品會暫存在這裡。你可以查看設定、重新下載 ZIP，或載回創作頁繼續使用。")
+    st.caption("登入會員完成打包後，作品會保存到私人雲端作品庫；本機暫存只在這次瀏覽期間保留。")
+
+    _cloud_session = _beta_current_user() if _beta_config() else None
+    if _cloud_session:
+        try:
+            _cloud_status = _beta_library_status(_cloud_session)
+            st.info(
+                f"☁️ 雲端作品庫：已保存 {_cloud_status['saved_count']}／"
+                f"{_cloud_status['library_capacity']} 組作品"
+            )
+            st.caption("目前 Beta 每位登入會員可保存 5 組。日後訂閱方案會提高上限，但容量不累計。")
+            _cloud_projects = _beta_list_library_projects(_cloud_session)
+        except Exception:
+            _cloud_projects = []
+            st.warning("雲端作品庫暫時無法讀取；本機暫存不受影響。")
+
+        if _cloud_projects:
+            st.markdown("### ☁️ 雲端作品")
+            for _cloud_project in _cloud_projects:
+                if not isinstance(_cloud_project, dict) or not _cloud_project.get("id"):
+                    continue
+                _cloud_id = str(_cloud_project["id"])
+                _cloud_meta = _cloud_project.get("metadata")
+                if not isinstance(_cloud_meta, dict):
+                    _cloud_meta = {}
+                _cloud_title = str(_cloud_project.get("title") or _cloud_meta.get("project_name") or "未命名作品")
+                _cloud_left, _cloud_right = st.columns([1, 2.4], vertical_alignment="top")
+                with _cloud_left:
+                    try:
+                        st.image(
+                            _beta_storage_download(_cloud_session, _cloud_project.get("preview_path", "")),
+                            caption="雲端預覽圖",
+                            use_container_width=True,
+                        )
+                    except Exception:
+                        st.info("🖼️ 預覽圖暫時無法載入")
+                with _cloud_right:
+                    st.markdown(f"### 🏷️ {html.escape(_cloud_title)}")
+                    st.caption(f"雲端保存：{_v12_format_display_time(_cloud_project.get('created_at', ''))}")
+                    _cloud_act1, _cloud_act2, _cloud_act3 = st.columns(3)
+                    with _cloud_act1:
+                        if st.button("⬇️ 準備 ZIP 下載", key=f"cloud_zip_prepare_{_cloud_id}", use_container_width=True):
+                            try:
+                                st.session_state[f"cloud_zip_{_cloud_id}"] = _beta_storage_download(
+                                    _cloud_session, _cloud_project.get("package_path", "")
+                                )
+                            except Exception:
+                                st.error("ZIP 暫時無法下載，請稍後再試。")
+                        _cloud_zip = st.session_state.get(f"cloud_zip_{_cloud_id}")
+                        if _cloud_zip:
+                            st.download_button(
+                                "下載完整 ZIP",
+                                data=_cloud_zip,
+                                file_name=f"{_v12_safe_download_stem(_cloud_title)}.zip",
+                                mime="application/zip",
+                                key=f"cloud_zip_download_{_cloud_id}",
+                                use_container_width=True,
+                            )
+                    with _cloud_act2:
+                        if st.button("↩️ 載回創作頁", key=f"cloud_load_{_cloud_id}", use_container_width=True):
+                            try:
+                                _cloud_record = dict(_cloud_meta)
+                                _cloud_record.update(_cloud_project)
+                                _cloud_grid = _beta_storage_download(
+                                    _cloud_session, _cloud_project.get("grid_path", "")
+                                )
+                                _cloud_record["grid_bytes"] = _v12_png_bytes(
+                                    Image.open(BytesIO(_cloud_grid))
+                                )
+                                _v12_load_history_record(_cloud_record)
+                                st.session_state["v12_view"] = "create"
+                                st.rerun()
+                            except Exception:
+                                st.error("作品暫時無法載回，請稍後再試。")
+                    with _cloud_act3:
+                        _delete_ack = st.checkbox(
+                            "確認永久刪除",
+                            key=f"cloud_delete_ack_{_cloud_id}",
+                        )
+                        if st.button("🗑️ 刪除雲端作品", key=f"cloud_delete_{_cloud_id}", use_container_width=True):
+                            if not _delete_ack:
+                                st.warning("請先勾選確認永久刪除。")
+                            else:
+                                try:
+                                    _beta_delete_library_project(_cloud_session, _cloud_id)
+                                    st.session_state.pop(f"cloud_zip_{_cloud_id}", None)
+                                    st.rerun()
+                                except Exception:
+                                    st.error("作品尚未刪除，請稍後再試。")
+                st.divider()
+        else:
+            st.caption("☁️ 雲端作品庫尚未有作品。完成打包後會自動保存；空間滿時請先下載並刪除一組。")
+    else:
+        st.info("登入會員後，完成打包的作品才會保存到私人雲端作品庫。")
 
     _projects_all = list(st.session_state.get("v12_projects_local_index", []))
     _top_a, _top_b = st.columns([4, 1])
@@ -3154,7 +3443,7 @@ if st.session_state["v12_view"] == "library":
 
             st.divider()
 
-    st.caption(f"V12｜STEP 01A③｜目前最多暫存 {V12_HISTORY_LIMIT} 組作品，不保存 API Key，也不寫入網站每日 AI 額度資料。")
+    st.caption(f"本機暫存最多 {V12_HISTORY_LIMIT} 組；不保存 API Key，也不寫入網站每日 AI 額度資料。")
     st.stop()
 
 
@@ -4660,7 +4949,7 @@ if st.session_state.generated_4x2_bytes:
                 _history_project.get("project_name") or _v12_default_project_name()
             )
 
-            _v12_history_record(
+            _history_record = _v12_history_record(
                 metadata=_history_project,
                 zip_bytes=_zipbuf.getvalue(),
                 grid_bytes=st.session_state.get("generated_4x2_bytes"),
@@ -4675,6 +4964,24 @@ if st.session_state.generated_4x2_bytes:
                 f"🎉 完成！MAIN={main_no}、TAB={tab_no}，"
                 "已將 01～08＋main.png＋tab.png 打包，並加入「我的作品」。"
             )
+            _cloud_session = _beta_current_user() if _beta_config() else None
+            if _cloud_session:
+                try:
+                    _cloud_save = _beta_save_library_project(_cloud_session, _history_record)
+                    if _cloud_save.get("saved"):
+                        st.success(
+                            f"☁️ 已同步保存至雲端作品庫（{_cloud_save['saved_count']}／"
+                            f"{_cloud_save['library_capacity']} 組）。"
+                        )
+                    else:
+                        st.warning(
+                            f"雲端作品庫已達 {_cloud_save['saved_count']}／"
+                            f"{_cloud_save['library_capacity']} 組；請到「我的作品」下載並刪除一組後再保存。"
+                        )
+                except Exception:
+                    st.warning("本次作品已保留在本機暫存，但雲端保存暫時未完成。請稍後重新打包再試。")
+            else:
+                st.info("登入會員後，完成打包的作品會自動保存到私人雲端作品庫。")
             st.download_button(
                 "⬇️ 下載完整 LINE 套件 ZIP",
                 data=_zipbuf.getvalue(),
