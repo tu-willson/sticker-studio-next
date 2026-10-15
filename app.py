@@ -4516,7 +4516,14 @@ with st.expander("🔎 已選字型大圖", expanded=False):
     if _selected_font:
         _p = V8_FONT_PREVIEW_DIR / f"{_selected_font:03d}.jpg"
         if _p.exists():
-            st.image(str(_p), caption=f"{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}", use_container_width=True)
+            # 預覽維持置中，避免原圖在桌機與手機上佔滿整個區塊。
+            _font_preview_left, _font_preview_center, _font_preview_right = st.columns([1, 2, 1])
+            with _font_preview_center:
+                st.image(
+                    str(_p),
+                    caption=f"{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}",
+                    use_container_width=True,
+                )
             st.caption("以上為參考效果；實際生成會由 AI 依人物、文字與整體風格重新詮釋。")
     else:
         st.write("尚未選擇。")
