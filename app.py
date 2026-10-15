@@ -1372,17 +1372,7 @@ def _beta_http(method, path, payload=None, access_token=None):
         with urllib.request.urlopen(request, timeout=20) as response:
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
-        # Preserve only a short machine-readable database error code.  Never
-        # expose the response's message, details, query, or credentials.
-        error_code = "unknown"
-        try:
-            error_body = json.loads(exc.read().decode("utf-8") or "{}")
-            if isinstance(error_body, dict):
-                error_code = str(error_body.get("code", "unknown") or "unknown")
-        except Exception:
-            pass
-        safe_error_code = re.sub(r"[^A-Za-z0-9_-]", "", error_code)[:24] or "unknown"
-        raise RuntimeError(f"beta_http_{exc.code}_{safe_error_code}") from exc
+        raise RuntimeError("beta_request_failed") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
         raise RuntimeError("beta_request_failed") from exc
 
@@ -1942,8 +1932,8 @@ def _beta_render_account_panel():
                 "AI 文案今日額度（台灣時間）："
                 f"剩 {copy_status['remaining_count']} / {copy_status['daily_limit']} 次"
             )
-        except Exception as exc:
-            st.caption(f"AI 文案今日額度暫時無法讀取（{exc}）。")
+        except Exception:
+            st.caption("AI 文案今日額度暫時無法讀取。")
         if st.button("登出會員 Beta", key="beta_logout"):
             st.session_state.pop("beta_auth_session", None)
             st.session_state.pop("beta_pending_login_url", None)
@@ -2912,11 +2902,8 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
                     "✨ 今日 AI 文案額度（台灣時間）："
                     f"剩 {_copy_status['remaining_count']} / {_copy_status['daily_limit']} 次"
                 )
-            except Exception as _copy_status_error:
-                st.warning(
-                    "今日文案額度暫時無法確認，請稍後再試。"
-                    f"（診斷代碼：{_copy_status_error}）"
-                )
+            except Exception:
+                st.warning("今日文案額度暫時無法確認，請稍後再試。")
         else:
             st.info("完成 Google 登入後，即可查看並使用每日 AI 文案額度。")
 
