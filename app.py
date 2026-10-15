@@ -1763,6 +1763,42 @@ def _beta_copy_usage_status(session):
     }
 
 
+def _beta_copy_usage_status_cached(session, max_age_seconds=120):
+    """Return a short-lived display cache so ordinary UI clicks do not query Supabase."""
+    user_id = str((session.get("user") or {}).get("id", "") or "")
+    cache = st.session_state.get("beta_copy_usage_status_cache")
+    now = time.monotonic()
+    if (
+        isinstance(cache, dict)
+        and cache.get("user_id") == user_id
+        and isinstance(cache.get("value"), dict)
+        and now - float(cache.get("checked_at", 0) or 0) < max_age_seconds
+    ):
+        return dict(cache["value"])
+
+    status = _beta_copy_usage_status(session)
+    st.session_state["beta_copy_usage_status_cache"] = {
+        "user_id": user_id,
+        "checked_at": now,
+        "value": dict(status),
+    }
+    return status
+
+
+def _beta_set_cached_copy_usage_status(session, status):
+    """Keep the displayed allowance accurate immediately after a reservation."""
+    user_id = str((session.get("user") or {}).get("id", "") or "")
+    st.session_state["beta_copy_usage_status_cache"] = {
+        "user_id": user_id,
+        "checked_at": time.monotonic(),
+        "value": dict(status),
+    }
+
+
+def _beta_clear_cached_copy_usage_status():
+    st.session_state.pop("beta_copy_usage_status_cache", None)
+
+
 def _beta_reserve_copy_generation(session):
     """Reserve one daily copywriting use before the station API is called."""
     response = _beta_rpc(
@@ -1927,7 +1963,7 @@ def _beta_render_account_panel():
         except Exception:
             st.warning(f"已登入：{email}　｜　點數暫時無法讀取，請稍後再試。")
         try:
-            copy_status = _beta_copy_usage_status(session)
+            copy_status = _beta_copy_usage_status_cached(session)
             st.caption(
                 "AI 文案今日額度（台灣時間）："
                 f"剩 {copy_status['remaining_count']} / {copy_status['daily_limit']} 次"
@@ -1937,6 +1973,7 @@ def _beta_render_account_panel():
         if st.button("登出會員 Beta", key="beta_logout"):
             st.session_state.pop("beta_auth_session", None)
             st.session_state.pop("beta_pending_login_url", None)
+            _beta_clear_cached_copy_usage_status()
             st.rerun()
         if not _beta_site_openai_key():
             st.info("會員登入與點數帳本已啟用；站方生成 API 正在進行最後設定，自備 Key 模式不受影響。")
@@ -2629,6 +2666,16 @@ def _v12_set_segment_color(i, j, color_name, hex_code):
         segs[j]["color_name"] = str(color_name)
         segs[j]["hex"] = str(hex_code)
 
+
+def _v12_pick_segment_color(i, j, color_name, hex_code):
+    """Colour buttons update state before their fragment redraws."""
+    _v12_set_segment_color(i, j, color_name, hex_code)
+
+
+def _v12_add_text_color_segment(i):
+    count = int(st.session_state.get(f"v12_text_color_count_{i}", 0))
+    st.session_state[f"v12_text_color_count_{i}"] = min(3, count + 1)
+
 def _v12_valid_color_segments(texts):
     out = []
     for i in range(8):
@@ -2849,6 +2896,7 @@ def _v12_ai_copy_generate(topic, tone, api_key):
         raise ValueError("invalid_phrase_count")
     return phrases
 
+@st.fragment
 def _v12_render_ai_copy_assistant(api_mode, user_api_key):
     """V12｜AI 文案助手＋多主題暫存池（Session-only）。
     規則：主題只在使用者完成 AI 生成並選擇儲存文案後建立；
@@ -2894,10 +2942,11 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
 
     # 在點選生成前就先讓會員看見今日剩餘額度；自備 Key 不受此帳本限制。
     if api_mode != OWN_API_MODE:
-        _copy_status_session = _beta_current_user()
+        # 勾選候選文案時只需要顯示既有額度；避免每次局部互動都重新驗證登入。
+        _copy_status_session = st.session_state.get("beta_auth_session")
         if _copy_status_session:
             try:
-                _copy_status = _beta_copy_usage_status(_copy_status_session)
+                _copy_status = _beta_copy_usage_status_cached(_copy_status_session)
                 st.info(
                     "✨ 今日 AI 文案額度（台灣時間）："
                     f"剩 {_copy_status['remaining_count']} / {_copy_status['daily_limit']} 次"
@@ -2952,6 +3001,24 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
                                 )
                                 _copy_api_key = ""
 
+                            _beta_set_cached_copy_usage_status(
+                                _copy_session,
+                                {
+                                    "usage_date": _copy_reservation["usage_date"],
+                                    "daily_limit": _copy_reservation["daily_limit"],
+                                    "used_count": max(
+                                        0,
+                                        _copy_reservation["daily_limit"]
+                                        - _copy_reservation["remaining_count"],
+                                    ),
+                                    "remaining_count": _copy_reservation["remaining_count"],
+                                    "entitlement_kind": _copy_reservation["entitlement_kind"],
+                                    "entitlement_expires_at": _copy_reservation[
+                                        "entitlement_expires_at"
+                                    ],
+                                },
+                            )
+
             if _copy_api_key:
                 try:
                     with st.spinner("🤖 AI 正在延伸主題與生活情境……"):
@@ -2966,6 +3033,7 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
                             )
                         except Exception:
                             pass
+                    _beta_clear_cached_copy_usage_status()
                     st.error("❌ AI 文案服務目前無法使用。")
                     st.caption(f"錯誤資訊：{_e}")
                 except Exception:
@@ -2978,6 +3046,7 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
                             )
                         except Exception:
                             pass
+                    _beta_clear_cached_copy_usage_status()
                     st.error("❌ AI 文案產生失敗，請稍後再試。")
                 else:
                     if _copy_session and _copy_reservation and _copy_reservation["job_id"]:
@@ -3238,7 +3307,8 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
                 if len(_final_phrases) == 8:
                     set_texts(_final_phrases)
                     st.session_state["v12_ai_copy_last_applied"] = True
-                    st.success("✅ 已將主題用語池選出的 8 句套用到 01～08。")
+                    # 01～08 是另一個局部區塊；套用完成時才需要更新整頁。
+                    st.rerun()
 
     if st.session_state.get("v12_ai_copy_last_applied", False):
         st.caption("💡 已套用完成；你仍然可以手動修改 01～08 的任何一句。")
@@ -4040,31 +4110,31 @@ def _v12_render_text_slot(i):
                                 else f"v12_color_selected_{i}_{j}_{k}"
                             )
                             with st.container(key=wrapper_key):
-                                if st.button(
+                                st.button(
                                     label,
                                     key=f"v12_text_color_pick_{i}_{j}_{k}",
                                     use_container_width=True,
-                                ):
-                                    _v12_set_segment_color(i, j, name, hex_code)
-                                    st.rerun()
+                                    on_click=_v12_pick_segment_color,
+                                    args=(i, j, name, hex_code),
+                                )
                         else:
-                            if st.button(
+                            st.button(
                                 label,
                                 key=f"v12_text_color_pick_{i}_{j}_{k}",
                                 use_container_width=True,
-                            ):
-                                _v12_set_segment_color(i, j, name, hex_code)
-                                st.rerun()
+                                on_click=_v12_pick_segment_color,
+                                args=(i, j, name, hex_code),
+                            )
 
 
         if count < 3:
-            if st.button(
+            st.button(
                 "＋ 新增一段文字顏色",
                 key=f"v12_text_color_add_{i}",
                 use_container_width=True,
-            ):
-                st.session_state[f"v12_text_color_count_{i}"] = count + 1
-                st.rerun()
+                on_click=_v12_add_text_color_segment,
+                args=(i,),
+            )
 
         # 精簡預覽：直接把整句文字中已設定的片段顯示成實際顏色。
         # 不再顯示原本的綠色「已設定」說明框，避免手機版過度拉長。
@@ -4111,6 +4181,24 @@ def _v12_render_text_slot(i):
                 )
 
 
+@st.fragment
+def _v12_render_text_slots():
+    """Keep ordinary text and colour edits local to the text editor."""
+    cols = st.columns(4)
+    for i, col in enumerate(cols):
+        with col:
+            _v12_render_text_slot(i)
+
+    cols = st.columns(4)
+    for i, col in enumerate(cols, start=4):
+        with col:
+            _v12_render_text_slot(i)
+
+    texts = get_texts()
+    filled = sum(bool(x.strip()) for x in texts)
+    st.info(f"已填寫 {filled} / 8 格")
+
+
 if st.session_state.get("v12_text_source_panel") == "ai":
     if _v12_current_api_mode == OWN_API_MODE:
         st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；自備 Key 模式不使用會員每日文案額度。")
@@ -4122,7 +4210,8 @@ if st.session_state.get("v12_text_source_panel") == "ai":
     )
 
 
-if st.session_state.get("v12_text_source_panel") == "random":
+@st.fragment
+def _v12_render_random_phrase_panel():
     _pool_names=list(V8_RANDOM_POOLS.keys())
     _pool_choice=st.selectbox(
         "🎲 隨機用語池",
@@ -4213,19 +4302,12 @@ if st.session_state.get("v12_text_source_panel") == "random":
             ])
             st.rerun()
 
-cols=st.columns(4)
-for i,col in enumerate(cols):
-    with col:
-        _v12_render_text_slot(i)
 
-cols=st.columns(4)
-for i,col in enumerate(cols,start=4):
-    with col:
-        _v12_render_text_slot(i)
+if st.session_state.get("v12_text_source_panel") == "random":
+    _v12_render_random_phrase_panel()
 
-texts=get_texts()
-filled=sum(bool(x.strip()) for x in texts)
-st.info(f"已填寫 {filled} / 8 格")
+_v12_render_text_slots()
+texts = get_texts()
 
 with st.expander("📚 查看全部語詞分類與內容",expanded=False):
     for cat,vals in V8_RANDOM_POOLS.items():
