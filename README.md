@@ -12,6 +12,7 @@
 2. [`20261016_000002_oauth_login_state.sql`](supabase/migrations/20261016_000002_oauth_login_state.sql)
 3. [`20261016_000003_refund_stale_reservations.sql`](supabase/migrations/20261016_000003_refund_stale_reservations.sql)
 4. [`20261016_000004_member_generation_guardrails.sql`](supabase/migrations/20261016_000004_member_generation_guardrails.sql)
+5. [`20261016_000005_beta_admin_credit_console.sql`](supabase/migrations/20261016_000005_beta_admin_credit_console.sql)
 
 它提供：
 
@@ -23,12 +24,13 @@
 - 一次性、10 分鐘有效的 Google PKCE 登入狀態；
 - 若瀏覽器或服務中斷，15 分鐘後於會員下次生成前自動退回未完成的保留點數。
 - 同帳號跨分頁同時只能有一份進行中的站方生成，且成功後需等候 60 秒才能再次生成。
+- 僅限明確授權管理者使用的會員查詢與補／扣點後台；每次調整都會留下操作者、原因與帳本紀錄。
 
 設定 `SUPABASE_URL` 與 `SUPABASE_ANON_KEY` 後，網站會顯示 Google 登入與會員點數。只有再設定伺服器端 `OPENAI_API_KEY` 時，會員模式才會允許站方付費生成；在此之前自備 Key 模式仍可完整使用。自備 OpenAI API Key 不消耗會員點數，也不會寫入資料庫。
 
 ## 上線順序
 
-1. 建立新的 Supabase 專案並依序在 SQL Editor 執行三份 migration。
+1. 建立新的 Supabase 專案並依序在 SQL Editor 執行五份 migration；第五份執行後，再明確將站長帳號加入 `admin_users`。
 2. 在 Supabase Auth 啟用 Google Provider，並建立 Google OAuth client。
 3. 將新專案的 URL 與 anon key 存入 Streamlit secrets（絕不提交 `secrets.toml`）。
 4. 部署後測試 Google 登入、首次帳號 +2 點與 RLS；確認無誤後才加入站方的 `OPENAI_API_KEY` 開啟付費生成。

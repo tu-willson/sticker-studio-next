@@ -1539,6 +1539,116 @@ def _beta_finish_generation(session, job_id, failure_code=None):
     return _beta_rpc(function_name, payload, access_token=session["access_token"])
 
 
+def _beta_is_admin(session):
+    """Ask the database, rather than the UI, whether this account is an administrator."""
+    response = _beta_rpc("is_beta_admin", {}, access_token=session["access_token"])
+    if isinstance(response, list):
+        response = response[0] if response else False
+    return bool(response)
+
+
+def _beta_admin_list_members(session, search_text=""):
+    response = _beta_rpc(
+        "admin_list_members",
+        {"p_search": str(search_text or "")[:120]},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_admin_adjust_credits(session, user_id, delta, note):
+    response = _beta_rpc(
+        "admin_adjust_member_credits",
+        {
+            "p_user_id": str(user_id),
+            "p_delta": int(delta),
+            "p_note": str(note or "")[:160],
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
+
+
+def _beta_render_admin_console(session):
+    """Show a small audited console only when Supabase authorizes this member."""
+    if not session:
+        return
+    try:
+        if not _beta_is_admin(session):
+            return
+    except Exception:
+        return
+
+    st.markdown("---")
+    with st.expander("🛠️ Beta 管理後台（僅管理者）", expanded=False):
+        st.caption("可補回或扣除測試點數。每一次調整都會記錄操作者、原因與時間。")
+        search_text = st.text_input(
+            "搜尋會員 Email 或名稱（空白會顯示最近 100 位）",
+            key="beta_admin_member_search",
+        )
+        if st.button("查詢會員", key="beta_admin_search_members"):
+            try:
+                st.session_state["beta_admin_members"] = _beta_admin_list_members(
+                    session, search_text
+                )
+            except Exception:
+                st.error("會員資料暫時無法讀取，請稍後再試。")
+
+        members = st.session_state.get("beta_admin_members", [])
+        if not isinstance(members, list) or not members:
+            st.info("輸入 Email 後按「查詢會員」，即可進行補點或扣點。")
+            return
+
+        options = {}
+        for member in members:
+            if not isinstance(member, dict) or not member.get("user_id"):
+                continue
+            label = (
+                f"{member.get('email') or '未提供 Email'}"
+                f"｜目前 {int(member.get('credit_balance', 0) or 0)} 次"
+            )
+            options[label] = member
+        if not options:
+            st.info("找不到符合的會員。")
+            return
+
+        selected_label = st.selectbox(
+            "選擇會員", list(options.keys()), key="beta_admin_selected_member"
+        )
+        selected = options[selected_label]
+        adjustment = st.number_input(
+            "調整點數（正數補點、負數扣點）",
+            min_value=-50,
+            max_value=50,
+            value=2,
+            step=1,
+            key="beta_admin_adjustment",
+        )
+        note = st.text_input(
+            "調整原因（會寫入管理紀錄）",
+            value="Beta 測試補點",
+            max_chars=160,
+            key="beta_admin_adjustment_note",
+        )
+        if st.button("確認調整會員點數", type="primary", key="beta_admin_adjust_credits"):
+            if int(adjustment) == 0 or len(note.strip()) < 3:
+                st.warning("請填寫非 0 的調整次數與至少 3 個字的原因。")
+                return
+            try:
+                result = _beta_admin_adjust_credits(
+                    session, selected["user_id"], adjustment, note
+                )
+                new_balance = int(result.get("credit_balance", 0))
+                st.success(f"已完成調整；該會員目前有 {new_balance} 次體驗額度。")
+                st.session_state["beta_admin_members"] = _beta_admin_list_members(
+                    session, search_text
+                )
+            except Exception:
+                st.error("調整未完成。請確認點數不會低於 0，或稍後再試。")
+
+
 def _beta_render_account_panel():
     """Render the separate member login without touching the always-available BYOK path."""
     if not _beta_config():
@@ -3109,6 +3219,7 @@ st.session_state["v11_api_mode"] = _api_mode
 st.session_state["v12_saved_api_mode"] = _api_mode
 
 _beta_session = _beta_render_account_panel()
+_beta_render_admin_console(_beta_session)
 
 # API 教學連結：固定顯示，讓不熟悉 API 的使用者也能先了解申請方式。
 st.link_button(
