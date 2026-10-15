@@ -13,6 +13,8 @@ import hashlib
 import html
 import urllib.request
 import urllib.error
+import urllib.parse
+import secrets
 
 # ------------------------------------------------------------
 # V10 使用者資料本／獨立儲存區
@@ -1315,12 +1317,269 @@ def v10_subsection(title, accent="#4f8cff"):
     )
 
 # ============================================================
-# Sticker Studio Next｜獨立預覽版
+# Sticker Studio Next｜獨立預覽版／會員 Beta
 #
 # 這個專案不讀取、不呼叫舊版 LINE Sticker Web 的 Supabase 或網站
-# OpenAI Key。正式會員／點數系統完成前，圖片生成僅允許使用者在
-# 當前 Streamlit Session 輸入自己的 OpenAI API Key。
+# OpenAI Key。自備 Key 仍可隨時使用；會員 Beta 則只使用本專案新的
+# Supabase、Google 登入與點數帳本。
 # ============================================================
+BETA_API_MODE = "✨ 會員 Beta（登入送 2 點）"
+OWN_API_MODE = "🔑 使用自己的 OpenAI API"
+BETA_SITE_URL = "https://sticker-studio-next.streamlit.app"
+
+
+def _beta_config():
+    """Read only the new project's public Supabase settings from Streamlit Secrets."""
+    try:
+        url = str(st.secrets.get("SUPABASE_URL", "") or "").strip().rstrip("/")
+        anon_key = str(st.secrets.get("SUPABASE_ANON_KEY", "") or "").strip()
+    except Exception:
+        return None
+    if not url.startswith("https://") or not anon_key:
+        return None
+    return {"url": url, "anon_key": anon_key}
+
+
+def _beta_site_openai_key():
+    """The server-side key is optional until the member-generation Beta is enabled."""
+    try:
+        return str(st.secrets.get("OPENAI_API_KEY", "") or "").strip()
+    except Exception:
+        return ""
+
+
+def _beta_http(method, path, payload=None, access_token=None):
+    """Call the new Supabase project without exposing server or transport errors."""
+    config = _beta_config()
+    if not config:
+        raise RuntimeError("beta_not_configured")
+
+    body = None
+    headers = {
+        "apikey": config["anon_key"],
+        "Accept": "application/json",
+    }
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    if access_token:
+        headers["Authorization"] = f"Bearer {access_token}"
+
+    request = urllib.request.Request(
+        f"{config['url']}{path}", data=body, headers=headers, method=method
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            raw = response.read().decode("utf-8")
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError("beta_request_failed") from exc
+
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("beta_invalid_response") from exc
+
+
+def _beta_rpc(function_name, payload, access_token=None):
+    return _beta_http(
+        "POST",
+        f"/rest/v1/rpc/{urllib.parse.quote(function_name, safe='')}",
+        payload=payload,
+        access_token=access_token,
+    )
+
+
+def _beta_b64url(value):
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+
+
+def _beta_new_login_url():
+    """Create a one-time PKCE login attempt, then return the Google authorize URL."""
+    config = _beta_config()
+    if not config:
+        raise RuntimeError("beta_not_configured")
+
+    state = _beta_b64url(secrets.token_bytes(32))
+    code_verifier = _beta_b64url(secrets.token_bytes(64))
+    code_challenge = _beta_b64url(hashlib.sha256(code_verifier.encode("ascii")).digest())
+    state_digest = hashlib.sha256(state.encode("ascii")).hexdigest()
+    _beta_rpc(
+        "create_oauth_login_state",
+        {"p_state_digest": state_digest, "p_code_verifier": code_verifier},
+    )
+
+    redirect_to = f"{BETA_SITE_URL}?{urllib.parse.urlencode({'oauth_state': state})}"
+    params = urllib.parse.urlencode(
+        {
+            "provider": "google",
+            "redirect_to": redirect_to,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "s256",
+        }
+    )
+    return f"{config['url']}/auth/v1/authorize?{params}"
+
+
+def _beta_store_auth_session(token_response, user):
+    access_token = str(token_response.get("access_token", "") or "")
+    refresh_token = str(token_response.get("refresh_token", "") or "")
+    if not access_token or not refresh_token or not isinstance(user, dict):
+        raise RuntimeError("beta_invalid_session")
+    try:
+        expires_in = max(60, int(token_response.get("expires_in", 3600)))
+    except (TypeError, ValueError):
+        expires_in = 3600
+    st.session_state["beta_auth_session"] = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "expires_at": time.time() + expires_in,
+        "user": user,
+    }
+
+
+def _beta_verify_access_token(access_token):
+    user = _beta_http("GET", "/auth/v1/user", access_token=access_token)
+    if not isinstance(user, dict) or not user.get("id"):
+        raise RuntimeError("beta_invalid_session")
+    return user
+
+
+def _beta_current_user():
+    """Refresh when needed, then verify the token with Supabase before using credits."""
+    session = st.session_state.get("beta_auth_session")
+    if not isinstance(session, dict):
+        return None
+
+    try:
+        if float(session.get("expires_at", 0)) - time.time() < 90:
+            token_response = _beta_http(
+                "POST",
+                "/auth/v1/token?grant_type=refresh_token",
+                payload={"refresh_token": str(session.get("refresh_token", "") or "")},
+            )
+            user = _beta_verify_access_token(str(token_response.get("access_token", "") or ""))
+            _beta_store_auth_session(token_response, user)
+            session = st.session_state["beta_auth_session"]
+        else:
+            user = _beta_verify_access_token(str(session.get("access_token", "") or ""))
+            session["user"] = user
+        return session
+    except Exception:
+        st.session_state.pop("beta_auth_session", None)
+        return None
+
+
+def _beta_complete_oauth_callback():
+    """Consume a PKCE verifier once and exchange the returned authorization code."""
+    code = str(st.query_params.get("code", "") or "")
+    state = str(st.query_params.get("oauth_state", "") or "")
+    if not code or not state:
+        return
+
+    try:
+        state_digest = hashlib.sha256(state.encode("ascii")).hexdigest()
+        code_verifier = _beta_rpc(
+            "consume_oauth_login_state", {"p_state_digest": state_digest}
+        )
+        if not isinstance(code_verifier, str) or not code_verifier:
+            raise RuntimeError("beta_invalid_login_state")
+        token_response = _beta_http(
+            "POST",
+            "/auth/v1/token?grant_type=pkce",
+            payload={"auth_code": code, "code_verifier": code_verifier},
+        )
+        user = _beta_verify_access_token(str(token_response.get("access_token", "") or ""))
+        _beta_store_auth_session(token_response, user)
+        st.session_state.pop("beta_pending_login_url", None)
+        st.query_params.clear()
+        st.rerun()
+    except Exception:
+        st.session_state["beta_login_error"] = "Google 登入未完成，請重新開始登入。"
+        st.query_params.clear()
+
+
+def _beta_credit_balance(session):
+    response = _beta_rpc(
+        "get_my_credit_balance", {}, access_token=session["access_token"]
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if isinstance(response, dict):
+        response = response.get("credit_balance", 0)
+    try:
+        return max(0, int(response))
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("beta_invalid_balance") from exc
+
+
+def _beta_reserve_generation(session):
+    response = _beta_rpc(
+        "reserve_generation_credit",
+        {"p_idempotency_key": str(__import__("uuid").uuid4())},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("beta_invalid_reservation")
+    return {
+        "job_id": str(response.get("job_id", "") or ""),
+        "granted": bool(response.get("granted", False)),
+        "balance": max(0, int(response.get("balance", 0))),
+    }
+
+
+def _beta_finish_generation(session, job_id, failure_code=None):
+    function_name = "fail_generation" if failure_code else "complete_generation"
+    payload = {"p_job_id": job_id}
+    if failure_code:
+        payload["p_failure_code"] = str(failure_code)[:80]
+    return _beta_rpc(function_name, payload, access_token=session["access_token"])
+
+
+def _beta_render_account_panel():
+    """Render the separate member login without touching the always-available BYOK path."""
+    if not _beta_config():
+        return None
+
+    _beta_complete_oauth_callback()
+    session = _beta_current_user()
+    st.markdown("#### ✨ 會員 Beta")
+    if session:
+        user = session.get("user", {})
+        email = html.escape(str(user.get("email", "已登入會員") or "已登入會員"))
+        try:
+            balance = _beta_credit_balance(session)
+            st.success(f"已登入：{email}　｜　可用點數：{balance} 點")
+        except Exception:
+            st.warning(f"已登入：{email}　｜　點數暫時無法讀取，請稍後再試。")
+        if st.button("登出會員 Beta", key="beta_logout"):
+            st.session_state.pop("beta_auth_session", None)
+            st.session_state.pop("beta_pending_login_url", None)
+            st.rerun()
+        if not _beta_site_openai_key():
+            st.info("會員登入與點數帳本已啟用；站方生成 API 正在進行最後設定，自備 Key 模式不受影響。")
+        return session
+
+    login_error = st.session_state.pop("beta_login_error", "")
+    if login_error:
+        st.warning(login_error)
+    st.caption("使用 Google 登入，新帳號只會獲得一次 2 點 Beta 體驗額度。")
+    if st.button("準備 Google 登入", type="primary", key="beta_start_google_login"):
+        try:
+            st.session_state["beta_pending_login_url"] = _beta_new_login_url()
+        except Exception:
+            st.error("登入服務暫時無法啟動，請稍後再試。")
+
+    login_url = str(st.session_state.get("beta_pending_login_url", "") or "")
+    if login_url:
+        st.link_button("前往 Google 登入", login_url, type="primary", key="beta_google_login_link")
+        st.caption("登入連結有效 10 分鐘，完成後會自動回到本站。")
+    return None
+
+
 def _supabase_rpc(function_name):
     """Legacy quota bridge deliberately disabled in Sticker Studio Next."""
     raise RuntimeError("legacy_quota_disabled")
@@ -2073,7 +2332,7 @@ def _v12_ai_copy_generate(topic, tone, api_mode, user_api_key):
     if not topic:
         raise ValueError("missing_topic")
 
-    if api_mode != "🔑 使用自己的 OpenAI API" or not user_api_key:
+    if api_mode != OWN_API_MODE or not user_api_key:
         raise ValueError("missing_user_api_key")
     _copy_client = OpenAI(api_key=user_api_key)
 
@@ -2252,7 +2511,9 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
     if _generate:
         if not _topic:
             st.warning("請先輸入一個主題，例如「職場的憤憤不平」。")
-        elif api_mode == "🔑 使用自己的 OpenAI API" and not user_api_key:
+        elif api_mode != OWN_API_MODE:
+            st.info("AI 文案助手目前維持自備 Key 模式，不會使用或扣除會員圖片點數。")
+        elif not user_api_key:
             st.error("❌ 請先輸入自己的 OpenAI API Key。")
         else:
             try:
@@ -2263,7 +2524,9 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
                     or user_api_key
                     or ""
                 ).strip()
-                if _live_api_mode == "🔑 使用自己的 OpenAI API" and not _live_user_api_key:
+                if _live_api_mode != OWN_API_MODE:
+                    st.info("AI 文案助手目前維持自備 Key 模式，不會使用或扣除會員圖片點數。")
+                elif not _live_user_api_key:
                     st.error("❌ 請先輸入自己的 OpenAI API Key。")
                 else:
                     with st.spinner("🤖 AI 正在延伸主題與生活情境……"):
@@ -2789,16 +3052,23 @@ st.markdown('<div id="v12-page-top"></div>', unsafe_allow_html=True)
 st.markdown('<div class="v10-main-title">🎨 LINE 貼圖創作工作室</div>', unsafe_allow_html=True)
 st.caption("V11｜公開版｜快速完成 LINE 貼圖創作")
 
+# OAuth redirects arrive with a short-lived code in the URL.  Handle it before
+# creating the rest of the widgets so a successful login returns to a clean app.
+if _beta_config():
+    _beta_complete_oauth_callback()
+
 
 # API 使用模式常數必須在所有 callback / widget 使用前先建立。
 # Streamlit 會由上而下執行整個 script，因此不可放在 AI 文案區之後。
-_ALLOWED_API_MODES = ["🔑 使用自己的 OpenAI API"]
+_ALLOWED_API_MODES = [OWN_API_MODE]
+if _beta_config():
+    _ALLOWED_API_MODES.append(BETA_API_MODE)
 
 def _v12_sync_api_mode():
     """把 API 使用模式同步到獨立 canonical Session state。"""
     value = str(st.session_state.get("v12_api_mode_widget", "") or "")
     if value not in _ALLOWED_API_MODES:
-        value = "🔑 使用自己的 OpenAI API"
+        value = OWN_API_MODE
     st.session_state["v12_saved_api_mode"] = value
     st.session_state["v11_api_mode"] = value
 
@@ -2819,14 +3089,14 @@ def _v12_sync_user_api_key():
 # 4. 預設隱碼；可由使用者自行切換顯示。
 # ============================================================
 v10_section("🤖 AI 生成方式", "#6366f1")
-st.caption("📌 Sticker Studio Next 預覽版目前使用你自己的 OpenAI API；會員免費額度與訂閱點數功能開發中。")
+st.caption("📌 自備 Key 模式持續可用；會員 Beta 以獨立帳號、RLS 與點數帳本提供一次性的 2 點體驗額度。")
 
 # 重要：不要再直接把 radio 綁在 v11_api_mode。
 # 字型快速選擇／開關 125 種總覽都會觸發 Streamlit rerun，
 # 因此先由 canonical Session state 恢復 widget，再由 callback 寫回 canonical state。
 _saved_api_mode = str(st.session_state.get("v12_saved_api_mode", "") or "")
 if _saved_api_mode not in _ALLOWED_API_MODES:
-    _saved_api_mode = "🔑 使用自己的 OpenAI API"
+    _saved_api_mode = OWN_API_MODE
 st.session_state["v12_api_mode_widget"] = _saved_api_mode
 _api_mode = st.radio(
     "請選擇生成方式",
@@ -2838,6 +3108,8 @@ _api_mode = st.radio(
 st.session_state["v11_api_mode"] = _api_mode
 st.session_state["v12_saved_api_mode"] = _api_mode
 
+_beta_session = _beta_render_account_panel()
+
 # API 教學連結：固定顯示，讓不熟悉 API 的使用者也能先了解申請方式。
 st.link_button(
     "申請API教學連結-**HKT實驗室**",
@@ -2847,7 +3119,7 @@ st.link_button(
     key="v12_api_help",
 )
 
-st.caption("💡 目前不連線至舊版網站的每日額度或 Supabase。")
+st.caption("💡 會員 Beta 只連線至新的 Sticker Studio Next Supabase；不會讀取或變更舊版網站的資料。")
 
 # 若 API Key widget 曾因 rerun 被 Streamlit 暫時清除，從 Session backup 還原。
 if not str(st.session_state.get("v11_user_api_key", "") or "").strip():
@@ -2855,33 +3127,37 @@ if not str(st.session_state.get("v11_user_api_key", "") or "").strip():
     if _saved_key:
         st.session_state["v11_user_api_key"] = _saved_key
 
-st.info(
-    "🔐 **隱私提醒**\n\n"
-    "本網站只將這組 Key 用於目前這個瀏覽器 Session；不會儲存至 GitHub、Supabase 或 Streamlit Secrets。"
-)
+if _api_mode == OWN_API_MODE:
+    st.info(
+        "🔐 **隱私提醒**\n\n"
+        "本網站只將這組 Key 用於目前這個瀏覽器 Session；不會儲存至 GitHub、Supabase 或 Streamlit Secrets。"
+    )
 
-_show_v11_key = st.checkbox(
-    "👁️ 顯示 API Key（再次點擊即可隱藏）",
-    value=False,
-    key="v11_show_api_key",
-)
+    _show_v11_key = st.checkbox(
+        "👁️ 顯示 API Key（再次點擊即可隱藏）",
+        value=False,
+        key="v11_show_api_key",
+    )
 
-_v11_user_api_key = st.text_input(
-    "OpenAI API Key",
-    type="default" if _show_v11_key else "password",
-    placeholder="sk-••••••••••••••••••••",
-    key="v11_user_api_key",
-    help="請輸入你自己的 OpenAI API Key。",
-    on_change=_v12_sync_user_api_key,
-).strip()
+    _v11_user_api_key = st.text_input(
+        "OpenAI API Key",
+        type="default" if _show_v11_key else "password",
+        placeholder="sk-••••••••••••••••••••",
+        key="v11_user_api_key",
+        help="請輸入你自己的 OpenAI API Key。",
+        on_change=_v12_sync_user_api_key,
+    ).strip()
 
 # 以 Session 中的值作為後續圖片生成與 AI 文案助手的唯一來源。
 _v11_user_api_key = str(st.session_state.get("v11_user_api_key", "") or "").strip()
 
-if _v11_user_api_key:
-    st.success("🔒 已取得本次 Session 的 API Key。")
-else:
-    st.warning("⚠️ 請先輸入自己的 OpenAI API Key。")
+if _api_mode == OWN_API_MODE:
+    if _v11_user_api_key:
+        st.success("🔒 已取得本次 Session 的 API Key。")
+    else:
+        st.warning("⚠️ 請先輸入自己的 OpenAI API Key。")
+elif not _beta_session:
+    st.warning("⚠️ 請先使用 Google 登入，才能使用會員 Beta 額度。")
 
 
 st.markdown("""
@@ -2894,7 +3170,7 @@ st.markdown("""
     </div>
     <div class="v11-onboarding-card">
       <div class="v11-onboarding-step">② 選擇 AI 生成方式</div>
-      <div class="v11-onboarding-text">Sticker Studio Next 預覽版請輸入自己的 OpenAI API Key。</div>
+      <div class="v11-onboarding-text">可選自備 OpenAI API Key，或登入會員 Beta 使用帳號點數。</div>
     </div>
     <div class="v11-onboarding-card">
       <div class="v11-onboarding-step">③ 生成 → 裁切 → 下載</div>
@@ -3871,9 +4147,27 @@ if st.button(
         st.warning("請至少輸入一格貼圖文字。")
         st.stop()
 
-    if not _v11_user_api_key:
-        st.error("❌ 請先輸入自己的 OpenAI API Key。")
-        st.stop()
+    if _api_mode == OWN_API_MODE:
+        if not _v11_user_api_key:
+            st.error("❌ 請先輸入自己的 OpenAI API Key。")
+            st.stop()
+    else:
+        _click_beta_session = _beta_current_user()
+        if not _click_beta_session:
+            st.error("❌ 請先使用 Google 登入會員 Beta。")
+            st.stop()
+        if not _beta_site_openai_key():
+            st.error("❌ 會員 Beta 的站方生成服務尚未開放；目前仍可使用自備 Key 模式。")
+            st.stop()
+        try:
+            _reservation = _beta_reserve_generation(_click_beta_session)
+        except Exception:
+            st.error("❌ 目前無法確認會員點數，請稍後再試。")
+            st.stop()
+        if not _reservation["granted"] or not _reservation["job_id"]:
+            st.warning(f"點數不足：目前可用 {_reservation['balance']} 點。")
+            st.stop()
+        st.session_state["beta_generation_job_id"] = _reservation["job_id"]
 
     # 先鎖定，再立即重新繪製畫面；本次不呼叫 AI。
     st.session_state["v11_generation_pending"] = True
@@ -3892,12 +4186,25 @@ if st.session_state.get("v11_generation_pending", False):
 
     st.info("🔒 AI 生成進行中，本次操作已鎖定，請稍候……")
 
-    try:
-        if not _v11_user_api_key:
-            st.error("❌ 請先輸入自己的 OpenAI API Key。")
-            raise RuntimeError("missing_user_api_key")
+    _using_beta_credit = _api_mode == BETA_API_MODE
+    _beta_job_id = str(st.session_state.get("beta_generation_job_id", "") or "")
+    _beta_generation_returned = False
+    _beta_live_session = None
 
-        _generation_client = OpenAI(api_key=_v11_user_api_key)
+    try:
+        if _using_beta_credit:
+            _beta_live_session = _beta_current_user()
+            if not _beta_live_session or not _beta_job_id:
+                raise RuntimeError("missing_beta_reservation")
+            _server_openai_key = _beta_site_openai_key()
+            if not _server_openai_key:
+                raise RuntimeError("beta_generation_not_enabled")
+            _generation_client = OpenAI(api_key=_server_openai_key)
+        else:
+            if not _v11_user_api_key:
+                st.error("❌ 請先輸入自己的 OpenAI API Key。")
+                raise RuntimeError("missing_user_api_key")
+            _generation_client = OpenAI(api_key=_v11_user_api_key)
 
         with st.spinner("AI 正在生成 4×2 原始總圖……"):
             ib = BytesIO(st.session_state.uploaded_image_bytes)
@@ -3954,6 +4261,11 @@ if st.session_state.get("v11_generation_pending", False):
                 if not _b64_json:
                     raise RuntimeError("AI 回應成功，但圖片資料不完整，請重新操作。")
 
+                # From this point an image has been created successfully.  A
+                # transient database acknowledgement failure must never turn
+                # into an automatic refund for an image the member received.
+                _beta_generation_returned = _using_beta_credit
+
                 _progress.progress(0.88)
                 _status.info("🖼️ 原始總圖處理中……")
                 _progress.progress(0.96)
@@ -3984,10 +4296,26 @@ if st.session_state.get("v11_generation_pending", False):
             img.save(out, "PNG")
             st.session_state.generated_4x2_bytes = out.getvalue()
             st.session_state.crop_boxes = None
+            if _using_beta_credit:
+                try:
+                    _beta_finish_generation(_beta_live_session, _beta_job_id)
+                    st.session_state.pop("beta_generation_job_id", None)
+                except Exception:
+                    st.warning("圖片已生成；點數完成紀錄正在同步，請勿重複按下生成。")
             st.success("🎉 4×2 原始總圖生成成功！")
 
     except Exception as e:
-        if str(e) != "missing_user_api_key":
+        if _using_beta_credit and _beta_job_id and not _beta_generation_returned:
+            try:
+                if _beta_live_session:
+                    _beta_finish_generation(
+                        _beta_live_session, _beta_job_id, type(e).__name__
+                    )
+                st.session_state.pop("beta_generation_job_id", None)
+            except Exception:
+                st.warning("生成失敗，退點紀錄正在同步；請先不要重複嘗試。")
+
+        if not _using_beta_credit and str(e) != "missing_user_api_key":
             st.info(
                 "ℹ️ 這次使用的是你自己的 OpenAI API；"
                 "不涉及舊版網站的每日額度或 Supabase。"
