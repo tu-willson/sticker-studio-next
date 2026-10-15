@@ -1322,28 +1322,8 @@ def v10_subsection(title, accent="#4f8cff"):
 # 當前 Streamlit Session 輸入自己的 OpenAI API Key。
 # ============================================================
 def _supabase_rpc(function_name):
-    """伺服器端呼叫 Supabase RPC。只使用 Streamlit Secrets。"""
-    supabase_url = str(st.secrets["SUPABASE_URL"]).rstrip("/")
-    service_role_key = str(st.secrets["SUPABASE_SERVICE_ROLE_KEY"])
-    endpoint = f"{supabase_url}/rest/v1/rpc/{function_name}"
-    req = urllib.request.Request(
-        endpoint,
-        data=b"{}",
-        method="POST",
-        headers={
-            "apikey": service_role_key,
-            "Authorization": f"Bearer {service_role_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-    )
-    with urllib.request.urlopen(req, timeout=10) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    if isinstance(payload, list):
-        return payload[0] if payload else {}
-    if isinstance(payload, dict):
-        return payload
-    return {}
+    """Legacy quota bridge deliberately disabled in Sticker Studio Next."""
+    raise RuntimeError("legacy_quota_disabled")
 
 
 def _get_daily_ai_quota():
