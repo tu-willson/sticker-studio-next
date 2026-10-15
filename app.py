@@ -1372,9 +1372,17 @@ def _beta_http(method, path, payload=None, access_token=None):
         with urllib.request.urlopen(request, timeout=20) as response:
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
-        # Only retain the HTTP status.  It is enough to diagnose an RPC
-        # deployment/cache problem without exposing Supabase response bodies.
-        raise RuntimeError(f"beta_http_{exc.code}") from exc
+        # Preserve only a short machine-readable database error code.  Never
+        # expose the response's message, details, query, or credentials.
+        error_code = "unknown"
+        try:
+            error_body = json.loads(exc.read().decode("utf-8") or "{}")
+            if isinstance(error_body, dict):
+                error_code = str(error_body.get("code", "unknown") or "unknown")
+        except Exception:
+            pass
+        safe_error_code = re.sub(r"[^A-Za-z0-9_-]", "", error_code)[:24] or "unknown"
+        raise RuntimeError(f"beta_http_{exc.code}_{safe_error_code}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
         raise RuntimeError("beta_request_failed") from exc
 
