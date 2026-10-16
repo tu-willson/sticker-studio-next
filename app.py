@@ -585,6 +585,39 @@ st.markdown("""
   font-size:18px !important;
   font-weight:800 !important;
 }
+/* V12｜④ 貼圖類型：以醒目的大按鈕取代小型 radio，手機也容易點選。 */
+.st-key-v12_select_text_sticker_mode button,
+.st-key-v12_select_expression_sticker_mode button{
+  min-height:82px !important;
+  border-radius:16px !important;
+  font-size:22px !important;
+  font-weight:900 !important;
+  letter-spacing:.01em !important;
+  border-width:2px !important;
+  box-shadow:0 5px 14px rgba(30,64,175,.12) !important;
+}
+.st-key-v12_select_text_sticker_mode button p,
+.st-key-v12_select_expression_sticker_mode button p{
+  font-size:22px !important;
+  font-weight:900 !important;
+}
+.st-key-v12_select_text_sticker_mode button:not(:disabled){
+  border-color:#3498db !important;
+}
+.st-key-v12_select_expression_sticker_mode button:not(:disabled){
+  border-color:#8e67d8 !important;
+}
+@media (max-width:640px){
+  .st-key-v12_select_text_sticker_mode button,
+  .st-key-v12_select_expression_sticker_mode button{
+    min-height:70px !important;
+    font-size:18px !important;
+  }
+  .st-key-v12_select_text_sticker_mode button p,
+  .st-key-v12_select_expression_sticker_mode button p{
+    font-size:18px !important;
+  }
+}
 :root{
   --v10-max: 1180px;
   --v10-control: 820px;
@@ -4267,12 +4300,37 @@ if st.button("💾 儲存人物／場景設定",key="v10_save_character",use_con
         st.error("❌ 儲存失敗")
 
 st.session_state.setdefault("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
-_sticker_content_choice = st.radio(
-    "💬 ④ 貼圖類型",
-    [V12_STICKER_TEXT_MODE, V12_STICKER_EXPRESSION_MODE],
-    key="v12_sticker_content_mode",
-    horizontal=True,
-)
+v10_section("💬 ④ 貼圖類型", "#3498db")
+st.caption("選擇這組貼圖要使用文字，或以人物表情特寫呈現。")
+
+def _v12_set_sticker_content_mode(mode):
+    st.session_state["v12_sticker_content_mode"] = mode
+
+
+_sticker_content_choice = str(st.session_state.get(
+    "v12_sticker_content_mode", V12_STICKER_TEXT_MODE
+))
+_mode_text_col, _mode_expression_col = st.columns(2)
+with _mode_text_col:
+    st.button(
+        ("✓ " if _sticker_content_choice == V12_STICKER_TEXT_MODE else "")
+        + V12_STICKER_TEXT_MODE,
+        key="v12_select_text_sticker_mode",
+        use_container_width=True,
+        type="primary" if _sticker_content_choice == V12_STICKER_TEXT_MODE else "secondary",
+        on_click=_v12_set_sticker_content_mode,
+        args=(V12_STICKER_TEXT_MODE,),
+    )
+with _mode_expression_col:
+    st.button(
+        ("✓ " if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "")
+        + V12_STICKER_EXPRESSION_MODE,
+        key="v12_select_expression_sticker_mode",
+        use_container_width=True,
+        type="primary" if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "secondary",
+        on_click=_v12_set_sticker_content_mode,
+        args=(V12_STICKER_EXPRESSION_MODE,),
+    )
 _sticker_mode = _v12_sticker_mode_value(_sticker_content_choice)
 if _sticker_mode == "text":
     v10_section('💬 ④ 使用文字貼圖<br><span style="font-size:.72em;">使用「✨ 主題 AI 幫想」或「🎲 隨機用語」</span>', '#3498db')
