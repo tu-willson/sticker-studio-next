@@ -5212,7 +5212,9 @@ if st.button(
         st.warning("請先上傳人物照片。")
         st.stop()
 
-    if not filled:
+    # 文字模式至少需要一格文字；無文字表情模式則由每格的表情／特效方向生成，
+    # 不應共用「必須填貼圖文字」的驗證。
+    if _sticker_mode == "text" and not any(str(text or "").strip() for text in texts):
         st.warning("請至少輸入一格貼圖文字。")
         st.stop()
 
