@@ -3703,29 +3703,6 @@ st.markdown("""<style>
 .v10-rainbow-title{padding:8px 14px;border-radius:12px;margin:8px 0 12px;font-weight:700;background:linear-gradient(90deg,#fff1f2,#fff7ed,#fefce8,#f0fdf4,#eff6ff,#f5f3ff);}
 .v10-soft-box{padding:8px 12px;border-radius:10px;background:#fafafa;border:1px solid #e5e7eb;}
 
-/* V12 微調：OpenAI API 教學連結按鈕，沿用「開始製作」紅色。 */
-.st-key-v12_api_help button{
-  width:100% !important;
-  min-height:52px !important;
-  border-radius:10px !important;
-  font-size:18px !important;
-  font-weight:800 !important;
-  background:#FF4B4B !important;
-  background-color:#FF4B4B !important;
-  color:#FFFFFF !important;
-  border:1px solid #FF4B4B !important;
-  box-shadow:none !important;
-}
-.st-key-v12_api_help button:hover{
-  background:#FF3333 !important;
-  background-color:#FF3333 !important;
-  border-color:#FF3333 !important;
-  color:#FFFFFF !important;
-}
-.st-key-v12_api_help button p{
-  color:#FFFFFF !important;
-  font-weight:800 !important;
-}
 </style>""",unsafe_allow_html=True)
 
 
@@ -4061,15 +4038,6 @@ st.session_state["v12_saved_api_mode"] = _api_mode
 _beta_session = _beta_render_account_panel()
 _beta_render_admin_console(_beta_session)
 
-# API 教學連結：固定顯示，讓不熟悉 API 的使用者也能先了解申請方式。
-st.link_button(
-    "申請API教學連結-**HKT實驗室**",
-    "https://vocus.cc/article/69ed5612fd897800010cffde",
-    type="primary",
-    use_container_width=True,
-    key="v12_api_help",
-)
-
 st.caption("💡 會員 Beta 只連線至新的 Sticker Studio Next Supabase；不會讀取或變更舊版網站的資料。")
 
 # 若 API Key widget 曾因 rerun 被 Streamlit 暫時清除，從 Session backup 還原。
@@ -4130,7 +4098,7 @@ st.markdown("""
   </div>
 </div>
 """, unsafe_allow_html=True)
-st.markdown('<div class="v11-section-tip">💡 <b>小提醒：</b>第一次使用只要依照畫面上的 ①～⑧ 順序往下設定即可，不需要先閱讀複雜說明。</div>', unsafe_allow_html=True)
+st.markdown('<div class="v11-section-tip">💡 <b>小提醒：</b>第一次使用只要依照畫面上的 ①～⑥ 順序往下設定即可，不需要先閱讀複雜說明。</div>', unsafe_allow_html=True)
 st.divider()
 
 v10_section("📷 ① 上傳人物照片", "#ff5c7a")
