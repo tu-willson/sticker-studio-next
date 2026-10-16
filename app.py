@@ -4469,12 +4469,6 @@ def _v12_render_text_slot(i):
                     f"v12_text_color_segment_{i}_{j}",
                     current.get("text", ""),
                 )
-                st.button(
-                    "自動帶入文字",
-                    key=f"v12_text_color_segment_paste_{i}_{j}",
-                    on_click=_v12_paste_sticker_text_to_color_segment,
-                    args=(i, j),
-                )
                 # 讓使用者在文字片段旁邊直接看到目前套用的顏色。
                 if current.get("color_name") and current.get("hex"):
                     _chip_name = str(current["color_name"])
@@ -4504,6 +4498,14 @@ def _v12_render_text_slot(i):
                         f'<div style="margin:0 0 6px 0;font-weight:700;">文字片段 {j+1}</div>',
                         unsafe_allow_html=True,
                     )
+                st.button(
+                    "自動帶入文字",
+                    key=f"v12_text_color_segment_paste_{i}_{j}",
+                    on_click=_v12_paste_sticker_text_to_color_segment,
+                    args=(i, j),
+                    type="primary",
+                    use_container_width=True,
+                )
                 st.text_input(
                     f"文字片段 {j+1}",
                     key=f"v12_text_color_segment_{i}_{j}",
