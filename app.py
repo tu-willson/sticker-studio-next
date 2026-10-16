@@ -2554,7 +2554,7 @@ V12_RANDOM_EXPRESSION_VARIATIONS = {
 # 「60 組」只負責表情與動作的骨架；背景、視覺特效與鏡頭另外抽選。
 # 這可避免不同配方仍反覆落在同一種放射背景、星星或愛心的問題。
 # 每個畫面包是高階視覺方向，而非要複製任何既有作品或角色。
-V12_EXPRESSION_VISUAL_PACKS = [
+V12_EXPRESSION_VISUAL_PACK_SEEDS = [
     ("impact_red", "紅橙衝擊爆發", "漫畫驚嘆圖框", "紅橙爆發放射圖形與少量碎片", "微低角度、衝出畫面的近景"),
     ("impact_blue", "藍色冰裂震撼", "震動波浪線", "藍白冰裂波紋與放射衝擊", "正面近景、畫面帶停格感"),
     ("impact_yellow", "黃色警報閃光", "漫畫速度線", "明黃警示閃光與斜向速度線", "斜側近景、動作方向明確"),
@@ -2589,7 +2589,7 @@ V12_EXPRESSION_VISUAL_PACKS = [
         "stage": stage,
         "camera": camera,
     }
-    for pack_id, title, effect, stage, camera in V12_EXPRESSION_VISUAL_PACKS
+    for pack_id, title, effect, stage, camera in V12_EXPRESSION_VISUAL_PACK_SEEDS
 ]
 
 
@@ -5537,7 +5537,8 @@ def _v12_render_expression_sticker_slots():
     _last_recipes = st.session_state.get("v12_expression_last_recipe_labels", [])
     if isinstance(_last_recipes, list) and _last_recipes:
         _last_recipe_text = "、".join(
-            f"{int(item.get('slot', 0)):02d} {item.get('title', '')}／{item.get('visual_title', '')}"
+            f"{int(item.get('slot', 0)):02d} {item.get('title', '')}"
+            + (f"／{item.get('visual_title', '')}" if item.get("visual_title") else "")
             for item in _last_recipes
             if isinstance(item, dict)
         )
