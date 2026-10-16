@@ -112,8 +112,8 @@ begin
   end if;
 
   select coalesce(sum(delta), 0)::integer into v_balance
-  from public.credit_ledger
-  where user_id = p_user_id;
+  from public.credit_ledger as l
+  where l.user_id = p_user_id;
 
   if v_balance + p_delta < 0 then
     raise exception 'negative_credit_balance_not_allowed' using errcode = '22023';
