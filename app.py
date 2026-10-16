@@ -2584,6 +2584,7 @@ def _v12_normalize_project_metadata(metadata):
                 "sticker_index": si,
                 "segment_index": ji,
                 "text": part,
+                "auto_text": bool(item.get("auto_text", False)),
                 "color_name": color_name,
                 "hex": hex_code,
             })
@@ -2805,6 +2806,7 @@ def _v12_load_history_record(record):
             segs = _v12_get_color_segments(si)
             segs[ji] = {
                 "text": str(item.get("text", "") or ""),
+                "auto_text": bool(item.get("auto_text", False)),
                 "color_name": str(item.get("color_name", "") or ""),
                 "hex": str(item.get("hex", "") or ""),
             }
@@ -2956,7 +2958,10 @@ V12_TEXT_COLOR_PALETTE = [
 ]
 
 def _v12_default_color_segments():
-    return [{"text": "", "color_name": "", "hex": ""} for _ in range(3)]
+    return [
+        {"text": "", "auto_text": False, "color_name": "", "hex": ""}
+        for _ in range(3)
+    ]
 
 def _v12_sync_text_color_enabled(i):
     """把局部文字上色 checkbox 的 widget 狀態同步到獨立 canonical state。
@@ -2983,6 +2988,7 @@ def _v12_init_color_segment_state():
             item = segs[j] if isinstance(segs[j], dict) else {}
             normalized[j] = {
                 "text": str(item.get("text", "") or ""),
+                "auto_text": bool(item.get("auto_text", False)),
                 "color_name": str(item.get("color_name", "") or ""),
                 "hex": str(item.get("hex", "") or ""),
             }
@@ -3007,6 +3013,20 @@ def _v12_pick_segment_color(i, j, color_name, hex_code):
     _v12_set_segment_color(i, j, color_name, hex_code)
 
 
+def _v12_sync_auto_color_segment(i, j):
+    """Keep an automatic segment tied to its matching 01～08 sticker text."""
+    segs = _v12_get_color_segments(i)
+    if not 0 <= j < len(segs):
+        return
+    segs[j]["auto_text"] = bool(st.session_state.get(
+        f"v12_text_color_segment_auto_{i}_{j}", False
+    ))
+    if segs[j]["auto_text"]:
+        value = str(st.session_state.get(f"sticker_text_{i}", "") or "")
+        segs[j]["text"] = value
+        st.session_state[f"v12_text_color_segment_{i}_{j}"] = value
+
+
 def _v12_add_text_color_segment(i):
     count = int(st.session_state.get(f"v12_text_color_count_{i}", 0))
     st.session_state[f"v12_text_color_count_{i}"] = min(3, count + 1)
@@ -3026,6 +3046,7 @@ def _v12_valid_color_segments(texts):
                     "sticker_index": i + 1,
                     "segment_index": j + 1,
                     "text": part,
+                    "auto_text": bool(seg.get("auto_text", False)),
                     "color_name": color_name,
                     "hex": hex_code,
                 })
@@ -3039,13 +3060,19 @@ def _v12_clear_text_color_segments():
         st.session_state[f"v12_text_color_segments_{i}"] = _v12_default_color_segments()
         for j in range(3):
             st.session_state.pop(f"v12_text_color_segment_{i}_{j}", None)
+            st.session_state.pop(f"v12_text_color_segment_auto_{i}_{j}", None)
 
 _v12_init_color_segment_state()
 
 def _v12_sync_sticker_text(i):
     """把文字輸入 widget 的值同步到不受條件式 rerun 影響的 canonical state。"""
     key = f"v12_sticker_text_widget_{i}"
-    st.session_state[f"sticker_text_{i}"] = str(st.session_state.get(key, "") or "")
+    value = str(st.session_state.get(key, "") or "")
+    st.session_state[f"sticker_text_{i}"] = value
+    for j, segment in enumerate(_v12_get_color_segments(i)):
+        if segment.get("auto_text", False):
+            segment["text"] = value
+            st.session_state[f"v12_text_color_segment_{i}_{j}"] = value
 
 def get_texts():
     return [st.session_state.get(f"sticker_text_{i}", "") for i in range(8)]
@@ -4455,6 +4482,21 @@ def _v12_render_text_slot(i):
                     f"v12_text_color_segment_{i}_{j}",
                     current.get("text", ""),
                 )
+                _auto_text_key = f"v12_text_color_segment_auto_{i}_{j}"
+                st.session_state.setdefault(
+                    _auto_text_key, bool(current.get("auto_text", False))
+                )
+                _auto_text = st.checkbox(
+                    "自動帶入文字",
+                    key=_auto_text_key,
+                    on_change=_v12_sync_auto_color_segment,
+                    args=(i, j),
+                )
+                current["auto_text"] = bool(_auto_text)
+                if _auto_text:
+                    _source_text = str(st.session_state.get(f"sticker_text_{i}", "") or "")
+                    current["text"] = _source_text
+                    st.session_state[f"v12_text_color_segment_{i}_{j}"] = _source_text
                 # 讓使用者在文字片段旁邊直接看到目前套用的顏色。
                 if current.get("color_name") and current.get("hex"):
                     _chip_name = str(current["color_name"])
@@ -4489,6 +4531,7 @@ def _v12_render_text_slot(i):
                     key=f"v12_text_color_segment_{i}_{j}",
                     placeholder="例如：你還有",
                     label_visibility="collapsed",
+                    disabled=_auto_text,
                 )
                 segs[j]["text"] = str(
                     st.session_state.get(f"v12_text_color_segment_{i}_{j}", "")
