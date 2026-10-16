@@ -4609,7 +4609,7 @@ def _v12_render_expression_sticker_slots():
                 st.text_input(
                     "特效或動作提示詞",
                     key=f"v12_expression_effect_action_prompt_{i}",
-                    placeholder="例如：雙手抱頭後退、冷風吹過",
+                    placeholder="例如：大動作、荒謬、搶眼特效",
                 )
     configured = sum(
         bool(
