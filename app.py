@@ -5097,7 +5097,7 @@ if _style_reference_active:
             width=240,
         )
     st.success("✅ 已啟用畫風參考：本次生成會優先參考這張圖，不會套用上方貼圖風格。")
-    st.caption("參考圖只用於本次瀏覽工作階段的生成，不會保存到「我的作品」。")
+    st.caption("若打包時同步保存並勾選「保存私人創作素材」，這張參考圖會一併保存，供日後載回續作。")
 
 with st.expander("📚 查看全部預設風格",expanded=False):
     st.write("、".join(_style_options[2:]))
