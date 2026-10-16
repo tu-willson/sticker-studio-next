@@ -5475,7 +5475,6 @@ if st.session_state.get("v11_generation_pending", False):
                         ("person.png", ib, "image/png"),
                         ("style-reference.jpg", BytesIO(_style_reference_bytes), "image/jpeg"),
                     ]
-                    _image_edit_kwargs["input_fidelity"] = "high"
                     _status.info("🖼️ 正在分析人物照片與畫風參考圖……")
 
                 if transparent:
