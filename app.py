@@ -1537,6 +1537,8 @@ def _beta_library_metadata(record):
     keep = (
         "project_id", "project_name", "created_at", "updated_at", "style_name",
         "font_name", "text_style", "generation_method", "transparent_background",
+        "style_mode", "custom_style_snapshot", "character_features",
+        "custom_character", "custom_character_enabled",
         "sticker_texts", "sticker_color_segments", "schema_version", "identity",
         "timestamps", "creative_settings", "package_settings", "main_no", "tab_no",
     )
@@ -2260,6 +2262,57 @@ def _v12_format_display_time(value):
 def _v12_now_iso():
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
+
+def _v12_clean_character_features(value):
+    if not isinstance(value, list):
+        return []
+    return list(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
+
+
+def _v12_current_custom_style_snapshot():
+    """Capture the exact custom style used by the current project, including a draft."""
+    mode = str(st.session_state.get("v10_style_mode", "") or "")
+    snapshot = {
+        "mode": mode,
+        "name": "",
+        "prompt": "",
+        "source": "preset",
+    }
+    if mode != "⭐ 自定義風格":
+        return snapshot
+
+    loaded = st.session_state.get("v12_loaded_project_custom_style")
+    if isinstance(loaded, dict) and str(loaded.get("prompt", "") or "").strip():
+        snapshot.update({
+            "name": str(loaded.get("name", "") or "").strip(),
+            "prompt": str(loaded.get("prompt", "") or "").strip(),
+            "source": "project_snapshot",
+        })
+        return snapshot
+
+    choice = str(st.session_state.get("v12_saved_custom_style_choice", "") or "").strip()
+    if choice and choice != "↓ 請選擇已儲存風格":
+        try:
+            slot = int(choice.split("｜", 1)[0])
+            entry = _public02a_get_style_bank().get(str(slot), {})
+            snapshot.update({
+                "name": str(entry.get("name", "") or "").strip(),
+                "prompt": str(entry.get("prompt", "") or "").strip(),
+                "source": "saved_style",
+            })
+            return snapshot
+        except (TypeError, ValueError):
+            pass
+
+    # 未按下「儲存此風格」的草稿也屬於本次創作的一部分。
+    snapshot.update({
+        "name": str(st.session_state.get("v12_style_editor_name", "") or "").strip(),
+        "prompt": str(st.session_state.get("v12_style_editor_prompt", "") or "").strip(),
+        "source": "unsaved_draft",
+    })
+    return snapshot
+
+
 def _v12_new_project_metadata():
     """V12｜01B①：建立目前作品的標準化 metadata。
 
@@ -2278,6 +2331,11 @@ def _v12_new_project_metadata():
         "updated_at": now,
         "generation_method": "",
         "transparent_background": False,
+        "style_mode": "",
+        "custom_style_snapshot": {},
+        "character_features": [],
+        "custom_character": "",
+        "custom_character_enabled": False,
         "sticker_texts": [""] * 8,
         "sticker_color_segments": [],
         "source_image": None,
@@ -2297,11 +2355,14 @@ def _v12_new_project_metadata():
             "updated_at": now,
         },
         "creative_settings": {
-            "style": {"name": ""},
+            "style": {"name": "", "mode": "", "custom_snapshot": {}},
             "font": {"name": ""},
             "text_style": "",
             "generation_method": "",
             "transparent_background": False,
+            "character_features": [],
+            "custom_character": "",
+            "custom_character_enabled": False,
             "sticker_texts": [""] * 8,
             "sticker_color_segments": [],
         },
@@ -2331,6 +2392,30 @@ def _v12_normalize_project_metadata(metadata):
 
     style = creative.get("style") if isinstance(creative.get("style"), dict) else {}
     font = creative.get("font") if isinstance(creative.get("font"), dict) else {}
+
+    style_mode = str(data.get("style_mode", style.get("mode", "")) or "")
+    raw_custom_style = data.get(
+        "custom_style_snapshot", style.get("custom_snapshot", {})
+    )
+    custom_style_snapshot = dict(raw_custom_style) if isinstance(raw_custom_style, dict) else {}
+    custom_style_snapshot = {
+        "mode": str(custom_style_snapshot.get("mode", style_mode) or ""),
+        "name": str(custom_style_snapshot.get("name", "") or "")[:120],
+        "prompt": str(custom_style_snapshot.get("prompt", "") or "")[:12000],
+        "source": str(custom_style_snapshot.get("source", "") or "")[:40],
+    }
+    character_features = _v12_clean_character_features(
+        data.get("character_features", creative.get("character_features", []))
+    )
+    custom_character = str(
+        data.get("custom_character", creative.get("custom_character", "")) or ""
+    )[:2000]
+    custom_character_enabled = bool(
+        data.get(
+            "custom_character_enabled",
+            creative.get("custom_character_enabled", False),
+        )
+    )
 
     project_id = str(data.get("project_id") or identity.get("project_id") or base["project_id"])
     project_name = _v12_normalize_project_name(
@@ -2383,6 +2468,11 @@ def _v12_normalize_project_metadata(metadata):
         "text_style": str(data.get("text_style", creative.get("text_style", "")) or ""),
         "generation_method": str(data.get("generation_method", creative.get("generation_method", "")) or ""),
         "transparent_background": bool(data.get("transparent_background", creative.get("transparent_background", False))),
+        "style_mode": style_mode,
+        "custom_style_snapshot": custom_style_snapshot,
+        "character_features": character_features,
+        "custom_character": custom_character,
+        "custom_character_enabled": custom_character_enabled,
         "sticker_texts": sticker_texts,
         "sticker_color_segments": normalized_color_segments,
         "schema_version": "v12.project.1",
@@ -2397,11 +2487,18 @@ def _v12_normalize_project_metadata(metadata):
         "updated_at": normalized["updated_at"],
     }
     normalized["creative_settings"] = {
-        "style": {"name": normalized["style_name"]},
+        "style": {
+            "name": normalized["style_name"],
+            "mode": normalized["style_mode"],
+            "custom_snapshot": dict(normalized["custom_style_snapshot"]),
+        },
         "font": {"name": normalized["font_name"]},
         "text_style": normalized["text_style"],
         "generation_method": normalized["generation_method"],
         "transparent_background": normalized["transparent_background"],
+        "character_features": list(normalized["character_features"]),
+        "custom_character": normalized["custom_character"],
+        "custom_character_enabled": normalized["custom_character_enabled"],
         "sticker_texts": list(normalized["sticker_texts"]),
         "sticker_color_segments": list(normalized["sticker_color_segments"]),
     }
@@ -2506,6 +2603,38 @@ def _v12_load_history_record(record):
         record.get("tab_no") or package.get("tab_no") or ""
     )
 
+    # 作品專屬創作設定：載回時覆蓋目前畫面設定，但不改寫使用者的預設資料庫。
+    st.session_state["v10_character_options"] = list(
+        metadata.get("character_features", []) or []
+    )
+    st.session_state["v10_character_custom_1"] = str(
+        metadata.get("custom_character", "") or ""
+    )
+    st.session_state["v10_character_enabled_1"] = bool(
+        metadata.get("custom_character_enabled", False)
+    )
+
+    loaded_style_mode = str(metadata.get("style_mode", "") or "")
+    if loaded_style_mode:
+        st.session_state["v10_style_mode"] = loaded_style_mode
+    loaded_custom_style = metadata.get("custom_style_snapshot")
+    if (
+        loaded_style_mode == "⭐ 自定義風格"
+        and isinstance(loaded_custom_style, dict)
+        and str(loaded_custom_style.get("prompt", "") or "").strip()
+    ):
+        st.session_state["v12_loaded_project_custom_style"] = dict(loaded_custom_style)
+        # 先維持作品快照，使用者主動選擇已儲存風格後才會切換成新的設定。
+        st.session_state["v12_saved_custom_style_choice"] = "↓ 請選擇已儲存風格"
+        st.session_state["v12_style_editor_name"] = str(
+            loaded_custom_style.get("name", "") or ""
+        )
+        st.session_state["v12_style_editor_prompt"] = str(
+            loaded_custom_style.get("prompt", "") or ""
+        )
+    else:
+        st.session_state.pop("v12_loaded_project_custom_style", None)
+
     texts = list(metadata.get("sticker_texts") or [""] * 8)
     for i in range(8):
         value = str(texts[i] if i < len(texts) else "")
@@ -2587,6 +2716,17 @@ def _v12_project_snapshot():
     project["transparent_background"] = bool(
         st.session_state.get("transparent_png_option", False)
     )
+    project["character_features"] = _v12_clean_character_features(
+        st.session_state.get("v10_character_options", [])
+    )
+    project["custom_character"] = str(
+        st.session_state.get("v10_character_custom_1", "") or ""
+    ).strip()
+    project["custom_character_enabled"] = bool(
+        st.session_state.get("v10_character_enabled_1", False)
+    )
+    project["custom_style_snapshot"] = _v12_current_custom_style_snapshot()
+    project["style_mode"] = project["custom_style_snapshot"].get("mode", "")
     # V12｜STEP 01A③ FIX：
     # 若使用「⭐ 自定義風格」，作品庫不要只顯示泛稱，
     # 而是記錄使用者實際選取的「已儲存風格名稱」。
@@ -2594,20 +2734,11 @@ def _v12_project_snapshot():
         st.session_state.get("v10_style_mode", project.get("style_name", ""))
     )
     if _style_mode == "⭐ 自定義風格":
-        _saved_style_choice = str(
-            st.session_state.get(
-                "v12_saved_custom_style_choice",
-                st.session_state.get("v10_saved_custom_style_choice", ""),
-            )
+        _style_snapshot_name = str(
+            project["custom_style_snapshot"].get("name", "") or ""
         ).strip()
-
-        if _saved_style_choice and _saved_style_choice != "✏️ 尚未選擇／新增":
-            # 下拉選單格式為「01｜暖芽測試」，
-            # 作品紀錄只保存真正的自定義風格名稱「暖芽測試」。
-            if "｜" in _saved_style_choice:
-                project["style_name"] = _saved_style_choice.split("｜", 1)[1].strip()
-            else:
-                project["style_name"] = _saved_style_choice
+        if _style_snapshot_name:
+            project["style_name"] = _style_snapshot_name
         else:
             project["style_name"] = _style_mode
     else:
@@ -3909,11 +4040,32 @@ if style_mode=="⭐ 自定義風格":
 
     custom_style = ""
     if _saved_choice != "↓ 請選擇已儲存風格":
+        # 使用者主動選擇清單中的風格時，改用目前儲存版本。
+        st.session_state.pop("v12_loaded_project_custom_style", None)
         _pos = _saved_labels.index(_saved_choice) - 1
         custom_style = _custom_style_slots[_pos][2]
         st.info(f"💾 已套用：{_custom_style_slots[_pos][0]:02d}｜{_custom_style_slots[_pos][1]}")
     else:
-        st.info("👆 請選擇一個已儲存風格；或先在下方建立新的風格。")
+        _loaded_project_style = st.session_state.get("v12_loaded_project_custom_style")
+        _draft_style_prompt = str(
+            st.session_state.get("v12_style_editor_prompt", "") or ""
+        ).strip()
+        if (
+            isinstance(_loaded_project_style, dict)
+            and str(_loaded_project_style.get("prompt", "") or "").strip()
+        ):
+            custom_style = str(_loaded_project_style.get("prompt", "") or "").strip()
+            _loaded_style_name = str(_loaded_project_style.get("name", "") or "").strip()
+            st.info(
+                "📦 已載入作品當時的自定義風格"
+                + (f"：{_loaded_style_name}" if _loaded_style_name else "")
+            )
+        elif _draft_style_prompt:
+            # 草稿不必先存進個人風格庫，也能用於這次作品並一起保存。
+            custom_style = _draft_style_prompt
+            st.info("✏️ 正在使用尚未儲存的自定義風格草稿。")
+        else:
+            st.info("👆 請選擇一個已儲存風格；或先在下方建立新的風格。")
 
     # Single fixed editor: only two text widgets are ever used.
     with st.expander("✏️ 管理我的自定義風格", expanded=False):
@@ -3975,6 +4127,7 @@ if style_mode=="⭐ 自定義風格":
 else:
     style=style_mode
     custom_style=""
+    st.session_state.pop("v12_loaded_project_custom_style", None)
 
 with st.expander("📚 查看全部預設風格",expanded=False):
     st.write("、".join(_style_options[2:]))
