@@ -1554,7 +1554,8 @@ def _beta_library_status(session):
 def _beta_list_library_projects(session):
     query = (
         "/rest/v1/library_projects?select=id,title,metadata,grid_path,package_path,"
-        "preview_path,created_at,updated_at,completed_at&status=eq.active"
+        "preview_path,sticker_prefix,source_photo_path,style_reference_path,"
+        "created_at,updated_at,completed_at&status=eq.active"
         "&order=created_at.desc"
     )
     response = _beta_http("GET", query, access_token=session["access_token"])
@@ -1584,19 +1585,53 @@ def _beta_library_metadata(record):
         "sticker_texts", "sticker_color_segments", "schema_version", "identity",
         "timestamps", "creative_settings", "package_settings", "main_no", "tab_no",
     )
-    return {key: metadata[key] for key in keep if key in metadata}
+    result = {key: metadata[key] for key in keep if key in metadata}
+    asset_manifest = record.get("cloud_asset_manifest")
+    if isinstance(asset_manifest, dict):
+        result["cloud_asset_manifest"] = asset_manifest
+    return result
 
 
 def _beta_save_library_project(session, record, progress_callback=None):
-    """Reserve one library slot, then upload exactly three private objects."""
+    """Save only selected final assets plus optional private creation materials."""
     def _report(progress, message):
         if progress_callback:
             progress_callback(progress, message)
+
+    stickers = record.get("sticker_bytes")
+    if not isinstance(stickers, dict) or not stickers:
+        raise RuntimeError("library_selected_stickers_missing")
+    selected_stickers = [
+        (str(number), bytes(image_bytes))
+        for number, image_bytes in sorted(
+            stickers.items(),
+            key=lambda item: (
+                0, int(str(item[0]))
+            ) if str(item[0]).isdigit() else (1, str(item[0])),
+        )
+        if isinstance(image_bytes, (bytes, bytearray)) and image_bytes
+    ]
+    if not selected_stickers:
+        raise RuntimeError("library_selected_stickers_missing")
 
     _report(5, "正在建立雲端作品保存空間…")
     metadata = _beta_library_metadata(record)
     project_id = str(metadata.get("project_id") or __import__("uuid").uuid4())
     title = str(metadata.get("project_name") or _v12_default_project_name())[:80]
+    source_photo = bytes(record.get("source_photo_bytes") or b"")
+    style_reference = bytes(record.get("style_reference_bytes") or b"")
+    manifest = {
+        "version": 1,
+        "stickers": [
+            {"number": number, "path": f"stickers/{index:03d}.png"}
+            for index, (number, _) in enumerate(selected_stickers, start=1)
+        ],
+        "has_source_photo": bool(source_photo),
+        "has_style_reference": bool(style_reference),
+        "main_asset_index": int(record.get("cloud_main_asset_index", 1) or 1),
+        "tab_asset_index": int(record.get("cloud_tab_asset_index", 1) or 1),
+    }
+    metadata["cloud_asset_manifest"] = manifest
     slot = _beta_rpc(
         "create_library_project_slot",
         {"p_project_id": project_id, "p_title": title, "p_metadata": metadata},
@@ -1617,26 +1652,44 @@ def _beta_save_library_project(session, record, progress_callback=None):
     if not user_id:
         raise RuntimeError("beta_invalid_session")
     prefix = f"{user_id}/{project_id}/"
-    paths = [prefix + "grid.webp", prefix + "package.zip", prefix + "preview.webp"]
+    sticker_paths = [
+        prefix + item["path"] for item in manifest["stickers"]
+    ]
+    paths = [prefix + "preview.webp", *sticker_paths]
+    if source_photo:
+        paths.append(prefix + "source-photo.webp")
+    if style_reference:
+        paths.append(prefix + "style-reference.webp")
     _report(15, "正在壓縮作品預覽圖…")
-    grid_webp = _v12_webp_bytes(record.get("grid_bytes") or b"")
-    preview_webp = _v12_webp_bytes(record.get("main_bytes") or record.get("grid_bytes") or b"")
-    package_zip = bytes(record.get("zip_bytes") or b"")
+    preview_webp = _v12_webp_bytes(record.get("main_bytes") or selected_stickers[0][1])
+    source_webp = _v12_webp_bytes(source_photo, quality=90) if source_photo else b""
+    style_webp = _v12_webp_bytes(style_reference, quality=90) if style_reference else b""
+    total_sticker_bytes = sum(len(image_bytes) for _, image_bytes in selected_stickers)
     try:
-        _report(35, "正在上傳原始總圖…")
-        _beta_storage_upload(session, paths[0], grid_webp, "image/webp")
-        _report(60, "正在上傳 LINE 貼圖 ZIP…")
-        _beta_storage_upload(session, paths[1], package_zip, "application/zip")
-        _report(82, "正在上傳作品預覽圖…")
-        _beta_storage_upload(session, paths[2], preview_webp, "image/webp")
+        _report(25, "正在上傳已選貼圖…")
+        for index, ((_, image_bytes), path) in enumerate(
+            zip(selected_stickers, sticker_paths), start=1
+        ):
+            _beta_storage_upload(session, path, image_bytes, "image/png")
+            progress = 25 + round(50 * index / len(selected_stickers))
+            _report(progress, f"正在上傳已選貼圖 {index}／{len(selected_stickers)}…")
+        _report(78, "正在上傳作品預覽圖…")
+        _beta_storage_upload(session, prefix + "preview.webp", preview_webp, "image/webp")
+        if source_webp:
+            _report(85, "正在保存私人創作素材…")
+            _beta_storage_upload(session, prefix + "source-photo.webp", source_webp, "image/webp")
+        if style_webp:
+            _report(89, "正在保存畫風參考…")
+            _beta_storage_upload(session, prefix + "style-reference.webp", style_webp, "image/webp")
         _report(94, "正在確認雲端作品資料…")
         _beta_rpc(
             "complete_library_project_upload",
             {
                 "p_project_id": project_id,
-                "p_grid_bytes": len(grid_webp),
-                "p_package_bytes": len(package_zip),
                 "p_preview_bytes": len(preview_webp),
+                "p_sticker_bytes": total_sticker_bytes,
+                "p_source_photo_bytes": len(source_webp),
+                "p_style_reference_bytes": len(style_webp),
             },
             access_token=session["access_token"],
         )
@@ -1661,6 +1714,59 @@ def _beta_save_library_project(session, record, progress_callback=None):
     }
 
 
+def _beta_load_library_project_record(session, project):
+    """Download only the selected assets needed to resume a saved project."""
+    project = dict(project or {})
+    metadata = project.get("metadata")
+    metadata = dict(metadata) if isinstance(metadata, dict) else {}
+    manifest = metadata.get("cloud_asset_manifest")
+
+    # Legacy records retain their original 4×2 grid and optional ZIP.
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("stickers"), list):
+        grid_path = str(project.get("grid_path") or "")
+        if not grid_path:
+            raise RuntimeError("library_assets_missing")
+        record = dict(metadata)
+        record.update(project)
+        grid_webp = _beta_storage_download(session, grid_path)
+        record["grid_bytes"] = _v12_png_bytes(Image.open(BytesIO(grid_webp)))
+        return record
+
+    prefix = str(project.get("sticker_prefix") or "")
+    if not prefix:
+        raise RuntimeError("library_assets_missing")
+    sticker_bytes = {}
+    for position, item in enumerate(manifest["stickers"], start=1):
+        if not isinstance(item, dict):
+            continue
+        relative_path = str(item.get("path") or "")
+        if not relative_path:
+            continue
+        sticker_bytes[f"{position:02d}"] = _beta_storage_download(
+            session, prefix.rsplit("stickers/", 1)[0] + relative_path
+        )
+    if not sticker_bytes:
+        raise RuntimeError("library_assets_missing")
+
+    record = dict(metadata)
+    record.update(project)
+    record["grid_bytes"] = b""
+    record["sticker_bytes"] = sticker_bytes
+    record["cloud_asset_manifest"] = manifest
+    preview_path = str(project.get("preview_path") or "")
+    if preview_path:
+        record["main_bytes"] = _v12_png_bytes(
+            Image.open(BytesIO(_beta_storage_download(session, preview_path)))
+        )
+    if manifest.get("has_source_photo") and project.get("source_photo_path"):
+        record["source_photo_bytes"] = _beta_storage_download(
+            session, str(project["source_photo_path"]))
+    if manifest.get("has_style_reference") and project.get("style_reference_path"):
+        record["style_reference_bytes"] = _beta_storage_download(
+            session, str(project["style_reference_path"]))
+    return record
+
+
 def _beta_delete_library_project(session, project_id):
     response = _beta_rpc(
         "get_my_library_project_delete_paths",
@@ -1669,12 +1775,9 @@ def _beta_delete_library_project(session, project_id):
     )
     if isinstance(response, list):
         response = response[0] if response else {}
-    if not isinstance(response, dict) or not response.get("grid_path"):
+    if not isinstance(response, dict):
         raise RuntimeError("library_project_not_found")
-    _beta_storage_delete(
-        session,
-        [response.get("grid_path"), response.get("package_path"), response.get("preview_path")],
-    )
+    _beta_storage_delete(session, response.get("object_paths", []))
     _beta_rpc(
         "finalize_my_library_project_delete",
         {"p_project_id": str(project_id)},
@@ -3114,6 +3217,19 @@ def _v12_render_sticker_basket_workspace():
     else:
         st.caption("登入會員後可選擇同步保存到雲端「我的作品」。未勾選時，作品僅暫存於本次瀏覽。")
 
+    has_creation_materials = bool(
+        st.session_state.get("uploaded_image_bytes")
+        or st.session_state.get("v12_style_reference_image_bytes")
+    )
+    save_creation_materials = st.checkbox(
+        "🔒 同時保存私人創作素材（人物照片／畫風參考），方便下次繼續製作",
+        value=True,
+        key="v12_save_creation_materials_on_package",
+        disabled=not bool(cloud_session) or not has_creation_materials,
+    )
+    if has_creation_materials:
+        st.caption("創作素材僅自己可讀；取消勾選後，雲端作品只會保存已選成品與設定。")
+
     if st.button(
         f"📦 將已選 {len(selected)} 張貼圖一次打包",
         type="primary",
@@ -3145,6 +3261,7 @@ def _v12_render_sticker_basket_workspace():
             history_record = _v12_history_record(
                 metadata=history_project,
                 zip_bytes=zip_bytes,
+                # 雲端不會同步這張 4×2 總圖；本機暫存保留原本流程相容性。
                 grid_bytes=st.session_state.get("generated_4x2_bytes"),
                 main_bytes=main_buffer.getvalue(),
                 tab_bytes=tab_buffer.getvalue(),
@@ -3152,6 +3269,18 @@ def _v12_render_sticker_basket_workspace():
                 main_no=main_label,
                 tab_no=tab_label,
                 sticker_count=len(selected),
+                source_photo_bytes=st.session_state.get("uploaded_image_bytes") or b"",
+                style_reference_bytes=(
+                    st.session_state.get("v12_style_reference_image_bytes") or b""
+                ),
+            )
+            history_record["cloud_main_asset_index"] = next(
+                index for index, item in enumerate(selected, start=1)
+                if item["id"] == options[main_label]["id"]
+            )
+            history_record["cloud_tab_asset_index"] = next(
+                index for index, item in enumerate(selected, start=1)
+                if item["id"] == options[tab_label]["id"]
             )
             download_name = (
                 f"{_v12_safe_download_stem(history_project.get('project_name'))}.zip"
@@ -3165,13 +3294,17 @@ def _v12_render_sticker_basket_workspace():
             active_cloud_session = _beta_current_user() if save_to_cloud and _beta_config() else None
             if save_to_cloud and active_cloud_session:
                 try:
+                    cloud_record = dict(history_record)
+                    if not save_creation_materials:
+                        cloud_record["source_photo_bytes"] = b""
+                        cloud_record["style_reference_bytes"] = b""
                     cloud_progress = st.progress(
                         0,
                         text="正在準備同步保存到雲端，請勿重新整理網頁…",
                     )
                     cloud_save = _beta_save_library_project(
                         active_cloud_session,
-                        history_record,
+                        cloud_record,
                         progress_callback=lambda progress, message: cloud_progress.progress(
                             progress, text=message + " 請勿重新整理網頁。"
                         ),
@@ -3229,7 +3362,8 @@ def _v12_build_assets_manifest(grid_bytes=None, main_bytes=None, tab_bytes=None,
 def _v12_history_record(metadata, zip_bytes, grid_bytes=None,
                         main_bytes=None, tab_bytes=None,
                         sticker_bytes=None, main_no=None, tab_no=None,
-                        sticker_count=None):
+                        sticker_count=None, source_photo_bytes=None,
+                        style_reference_bytes=None):
     metadata = _v12_normalize_project_metadata(metadata)
     project_id = str(metadata.get("project_id") or uuid4())
     now = _v12_now_iso()
@@ -3252,6 +3386,8 @@ def _v12_history_record(metadata, zip_bytes, grid_bytes=None,
         "main_bytes": bytes(main_bytes or b""),
         "tab_bytes": bytes(tab_bytes or b""),
         "sticker_bytes": dict(sticker_bytes or {}),
+        "source_photo_bytes": bytes(source_photo_bytes or b""),
+        "style_reference_bytes": bytes(style_reference_bytes or b""),
     })
     record["assets_manifest"] = _v12_build_assets_manifest(
         grid_bytes=record["grid_bytes"],
@@ -3279,6 +3415,52 @@ def _v12_load_history_record(record):
     st.session_state["v12_current_project"] = metadata
     st.session_state["v12_project_name_input"] = metadata.get("project_name", "")
     st.session_state["generated_4x2_bytes"] = record.get("grid_bytes") or None
+
+    source_photo = bytes(record.get("source_photo_bytes") or b"")
+    style_reference = bytes(record.get("style_reference_bytes") or b"")
+    st.session_state["uploaded_image_bytes"] = source_photo or None
+    st.session_state["v12_style_reference_image_bytes"] = style_reference or None
+    if style_reference:
+        st.session_state["v12_style_reference_filename"] = "已保存的畫風參考"
+        st.session_state["v12_style_reference_fingerprint"] = hashlib.sha256(
+            style_reference
+        ).hexdigest()
+    else:
+        st.session_state["v12_style_reference_filename"] = ""
+        st.session_state["v12_style_reference_fingerprint"] = ""
+
+    # 已保存的精選成品可直接重新打包，不需重新生成 AI 圖片。
+    stored_stickers = record.get("sticker_bytes")
+    if isinstance(stored_stickers, dict) and stored_stickers:
+        restored = []
+        for position, (number, image_bytes) in enumerate(
+            sorted(
+                stored_stickers.items(),
+                key=lambda item: (
+                    0, int(str(item[0]))
+                ) if str(item[0]).isdigit() else (1, str(item[0])),
+            ),
+            start=1,
+        ):
+            if not isinstance(image_bytes, (bytes, bytearray)) or not image_bytes:
+                continue
+            item_id = str(uuid4())
+            restored.append({
+                "id": item_id,
+                "image_bytes": bytes(image_bytes),
+                "batch_label": "作品集",
+                "source_slot": position,
+                "source_grid_hash": f"library:{metadata.get('project_id', '')}",
+            })
+            st.session_state[f"v12_basket_select_{item_id}"] = True
+        st.session_state["v12_sticker_basket"] = restored
+        st.session_state["v12_sticker_basket_batch_number"] = 1
+        manifest = record.get("cloud_asset_manifest")
+        if isinstance(manifest, dict):
+            main_index = max(1, min(len(restored), int(manifest.get("main_asset_index", 1) or 1)))
+            tab_index = max(1, min(len(restored), int(manifest.get("tab_asset_index", 1) or 1)))
+            st.session_state["v12_basket_main_choice"] = f"作品集・原圖 {main_index:02d}"
+            st.session_state["v12_basket_tab_choice"] = f"作品集・原圖 {tab_index:02d}"
 
     package = metadata.get("package_settings", {})
     st.session_state["v12_loaded_history_main_no"] = str(
@@ -4461,42 +4643,20 @@ if st.session_state["v12_view"] == "library":
                 with _cloud_right:
                     st.markdown(f"### 🏷️ {html.escape(_cloud_title)}")
                     st.caption(f"雲端保存：{_v12_format_display_time(_cloud_project.get('created_at', ''))}")
-                    _cloud_act1, _cloud_act2, _cloud_act3 = st.columns(3)
+                    st.caption("雲端只保存已選成品與設定，不保存 ZIP 或 4×2 原圖；如需下載，請先載回創作頁後重新打包。")
+                    _cloud_act1, _cloud_act2 = st.columns(2)
                     with _cloud_act1:
-                        if st.button("⬇️ 準備 ZIP 下載", key=f"cloud_zip_prepare_{_cloud_id}", use_container_width=True):
-                            try:
-                                st.session_state[f"cloud_zip_{_cloud_id}"] = _beta_storage_download(
-                                    _cloud_session, _cloud_project.get("package_path", "")
-                                )
-                            except Exception:
-                                st.error("ZIP 暫時無法下載，請稍後再試。")
-                        _cloud_zip = st.session_state.get(f"cloud_zip_{_cloud_id}")
-                        if _cloud_zip:
-                            st.download_button(
-                                "下載完整 ZIP",
-                                data=_cloud_zip,
-                                file_name=f"{_v12_safe_download_stem(_cloud_title)}.zip",
-                                mime="application/zip",
-                                key=f"cloud_zip_download_{_cloud_id}",
-                                use_container_width=True,
-                            )
-                    with _cloud_act2:
                         if st.button("↩️ 載回創作頁", key=f"cloud_load_{_cloud_id}", use_container_width=True):
                             try:
-                                _cloud_record = dict(_cloud_meta)
-                                _cloud_record.update(_cloud_project)
-                                _cloud_grid = _beta_storage_download(
-                                    _cloud_session, _cloud_project.get("grid_path", "")
-                                )
-                                _cloud_record["grid_bytes"] = _v12_png_bytes(
-                                    Image.open(BytesIO(_cloud_grid))
+                                _cloud_record = _beta_load_library_project_record(
+                                    _cloud_session, _cloud_project
                                 )
                                 _v12_load_history_record(_cloud_record)
                                 st.session_state["v12_view"] = "create"
                                 st.rerun()
                             except Exception:
                                 st.error("作品暫時無法載回，請稍後再試。")
-                    with _cloud_act3:
+                    with _cloud_act2:
                         _delete_ack = st.checkbox(
                             "確認永久刪除",
                             key=f"cloud_delete_ack_{_cloud_id}",
@@ -4507,7 +4667,6 @@ if st.session_state["v12_view"] == "library":
                             else:
                                 try:
                                     _beta_delete_library_project(_cloud_session, _cloud_id)
-                                    st.session_state.pop(f"cloud_zip_{_cloud_id}", None)
                                     st.rerun()
                                 except Exception:
                                     st.error("作品尚未刪除，請稍後再試。")
@@ -6185,6 +6344,16 @@ if st.session_state.get("v11_generation_pending", False):
 # STEP 10C native component
 # ------------------------------------------------------------
 # ------------------------------------------------------------
+if (
+    not st.session_state.generated_4x2_bytes
+    and _v12_get_sticker_basket()
+):
+    st.divider()
+    v10_section("🧺 STEP 11B｜已載回的精選作品", "#9b59b6")
+    st.caption("這些是從「我的作品」載回的已選成品；可直接重新指定 MAIN／TAB 並打包，不會重新生成或扣除點數。")
+    _v12_render_sticker_basket_workspace()
+
+
 if st.session_state.generated_4x2_bytes:
     st.divider()
     v10_section("✂️ ⑧ 直接用滑鼠調整 8 個裁切框", "#e74c3c")
