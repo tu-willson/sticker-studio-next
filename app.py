@@ -601,6 +601,11 @@ st.markdown("""
   font-size:22px !important;
   font-weight:900 !important;
 }
+/* 雲端保存是影響打包等待時間的重要選項，放大以提高可見度。 */
+.st-key-v12_save_to_cloud_on_package [data-testid="stCheckbox"] label p{
+  font-size:19px !important;
+  font-weight:800 !important;
+}
 .st-key-v12_select_text_sticker_mode button:not(:disabled){
   border-color:#3498db !important;
 }
@@ -616,6 +621,9 @@ st.markdown("""
   .st-key-v12_select_text_sticker_mode button p,
   .st-key-v12_select_expression_sticker_mode button p{
     font-size:18px !important;
+  }
+  .st-key-v12_save_to_cloud_on_package [data-testid="stCheckbox"] label p{
+    font-size:17px !important;
   }
 }
 :root{
@@ -4740,33 +4748,36 @@ if _sticker_mode == "text":
             st.markdown(f"**{cat}**")
             st.write("、".join(vals))
 
-st.divider()
-v10_section("🔤 ⑤ 貼圖字型＋125 種帶圖字型", "#8e67d8")
-
-v10_subsection("✏️ 一般貼圖字型效果", "#8e67d8")
-text_style = st.selectbox(
-    "文字貼圖效果",
-    V8_TEXT_STYLE_OPTIONS,
-    index=0,
-    key="v8_text_style"
-)
+if _sticker_mode == "text":
+    st.divider()
+    v10_section("🔤 貼圖字型＋125 種帶圖字型", "#8e67d8")
+    v10_subsection("✏️ 一般貼圖字型效果", "#8e67d8")
+    text_style = st.selectbox(
+        "文字貼圖效果",
+        V8_TEXT_STYLE_OPTIONS,
+        index=0,
+        key="v8_text_style"
+    )
+else:
+    text_style = ""
 
 _selected_font = st.session_state.get("v8_selected_font", None)
 # 選完字型後的回跳定位點：刻意放在「125 種帶圖字型」標題之前，
 # 讓回跳後可直接看到「已選擇 125 字型」成功提示，而不是停在提示下方。
-st.markdown('<div id="v10-font-result-anchor" style="scroll-margin-top: 72px;"></div>', unsafe_allow_html=True)
-v10_subsection("🔤 125 種帶圖字型", "#8e67d8")
-if _selected_font:
-    st.success(f"🎨 已選擇 125 字型：{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}")
-else:
-    st.info("尚未指定 125 種字型；可從下方總覽選用。")
+if _sticker_mode == "text":
+    st.markdown('<div id="v10-font-result-anchor" style="scroll-margin-top: 72px;"></div>', unsafe_allow_html=True)
+    v10_subsection("🔤 125 種帶圖字型", "#8e67d8")
+    if _selected_font:
+        st.success(f"🎨 已選擇 125 字型：{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}")
+    else:
+        st.info("尚未指定 125 種字型；可從下方總覽選用。")
 
 # ------------------------------------------------------------
 # ------------------------------------------------------------
 # 選字後真正跳回「已選字型」位置
 # 使用 Streamlit Components v2 的原生 DOM JavaScript。
 # ------------------------------------------------------------
-if st.session_state.pop("v10_scroll_to_font_result", False):
+if _sticker_mode == "text" and st.session_state.pop("v10_scroll_to_font_result", False):
     import streamlit.components.v2 as components
     _v10_font_scroll = components.component(
         "v10_font_scroll",
@@ -4803,13 +4814,15 @@ _font_labels = [
 if "v12_font_quick_pick" not in st.session_state:
     st.session_state["v12_font_quick_pick"] = "— 快速選擇字型｜可直接輸入數字 —"
 
-_quick_font_choice = st.selectbox(
-    "⚡ 快速選擇 125 種字型",
-    ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
-    key="v12_font_quick_pick",
-)
+_quick_font_choice = "— 快速選擇字型｜可直接輸入數字 —"
+if _sticker_mode == "text":
+    _quick_font_choice = st.selectbox(
+        "⚡ 快速選擇 125 種字型",
+        ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
+        key="v12_font_quick_pick",
+    )
 
-if _quick_font_choice != "— 快速選擇字型｜可直接輸入數字 —":
+if _sticker_mode == "text" and _quick_font_choice != "— 快速選擇字型｜可直接輸入數字 —":
     _quick_font_no = int(_quick_font_choice.split("｜", 1)[0])
     if st.session_state.get("v8_selected_font") != _quick_font_no:
         st.session_state["v8_selected_font"] = _quick_font_no
@@ -4822,7 +4835,7 @@ if "v10_font_gallery_open" not in st.session_state:
 if "v12_font_gallery_page" not in st.session_state:
     st.session_state.v12_font_gallery_page = 1
 
-if st.button(
+if _sticker_mode == "text" and st.button(
     "📚 開啟 125 種帶圖字型總覽" if not st.session_state.v10_font_gallery_open
     else "📖 關閉 125 種帶圖字型總覽",
     key="v10_font_gallery_toggle",
@@ -4831,7 +4844,7 @@ if st.button(
     st.session_state.v10_font_gallery_open = not st.session_state.v10_font_gallery_open
     st.rerun()
 
-if st.session_state.v10_font_gallery_open:
+if _sticker_mode == "text" and st.session_state.v10_font_gallery_open:
     st.markdown(
         '<div class="v12-font-gallery-note">📱 手機版已改為分頁瀏覽，每頁 12 種；點選後會立即關閉總覽並回到已選結果。</div>',
         unsafe_allow_html=True,
@@ -4938,24 +4951,25 @@ if st.session_state.v10_font_gallery_open:
         )
 
 
-with st.expander("🔎 已選字型大圖", expanded=False):
-    if _selected_font:
-        _p = V8_FONT_PREVIEW_DIR / f"{_selected_font:03d}.jpg"
-        if _p.exists():
-            # 預覽維持置中，避免原圖在桌機與手機上佔滿整個區塊。
-            _font_preview_left, _font_preview_center, _font_preview_right = st.columns([1, 2, 1])
-            with _font_preview_center:
-                st.image(
-                    str(_p),
-                    caption=f"{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}",
-                    use_container_width=True,
-                )
-            st.caption("以上為參考效果；實際生成會由 AI 依人物、文字與整體風格重新詮釋。")
-    else:
-        st.write("尚未選擇。")
+if _sticker_mode == "text":
+    with st.expander("🔎 已選字型大圖", expanded=False):
+        if _selected_font:
+            _p = V8_FONT_PREVIEW_DIR / f"{_selected_font:03d}.jpg"
+            if _p.exists():
+                # 預覽維持置中，避免原圖在桌機與手機上佔滿整個區塊。
+                _font_preview_left, _font_preview_center, _font_preview_right = st.columns([1, 2, 1])
+                with _font_preview_center:
+                    st.image(
+                        str(_p),
+                        caption=f"{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}",
+                        use_container_width=True,
+                    )
+                st.caption("以上為參考效果；實際生成會由 AI 依人物、文字與整體風格重新詮釋。")
+        else:
+            st.write("尚未選擇。")
 
 st.divider()
-v10_section("🌈 ⑥ 背景設定", "#16a085")
+v10_section("🌈 ⑤ 背景設定", "#16a085")
 st.markdown('<div class="v11-transparent-title">🖼️ 透明背景</div>', unsafe_allow_html=True)
 with st.container(key="transparent_png_option"):
     transparent = st.checkbox("使用透明背景 PNG", value=False)
@@ -5172,7 +5186,7 @@ with st.expander("🔍 點選查看貼圖設定"):
 
 
 
-v10_section("✨ ⑦ 生成 4×2 原始總圖", "#e67e22")
+v10_section("✨ ⑥ 生成 4×2 原始總圖", "#e67e22")
 st.markdown('<div class="v11-section-tip">📌 <b>準備完成後：</b>按一次生成即可。生成期間按鈕會自動鎖定，請耐心等待。</div>', unsafe_allow_html=True)
 
 # ============================================================
