@@ -2333,7 +2333,12 @@ V12_EXPRESSION_EFFECTS = [
 
 def _v12_default_expression_specs():
     return [
-        {"emotion": "", "effect": V12_EXPRESSION_EFFECTS[0], "effect_action_prompt": ""}
+        {
+            "emotion": "",
+            "emotion_random": False,
+            "effect": V12_EXPRESSION_EFFECTS[0],
+            "effect_action_prompt": "",
+        }
         for _ in range(8)
     ]
 
@@ -2349,6 +2354,7 @@ def _v12_normalize_expression_specs(value):
             effect = V12_EXPRESSION_EFFECTS[0]
         normalized.append({
             "emotion": str(item.get("emotion", "") or "").strip()[:160],
+            "emotion_random": bool(item.get("emotion_random", False)),
             "effect": effect,
             "effect_action_prompt": str(
                 item.get("effect_action_prompt", "") or ""
@@ -2367,7 +2373,12 @@ def _v12_sticker_mode_value(value=None):
 def _v12_get_expression_specs():
     return _v12_normalize_expression_specs([
         {
-            "emotion": st.session_state.get(f"v12_expression_emotion_{i}", ""),
+            "emotion": "" if st.session_state.get(
+                f"v12_expression_emotion_random_{i}", False
+            ) else st.session_state.get(f"v12_expression_emotion_{i}", ""),
+            "emotion_random": st.session_state.get(
+                f"v12_expression_emotion_random_{i}", False
+            ),
             "effect": st.session_state.get(
                 f"v12_expression_effect_{i}", V12_EXPRESSION_EFFECTS[0]
             ),
@@ -2769,6 +2780,9 @@ def _v12_load_history_record(record):
         metadata.get("expression_specs", [])
     )):
         st.session_state[f"v12_expression_emotion_{i}"] = spec["emotion"]
+        st.session_state[f"v12_expression_emotion_random_{i}"] = spec[
+            "emotion_random"
+        ]
         st.session_state[f"v12_expression_effect_{i}"] = spec["effect"]
         st.session_state[f"v12_expression_effect_action_prompt_{i}"] = spec[
             "effect_action_prompt"
@@ -3680,7 +3694,11 @@ def build_prompt(style, custom_style, selected_character, custom_character,
         p.append(f"AI 貼圖文案語氣方向：{str(ai_copy_tone).strip()}。")
     if sticker_mode == "expression":
         for i, spec in enumerate(_v12_normalize_expression_specs(expression_specs)):
-            emotion = spec["emotion"] or "自然、清楚且容易辨識的情緒反應"
+            emotion = (
+                "由 AI 隨機安排一種強烈、清楚且容易辨識的情緒反應"
+                if spec["emotion_random"]
+                else spec["emotion"] or "自然、清楚且容易辨識的情緒反應"
+            )
             p.append(
                 f"第{i+1}格：表情／情緒為「{emotion}」；"
                 f"視覺特效為「{spec['effect']}」。"
@@ -4591,12 +4609,20 @@ def _v12_render_expression_sticker_slots():
                 st.markdown(f"**圖片 {i + 1:02d}**")
                 st.session_state.setdefault(f"v12_expression_emotion_{i}", "")
                 st.session_state.setdefault(
+                    f"v12_expression_emotion_random_{i}", False
+                )
+                st.session_state.setdefault(
                     f"v12_expression_effect_{i}", V12_EXPRESSION_EFFECTS[0]
+                )
+                emotion_random = st.checkbox(
+                    "隨機",
+                    key=f"v12_expression_emotion_random_{i}",
                 )
                 st.text_input(
                     "表情欄位",
                     key=f"v12_expression_emotion_{i}",
                     placeholder="例如：慌張",
+                    disabled=emotion_random,
                 )
                 st.selectbox(
                     "想帶入什麼特效？",
@@ -4614,6 +4640,7 @@ def _v12_render_expression_sticker_slots():
     configured = sum(
         bool(
             spec["emotion"]
+            or spec["emotion_random"]
             or spec["effect"] != V12_EXPRESSION_EFFECTS[0]
             or spec["effect_action_prompt"]
         )
