@@ -35,8 +35,8 @@ def _public02a_default_settings():
     return {
         "style_custom": [""] * 10,
         "style_custom_names": [f"使用者自定{i}" for i in range(1, 11)],
-        "character_custom": ["", "", ""],
-        "character_enabled": [False, False, False],
+        "character_custom": [""],
+        "character_enabled": [False],
         "custom_phrases": [],
     }
 
@@ -53,17 +53,37 @@ def _public02a_normalize_settings(data):
             value += [""] * (10 - len(value))
             base[key] = value
 
-    value = data.get("character_custom")
-    if isinstance(value, list):
-        value = [str(x) if x is not None else "" for x in value[:3]]
-        value += [""] * (3 - len(value))
-        base["character_custom"] = value
-
-    value = data.get("character_enabled")
-    if isinstance(value, list):
-        value = [bool(x) for x in value[:3]]
-        value += [False] * (3 - len(value))
-        base["character_enabled"] = value
+    # 舊版曾有 3 組需求。載入舊資料時，優先保留「已啟用且有內容」的
+    # 第一組；若都未啟用，則保留第一則有內容的需求，避免使用者資料消失。
+    raw_custom = data.get("character_custom")
+    raw_enabled = data.get("character_enabled")
+    custom_values = (
+        [str(x) if x is not None else "" for x in raw_custom]
+        if isinstance(raw_custom, list) else []
+    )
+    enabled_values = (
+        [bool(x) for x in raw_enabled]
+        if isinstance(raw_enabled, list) else []
+    )
+    if custom_values or enabled_values:
+        selected_index = next(
+            (
+                i for i, value in enumerate(custom_values)
+                if value.strip() and i < len(enabled_values) and enabled_values[i]
+            ),
+            None,
+        )
+        if selected_index is None:
+            selected_index = next(
+                (i for i, value in enumerate(custom_values) if value.strip()),
+                0,
+            )
+        base["character_custom"] = [
+            custom_values[selected_index] if selected_index < len(custom_values) else ""
+        ]
+        base["character_enabled"] = [
+            enabled_values[selected_index] if selected_index < len(enabled_values) else False
+        ]
 
     value = data.get("custom_phrases")
     if isinstance(value, list):
@@ -112,7 +132,7 @@ def _public02a_get_settings():
     character_custom = []
     character_enabled = []
 
-    for i in range(1, 4):
+    for i in range(1, 2):
         custom_key = f"v10_character_custom_{i}"
         enabled_key = f"v10_character_enabled_{i}"
 
@@ -263,10 +283,39 @@ def _public02a_init():
         {
             "style_custom": [""] * 10,
             "style_custom_names": [f"使用者自定{i}" for i in range(1, 11)],
-            "character_custom": ["", "", ""],
-            "character_enabled": [False, False, False],
+            "character_custom": [""],
+            "character_enabled": [False],
         },
     )
+
+    # 一次性把舊版 3 組人物／場景需求安全縮併為 1 組。
+    # 優先保留已啟用且有內容的項目，避免改版後意外遺失使用者設定。
+    if not st.session_state.get("public02a_character_single_migrated", False):
+        legacy_store = dict(st.session_state.get("public02a_user_presets") or {})
+        legacy_custom = list(legacy_store.get("character_custom") or [])
+        legacy_enabled = list(legacy_store.get("character_enabled") or [])
+        for _i in range(1, 4):
+            _custom_key = f"v10_character_custom_{_i}"
+            _enabled_key = f"v10_character_enabled_{_i}"
+            if _custom_key in st.session_state:
+                while len(legacy_custom) < _i:
+                    legacy_custom.append("")
+                legacy_custom[_i - 1] = str(st.session_state.get(_custom_key, "") or "")
+            if _enabled_key in st.session_state:
+                while len(legacy_enabled) < _i:
+                    legacy_enabled.append(False)
+                legacy_enabled[_i - 1] = bool(st.session_state.get(_enabled_key, False))
+
+        migrated = _public02a_normalize_settings({
+            "character_custom": legacy_custom,
+            "character_enabled": legacy_enabled,
+        })
+        legacy_store["character_custom"] = list(migrated["character_custom"])
+        legacy_store["character_enabled"] = list(migrated["character_enabled"])
+        st.session_state["public02a_user_presets"] = legacy_store
+        st.session_state["v10_character_custom_1"] = migrated["character_custom"][0]
+        st.session_state["v10_character_enabled_1"] = migrated["character_enabled"][0]
+        st.session_state["public02a_character_single_migrated"] = True
 
     # FIX11: custom style prompts have their own authoritative bank.
     if "public02a_style_bank" not in st.session_state:
@@ -307,7 +356,7 @@ def _public02a_init():
         for i in range(1, 11):
             st.session_state[f"v10_style_custom_{i}"] = pending["style_custom"][i - 1]
             st.session_state[f"v10_style_name_{i}"] = pending["style_custom_names"][i - 1]
-        for i in range(1, 4):
+        for i in range(1, 2):
             st.session_state[f"v10_character_custom_{i}"] = pending["character_custom"][i - 1]
             st.session_state[f"v10_character_enabled_{i}"] = pending["character_enabled"][i - 1]
         st.session_state["public02a_custom_phrases"] = list(pending["custom_phrases"])
@@ -334,7 +383,7 @@ def _public02a_init():
             f"v10_style_name_{i}", defaults["style_custom_names"][i - 1]
         )
 
-    for i in range(1, 4):
+    for i in range(1, 2):
         st.session_state.setdefault(
             f"v10_character_custom_{i}", defaults["character_custom"][i - 1]
         )
@@ -437,11 +486,11 @@ def _save_v10_presets():
             ],
             "character_custom": [
                 str(st.session_state.get(f"v10_character_custom_{i}", ""))
-                for i in range(1, 4)
+                for i in range(1, 2)
             ],
             "character_enabled": [
                 bool(st.session_state.get(f"v10_character_enabled_{i}", False))
-                for i in range(1, 4)
+                for i in range(1, 2)
             ],
         }
 
@@ -3931,19 +3980,25 @@ with st.expander("📚 查看全部預設風格",expanded=False):
     st.write("、".join(_style_options[2:]))
 
 v10_section("👤 ③ 人物與畫面特色", "#2ecc71")
-st.caption("可複選；以下 3 組自定義人物／場景需求，只有打勾才會啟用。")
+st.caption("可複選；自定義人物／場景需求只有打勾才會啟用。")
 selected_character=st.multiselect("🎯 人物／畫面特色（可複選）",CHARACTER_OPTIONS,key="v10_character_options")
-for _i in range(1,4):
-    _c1,_c2=st.columns([1,8])
-    with _c1:
-        st.checkbox("啟用",key=f"v10_character_enabled_{_i}")
-    with _c2:
-        st.text_area(f"自定義人物／場景需求 {_i}",key=f"v10_character_custom_{_i}",height=70)
-_custom_character_values=[st.session_state.get(f"v10_character_custom_{_i}","").strip() for _i in range(1,4) if st.session_state.get(f"v10_character_enabled_{_i}",False)]
-custom_character="\n".join(_custom_character_values)
+_c1,_c2=st.columns([1,8])
+with _c1:
+    st.checkbox("啟用", key="v10_character_enabled_1")
+with _c2:
+    st.text_area(
+        "自定義人物／場景需求",
+        key="v10_character_custom_1",
+        height=70,
+    )
+custom_character = (
+    str(st.session_state.get("v10_character_custom_1", "") or "").strip()
+    if st.session_state.get("v10_character_enabled_1", False)
+    else ""
+)
 if st.button("💾 儲存人物／場景設定",key="v10_save_character",use_container_width=True):
     if _save_v10_presets():
-        st.success("✅ 3 組人物／場景設定已儲存")
+        st.success("✅ 人物／場景設定已儲存")
     else:
         st.error("❌ 儲存失敗")
 
