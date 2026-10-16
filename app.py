@@ -2330,6 +2330,250 @@ V12_EXPRESSION_EFFECTS = [
     "幽靈半透明",
 ]
 
+# 「隨機」不是交由模型任意猜測，而是先在網站端抽出具體配方。
+# 每個配方另有臉部、動作與鏡頭的變化池；即使新一輪再次抽到同一配方，
+# 實際送出的方向仍會不同。
+V12_RANDOM_EXPRESSION_RECIPE_SEEDS = [
+    # 驚訝／慌張
+    ("surprise_01", "驚訝／慌張", "突發嚇到", "瞬間嚇到、瞳孔放大", "雙手貼住臉頰往後縮", ("漫畫驚嘆圖框", "放射聚焦背景")),
+    ("surprise_02", "驚訝／慌張", "晴天霹靂", "完全不敢相信、嘴巴張成 O 型", "抬頭僵住、雙手停在半空", ("放射聚焦背景", "震動波浪線")),
+    ("surprise_03", "驚訝／慌張", "看到怪東西", "驚恐瞪大眼、眉毛高挑", "縮起肩膀、手指指向遠方", ("漫畫速度線", "漫畫驚嘆圖框")),
+    ("surprise_04", "驚訝／慌張", "突然被點名", "被抓包般慌張、眼神飄移", "單手指著自己、另一手停住", ("冷汗水滴", "震動波浪線")),
+    ("surprise_05", "驚訝／慌張", "快跌倒", "失去平衡的慌張表情", "雙手大張、身體明顯傾斜", ("漫畫速度線", "震動波浪線")),
+    ("surprise_06", "驚訝／慌張", "壓力爆表", "緊張到冒汗、嘴角發抖", "抱住頭、縮成一團", ("冷汗水滴", "頭頂烏雲")),
+    ("surprise_07", "驚訝／慌張", "找不到人", "焦急張望、眼神快速搜尋", "一手遮在額頭前四處看", ("漫畫速度線", "放射聚焦背景")),
+    ("surprise_08", "驚訝／慌張", "突然來電", "被聲音嚇醒的呆滯表情", "肩膀聳起、手邊像接到突發訊息", ("漫畫驚嘆圖框", "震動波浪線")),
+    ("surprise_09", "驚訝／慌張", "出大事了", "驚恐失色、呼吸停住", "兩手摀住嘴、身體後仰", ("放射聚焦背景", "冷汗水滴")),
+    ("surprise_10", "驚訝／慌張", "腦袋當機", "呆住睜大眼、表情空白", "雙手停在臉旁、整個人定格", ("震動波浪線", "幽靈半透明")),
+    # 搞笑／荒謬
+    ("funny_01", "搞笑／荒謬", "靈魂出竅", "眼神死、靈魂抽離般空白", "身體軟掉、靈魂像要飄走", ("幽靈半透明", "人物朦朧殘影")),
+    ("funny_02", "搞笑／荒謬", "荒謬瞇眼", "半瞇眼露出不可置信的怪表情", "雙手攤開、像在問到底怎麼了", ("漫畫速度線", "震動波浪線")),
+    ("funny_03", "搞笑／荒謬", "無語扶額", "尷尬又無言的苦笑", "一手扶額、另一手無力垂下", ("頭頂烏雲", "人物朦朧殘影")),
+    ("funny_04", "搞笑／荒謬", "戲劇性暈倒", "眼睛轉圈、誇張昏眩", "身體歪斜、手在空中亂揮", ("震動波浪線", "幽靈半透明")),
+    ("funny_05", "搞笑／荒謬", "裝傻逃避", "假裝沒聽到的無辜表情", "側過臉、手指偷偷比安靜", ("人物朦朧殘影", "冷汗水滴")),
+    ("funny_06", "搞笑／荒謬", "偷偷吃瓜", "八卦興奮又忍笑的眼神", "身體前傾、手遮住嘴偷笑", ("閃亮星星特效", "漫畫速度線")),
+    ("funny_07", "搞笑／荒謬", "嘴角抽搐", "尷尬到嘴角不受控制", "雙手僵在胸前、眼神斜看", ("震動波浪線", "冷汗水滴")),
+    ("funny_08", "搞笑／荒謬", "小丑模式", "荒謬大笑、表情過度用力", "雙手張開像在登場表演", ("聚光燈", "漫畫驚嘆圖框")),
+    ("funny_09", "搞笑／荒謬", "社死瞬間", "尷尬假笑、眼神想逃跑", "手掌遮住半張臉、肩膀縮起", ("冷汗水滴", "人物朦朧殘影")),
+    ("funny_10", "搞笑／荒謬", "反應太慢", "延遲理解後才震驚的表情", "一根手指停在臉旁、身體微歪", ("漫畫驚嘆圖框", "震動波浪線")),
+    # 開心／得意
+    ("happy_01", "開心／得意", "中獎歡呼", "眼睛發亮、開心尖叫", "雙手高舉歡呼", ("閃亮星星特效", "放射聚焦背景")),
+    ("happy_02", "開心／得意", "愛心暴擊", "愛慕又陶醉、臉頰泛紅", "雙手捧臉、頭微微傾斜", ("愛心泡泡", "閃亮星星特效")),
+    ("happy_03", "開心／得意", "任務完成", "鬆一口氣的燦爛笑容", "握拳小幅慶祝", ("閃亮星星特效", "聚光燈")),
+    ("happy_04", "開心／得意", "得意登場", "眉毛上挑、帶點跩的笑", "雙手叉腰、自信挺胸", ("聚光燈", "閃亮星星特效")),
+    ("happy_05", "開心／得意", "小小勝利", "滿足偷笑、眼神有光", "在胸前比出勝利手勢", ("閃亮星星特效", "愛心泡泡")),
+    ("happy_06", "開心／得意", "興奮轉圈", "開心到停不下來的笑容", "張開雙手、身體帶旋轉感", ("人物朦朧殘影", "漫畫速度線")),
+    ("happy_07", "開心／得意", "被稱讚", "害羞又開心、雙眼彎彎", "雙手放在臉旁、微微縮肩", ("愛心泡泡", "閃亮星星特效")),
+    ("happy_08", "開心／得意", "熱情招手", "元氣滿滿的大笑", "手臂大幅揮動招呼", ("漫畫速度線", "閃亮星星特效")),
+    ("happy_09", "開心／得意", "快樂尖叫", "張嘴歡呼、眼神閃亮", "雙手握拳靠近臉頰", ("漫畫驚嘆圖框", "閃亮星星特效")),
+    ("happy_10", "開心／得意", "開心比心", "甜甜微笑、眼神溫柔", "雙手在胸前比出愛心", ("愛心泡泡", "聚光燈")),
+    # 生氣／不耐煩
+    ("angry_01", "生氣／不耐煩", "火大握拳", "怒目瞪人、眉頭深鎖", "單手握拳舉在胸前", ("怒氣爆筋符號", "漫畫速度線")),
+    ("angry_02", "生氣／不耐煩", "氣到發抖", "咬牙忍耐、臉部緊繃", "雙拳握緊、肩膀顫抖", ("震動波浪線", "怒氣爆筋符號")),
+    ("angry_03", "生氣／不耐煩", "冷眼不爽", "側眼瞪人、嘴角下壓", "雙手抱胸、頭微微偏開", ("頭頂烏雲", "人物朦朧殘影")),
+    ("angry_04", "生氣／不耐煩", "無奈爆氣", "無奈又快爆炸的表情", "一手抓頭、另一手攤開", ("怒氣爆筋符號", "震動波浪線")),
+    ("angry_05", "生氣／不耐煩", "準備反擊", "銳利瞪眼、表情嚴肅", "手指向前、身體略前傾", ("漫畫速度線", "怒氣爆筋符號")),
+    ("angry_06", "生氣／不耐煩", "生悶氣", "鼓起臉頰、不想說話", "別過臉、雙手抱胸", ("頭頂烏雲", "震動波浪線")),
+    ("angry_07", "生氣／不耐煩", "忍耐極限", "眼角抽動、強忍怒火", "雙手交握用力、身體僵住", ("怒氣爆筋符號", "冷汗水滴")),
+    ("angry_08", "生氣／不耐煩", "臉紅怒吼", "張口大喊、臉部漲紅", "握拳向下用力揮", ("漫畫驚嘆圖框", "怒氣爆筋符號")),
+    ("angry_09", "生氣／不耐煩", "別惹我", "低頭瞪人、氣場很強", "一手伸出做停止手勢", ("聚光燈", "漫畫速度線")),
+    ("angry_10", "生氣／不耐煩", "不耐煩催促", "皺眉看時間、嘴角不耐", "手指點著手腕催促", ("震動波浪線", "頭頂烏雲")),
+    # 難過／崩潰
+    ("sad_01", "難過／崩潰", "委屈落淚", "眼眶泛淚、嘴角委屈下垂", "雙手縮在胸前、肩膀微縮", ("冷汗水滴", "頭頂烏雲")),
+    ("sad_02", "難過／崩潰", "崩潰大哭", "張嘴大哭、眼淚止不住", "雙手握在胸前、身體顫抖", ("震動波浪線", "頭頂烏雲")),
+    ("sad_03", "難過／崩潰", "下雨心情", "失落垂眼、整個人沒精神", "抱住自己、頭微微低下", ("頭頂烏雲", "幽靈半透明")),
+    ("sad_04", "難過／崩潰", "失望嘆氣", "無奈閉眼、長長嘆氣", "一手托著額頭、肩膀下垂", ("人物朦朧殘影", "頭頂烏雲")),
+    ("sad_05", "難過／崩潰", "被忽略", "委屈抿嘴、眼神想哭", "手指輕碰自己、默默縮起", ("幽靈半透明", "冷汗水滴")),
+    ("sad_06", "難過／崩潰", "心碎", "心痛皺眉、淚光閃爍", "一手按住胸口、另一手垂下", ("愛心泡泡", "頭頂烏雲")),
+    ("sad_07", "難過／崩潰", "求安慰", "可憐巴巴地望著前方", "雙手張開像想討抱抱", ("冷汗水滴", "愛心泡泡")),
+    ("sad_08", "難過／崩潰", "累倒", "疲憊睜不開眼、表情虛弱", "整個人歪向一側、手無力垂下", ("幽靈半透明", "人物朦朧殘影")),
+    ("sad_09", "難過／崩潰", "悲傷放空", "眼神空洞、表情平靜卻難過", "雙手垂下、身體完全靜止", ("幽靈半透明", "頭頂烏雲")),
+    ("sad_10", "難過／崩潰", "偷偷擦淚", "強忍眼淚、嘴角微微顫抖", "用手背擦眼角、別過臉", ("冷汗水滴", "人物朦朧殘影")),
+    # 日常／社交反應
+    ("daily_01", "日常／社交", "睡眼惺忪", "半閉眼、剛睡醒的迷糊表情", "一手揉眼睛、身體微歪", ("幽靈半透明", "震動波浪線")),
+    ("daily_02", "日常／社交", "思考中", "皺眉思考、眼神往上看", "一手托下巴、手指輕點臉頰", ("放射聚焦背景", "閃亮星星特效")),
+    ("daily_03", "日常／社交", "收到了解", "冷靜點頭、帶著可靠微笑", "單手比出 OK 或拇指", ("閃亮星星特效", "聚光燈")),
+    ("daily_04", "日常／社交", "等一下", "認真提醒、眉毛微挑", "手掌向前做暫停手勢", ("漫畫速度線", "震動波浪線")),
+    ("daily_05", "日常／社交", "偷偷看", "眼神偷瞄、帶點好奇", "從側邊探出頭、手遮住嘴", ("人物朦朧殘影", "漫畫速度線")),
+    ("daily_06", "日常／社交", "真的假的", "懷疑挑眉、嘴角微張", "一手攤開、另一手指向前方", ("漫畫驚嘆圖框", "放射聚焦背景")),
+    ("daily_07", "日常／社交", "害羞", "臉頰泛紅、眼神不敢直視", "雙手捧臉、身體微微內縮", ("愛心泡泡", "閃亮星星特效")),
+    ("daily_08", "日常／社交", "社交電量低", "禮貌微笑但眼神疲憊", "一手小幅揮手、另一手扶肩", ("幽靈半透明", "頭頂烏雲")),
+    ("daily_09", "日常／社交", "裝沒事", "假裝鎮定、嘴角僵住", "雙手背在身後、視線飄開", ("冷汗水滴", "人物朦朧殘影")),
+    ("daily_10", "日常／社交", "下班逃跑", "迫不及待又興奮的表情", "身體朝外衝、手臂大幅擺動", ("漫畫速度線", "閃亮星星特效")),
+]
+
+V12_RANDOM_EXPRESSION_RECIPES = [
+    {
+        "id": recipe_id,
+        "category": category,
+        "title": title,
+        "emotion": emotion,
+        "action": action,
+        "effects": tuple(effects),
+    }
+    for recipe_id, category, title, emotion, action, effects
+    in V12_RANDOM_EXPRESSION_RECIPE_SEEDS
+]
+
+V12_RANDOM_EXPRESSION_VARIATIONS = {
+    "驚訝／慌張": {
+        "face": ("眼睛圓睜、呼吸停住", "眉毛高挑、嘴型僵住", "瞳孔縮小、表情突然定格", "先呆住再露出強烈慌張"),
+        "motion": ("肩膀瞬間聳起", "上半身向後縮", "手指停在半空", "頭部微微後仰"),
+        "framing": ("臉部近景、保留清楚手勢", "肩膀以上特寫、動作集中", "正面近景、表情放大"),
+    },
+    "搞笑／荒謬": {
+        "face": ("五官誇張扭曲但仍可愛", "露出荒謬的無言表情", "眼神死卻帶喜劇節奏", "忍笑到表情快失控"),
+        "motion": ("動作刻意停在最尷尬的一刻", "身體帶一點滑稽歪斜", "手勢做得略微過頭", "肩膀跟著喜劇節奏抖動"),
+        "framing": ("臉部特寫、表情優先", "上半身近景、手勢清楚", "微側臉近景、保留荒謬動作"),
+    },
+    "開心／得意": {
+        "face": ("眼睛彎成月牙、笑容很亮", "眉眼上揚、充滿成就感", "開心到臉頰微紅", "露出自信又俏皮的笑"),
+        "motion": ("肩膀帶著上揚節奏", "手勢做出俐落收尾", "身體微微前傾分享喜悅", "頭部輕輕歪向一側"),
+        "framing": ("正面近景、笑容清楚", "肩膀以上特寫、保留手勢", "微仰角近景、帶主角感"),
+    },
+    "生氣／不耐煩": {
+        "face": ("眉頭深鎖、眼神銳利", "嘴角下壓、明顯不耐煩", "咬牙忍住怒氣", "怒氣寫在眼神裡"),
+        "motion": ("肩膀繃緊、動作有力", "上半身略向前壓", "手勢停在最有張力的位置", "頭部微低、視線往上瞪"),
+        "framing": ("臉部近景、保留拳頭或手勢", "正面上半身、氣勢集中", "微側臉近景、眼神突出"),
+    },
+    "難過／崩潰": {
+        "face": ("眼眶水亮、嘴角下垂", "強忍情緒卻快哭出來", "疲憊垂眼、神情脆弱", "眼神放空又讓人心疼"),
+        "motion": ("肩膀微微下垂", "動作小而收縮", "頭部慢慢低下", "手勢停在安慰自己的位置"),
+        "framing": ("臉部近景、眼神清楚", "肩膀以上特寫、保留手勢", "微側臉近景、情緒集中"),
+    },
+    "日常／社交": {
+        "face": ("自然但辨識度高的表情", "帶一點生活感的小反應", "眼神有明確社交情境", "表情簡潔又容易看懂"),
+        "motion": ("手勢乾淨清楚", "上半身微微前傾", "頭部輕微偏轉", "肩膀放鬆、動作自然"),
+        "framing": ("正面近景、日常感清楚", "肩膀以上特寫、保留手勢", "微側臉近景、姿態自然"),
+    },
+}
+
+
+def _v12_pick_balanced_expression_recipe_block(recipes, count, category_counts=None):
+    """Pick a short block while distributing the six categories as evenly as possible."""
+    available = list(recipes)
+    selected = []
+    category_counts = dict(category_counts or {})
+    while len(selected) < count and available:
+        categories = {}
+        for recipe in available:
+            categories.setdefault(recipe["category"], []).append(recipe)
+        least_used = min(category_counts.get(category, 0) for category in categories)
+        candidates = [
+            category for category in categories
+            if category_counts.get(category, 0) == least_used
+        ]
+        category = random.choice(candidates)
+        recipe = random.choice(categories[category])
+        selected.append(recipe)
+        category_counts[category] = category_counts.get(category, 0) + 1
+        available = [item for item in available if item["id"] != recipe["id"]]
+    return selected, category_counts
+
+
+def _v12_pick_random_expression_recipes(count):
+    """Pick balanced, never-repeated-in-session recipes for the random slots."""
+    count = max(0, int(count or 0))
+    used_ids = {
+        str(value) for value in st.session_state.get(
+            "v12_expression_used_recipe_ids", []
+        )
+    }
+    available = [
+        recipe for recipe in V12_RANDOM_EXPRESSION_RECIPES
+        if recipe["id"] not in used_ids
+    ]
+    if len(available) >= count:
+        selected, _ = _v12_pick_balanced_expression_recipe_block(available, count)
+        return selected, None
+
+    # A batch can cross the 60-recipe boundary. First use every remaining
+    # unused recipe, then begin the next round only for the still-needed slots.
+    selected, category_counts = _v12_pick_balanced_expression_recipe_block(
+        available, len(available)
+    )
+    new_cycle_start = len(selected)
+    selected_ids = {recipe["id"] for recipe in selected}
+    fresh_pool = [
+        recipe for recipe in V12_RANDOM_EXPRESSION_RECIPES
+        if recipe["id"] not in selected_ids
+    ]
+    extra, _ = _v12_pick_balanced_expression_recipe_block(
+        fresh_pool, count - len(selected), category_counts
+    )
+    return selected + extra, new_cycle_start
+
+
+def _v12_prepare_random_expression_specs(specs):
+    """Resolve checked random slots into concrete, varied directions for one job."""
+    resolved = _v12_normalize_expression_specs(specs)
+    random_indexes = [
+        index for index, spec in enumerate(resolved) if spec["emotion_random"]
+    ]
+    recipes, new_cycle_start = _v12_pick_random_expression_recipes(len(random_indexes))
+    labels = []
+    for index, recipe in zip(random_indexes, recipes):
+        original = resolved[index]
+        variation = V12_RANDOM_EXPRESSION_VARIATIONS[recipe["category"]]
+        face = random.choice(variation["face"])
+        motion = random.choice(variation["motion"])
+        framing = random.choice(variation["framing"])
+        user_effect = str(original.get("effect", "") or "")
+        effect = (
+            user_effect
+            if user_effect and user_effect != V12_EXPRESSION_EFFECTS[0]
+            else random.choice(recipe["effects"])
+        )
+        action_parts = [recipe["action"], motion, framing]
+        user_action = str(original.get("effect_action_prompt", "") or "").strip()
+        if user_action:
+            action_parts.append("仍需加入使用者指定方向：" + user_action)
+        resolved[index] = {
+            "emotion": recipe["emotion"] + "；" + face,
+            "emotion_random": False,
+            "effect": effect,
+            "effect_action_prompt": "；".join(action_parts),
+        }
+        labels.append({
+            "slot": index + 1,
+            "id": recipe["id"],
+            "category": recipe["category"],
+            "title": recipe["title"],
+        })
+    return resolved, labels, new_cycle_start
+
+
+def _v12_commit_random_expression_recipes():
+    """Remember only recipes that reached a successful image response."""
+    labels = st.session_state.get("v12_expression_generation_recipe_labels", [])
+    if not isinstance(labels, list):
+        return
+    used = [
+        str(value) for value in st.session_state.get(
+            "v12_expression_used_recipe_ids", []
+        )
+    ]
+    new_cycle_start = st.session_state.get("v12_expression_generation_new_cycle_start")
+    labels_for_current_cycle = labels
+    if new_cycle_start is not None:
+        used = []
+        st.session_state["v12_expression_recipe_cycle"] = (
+            int(st.session_state.get("v12_expression_recipe_cycle", 1)) + 1
+        )
+        labels_for_current_cycle = labels[max(0, int(new_cycle_start or 0)):]
+    for item in labels_for_current_cycle:
+        recipe_id = str(item.get("id", "") if isinstance(item, dict) else "")
+        if recipe_id and recipe_id not in used:
+            used.append(recipe_id)
+    st.session_state["v12_expression_used_recipe_ids"] = used[-len(V12_RANDOM_EXPRESSION_RECIPES):]
+    st.session_state["v12_expression_last_recipe_labels"] = labels
+
+
+def _v12_reset_random_expression_memory():
+    st.session_state["v12_expression_used_recipe_ids"] = []
+    st.session_state["v12_expression_last_recipe_labels"] = []
+    st.session_state["v12_expression_recipe_cycle"] = 1
+
 
 def _v12_default_expression_specs():
     return [
@@ -2935,6 +3179,9 @@ st.session_state.setdefault("uploaded_image_bytes", None)
 st.session_state.setdefault("v12_style_reference_image_bytes", None)
 st.session_state.setdefault("v12_style_reference_filename", "")
 st.session_state.setdefault("v12_style_reference_fingerprint", "")
+st.session_state.setdefault("v12_expression_used_recipe_ids", [])
+st.session_state.setdefault("v12_expression_last_recipe_labels", [])
+st.session_state.setdefault("v12_expression_recipe_cycle", 1)
 st.session_state.setdefault("generated_4x2_bytes", None)
 st.session_state.setdefault("last_prompt", "")
 st.session_state.setdefault("crop_boxes", None)
@@ -3689,6 +3936,7 @@ def build_prompt(style, custom_style, selected_character, custom_character,
             "八格都禁止出現任何漢字、英文字母、數字、標點、對話框文字或標籤。",
             "每格優先呈現人物臉部與肩膀以上的清楚特寫；眼神、眉毛、嘴型與姿態要能一眼辨識情緒。",
             "可以有少量手勢輔助情緒，但不要讓身體或背景搶走表情焦點。",
+            "八格的主情緒、手勢、臉部表情與視覺特效必須明顯不同；禁止重複同一種比讚、捧臉、微笑、哭泣或驚訝構圖。",
         ])
     else:
         p.extend([
@@ -4709,7 +4957,23 @@ def _v12_render_text_slots():
 @st.fragment
 def _v12_render_expression_sticker_slots():
     """Keep expression-only edits local, like the text editor fragment."""
-    st.caption("表情欄位可自由輸入，例如：慌張、驚恐、傻眼、得意、委屈。未填時會由 AI 自然安排清楚的情緒。")
+    st.caption(
+        "表情欄位可自由輸入，例如：慌張、驚恐、傻眼、得意、委屈。"
+        "勾選「隨機」時，系統會從 60 組表情／動作／特效配方抽取，"
+        "同一批與本次瀏覽期間不重複。"
+    )
+    _used_recipe_count = len(set(st.session_state.get("v12_expression_used_recipe_ids", [])))
+    _recipe_cycle = int(st.session_state.get("v12_expression_recipe_cycle", 1))
+    st.caption(f"🎲 隨機配方記憶：第 {_recipe_cycle} 輪，已使用 {_used_recipe_count}／60 組。")
+    _last_recipes = st.session_state.get("v12_expression_last_recipe_labels", [])
+    if isinstance(_last_recipes, list) and _last_recipes:
+        _last_recipe_text = "、".join(
+            f"{int(item.get('slot', 0)):02d} {item.get('title', '')}"
+            for item in _last_recipes
+            if isinstance(item, dict)
+        )
+        if _last_recipe_text:
+            st.info("最近一次隨機抽到：" + _last_recipe_text)
     for row_start in (0, 4):
         cols = st.columns(4)
         for offset, col in enumerate(cols):
@@ -4871,6 +5135,12 @@ else:
     _v12_render_expression_sticker_slots()
 texts = get_texts()
 expression_specs = _v12_get_expression_specs()
+_prepared_expression_specs = st.session_state.get("v12_expression_generation_specs")
+_prompt_expression_specs = (
+    _v12_normalize_expression_specs(_prepared_expression_specs)
+    if _sticker_mode == "expression" and isinstance(_prepared_expression_specs, list)
+    else expression_specs
+)
 
 if _sticker_mode == "text":
     with st.expander("📚 查看全部語詞分類與內容",expanded=False):
@@ -5120,7 +5390,7 @@ prompt = build_prompt(
     ai_copy_tone=st.session_state.get("v12_ai_copy_tone_used", st.session_state.get("v12_ai_copy_tone", "")),
     ai_copy_topics=st.session_state.get("v12_selected_themes", []),
     sticker_mode=_sticker_mode,
-    expression_specs=expression_specs,
+    expression_specs=_prompt_expression_specs,
 )
 
 if _style_reference_active:
@@ -5401,6 +5671,23 @@ if st.button(
             st.stop()
         st.session_state["beta_generation_job_id"] = _reservation["job_id"]
 
+    if _sticker_mode == "expression":
+        _resolved_specs, _recipe_labels, _new_recipe_cycle_start = (
+            _v12_prepare_random_expression_specs(expression_specs)
+        )
+        st.session_state["v12_expression_generation_specs"] = _resolved_specs
+        st.session_state["v12_expression_generation_recipe_labels"] = _recipe_labels
+        st.session_state["v12_expression_generation_new_cycle_start"] = (
+            _new_recipe_cycle_start
+        )
+    else:
+        for _expression_job_key in (
+            "v12_expression_generation_specs",
+            "v12_expression_generation_recipe_labels",
+            "v12_expression_generation_new_cycle_start",
+        ):
+            st.session_state.pop(_expression_job_key, None)
+
     # 先鎖定，再立即重新繪製畫面；本次不呼叫 AI。
     st.session_state["v11_generation_pending"] = True
     st.session_state["v11_generation_started_at"] = __import__("time").time()
@@ -5540,6 +5827,8 @@ if st.session_state.get("v11_generation_pending", False):
             img.save(out, "PNG")
             st.session_state.generated_4x2_bytes = out.getvalue()
             st.session_state.crop_boxes = None
+            if _sticker_mode == "expression":
+                _v12_commit_random_expression_recipes()
             if _using_beta_credit:
                 try:
                     _beta_finish_generation(_beta_live_session, _beta_job_id)
@@ -5575,6 +5864,12 @@ if st.session_state.get("v11_generation_pending", False):
         st.session_state["v11_generation_in_progress"] = False
         st.session_state["v11_generation_pending"] = False
         st.session_state["v11_generation_finished_at"] = __import__("time").time()
+        for _expression_job_key in (
+            "v12_expression_generation_specs",
+            "v12_expression_generation_recipe_labels",
+            "v12_expression_generation_new_cycle_start",
+        ):
+            st.session_state.pop(_expression_job_key, None)
 
 # ------------------------------------------------------------
 # STEP 10C native component
