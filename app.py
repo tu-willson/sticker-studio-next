@@ -2932,6 +2932,9 @@ for i in range(8):
         st.session_state.get(f"sticker_text_{i}", ""),
     )
 st.session_state.setdefault("uploaded_image_bytes", None)
+st.session_state.setdefault("v12_style_reference_image_bytes", None)
+st.session_state.setdefault("v12_style_reference_filename", "")
+st.session_state.setdefault("v12_style_reference_fingerprint", "")
 st.session_state.setdefault("generated_4x2_bytes", None)
 st.session_state.setdefault("last_prompt", "")
 st.session_state.setdefault("crop_boxes", None)
@@ -3742,6 +3745,35 @@ def build_prompt(style, custom_style, selected_character, custom_character,
     p.append("整體具有LINE貼圖的清楚、可讀、可愛與完整構圖感。")
     return "\n".join(p)
 
+
+def _v12_set_style_reference_from_upload(uploaded_file):
+    """Normalize a style-only reference to a compact image-edit input."""
+    raw = uploaded_file.getvalue()
+    fingerprint = hashlib.sha256(raw).hexdigest()
+    if fingerprint == st.session_state.get("v12_style_reference_fingerprint"):
+        return
+
+    image = Image.open(BytesIO(raw))
+    image.load()
+    image = image.convert("RGB")
+    resampling = getattr(Image, "Resampling", Image)
+    image.thumbnail((1600, 1600), resampling.LANCZOS)
+    buffer = BytesIO()
+    image.save(buffer, "JPEG", quality=90, optimize=True)
+
+    st.session_state["v12_style_reference_image_bytes"] = buffer.getvalue()
+    st.session_state["v12_style_reference_filename"] = (
+        str(getattr(uploaded_file, "name", "") or "參考畫風圖片")[:120]
+    )
+    st.session_state["v12_style_reference_fingerprint"] = fingerprint
+
+
+def _v12_style_reference_upload_changed():
+    """A new reference takes precedence over the selected preset style."""
+    if st.session_state.get("v12_style_reference_upload") is not None:
+        st.session_state["v10_style_mode"] = "↓ 請選擇風格"
+        st.session_state.pop("v12_loaded_project_custom_style", None)
+
 # ------------------------------------------------------------
 # UI
 # ------------------------------------------------------------
@@ -4294,6 +4326,59 @@ else:
     style=style_mode
     custom_style=""
     st.session_state.pop("v12_loaded_project_custom_style", None)
+
+st.markdown(
+    """
+    <div style="text-align:center;margin:22px 0 4px;font-size:19px;font-weight:800;">
+        🖼️ 畫風參考
+    </div>
+    <div style="text-align:center;margin:0 0 10px;font-size:14px;opacity:.78;">
+        上傳圖檔後請勿再挑選上方貼圖風格
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+_style_reference_left, _style_reference_center, _style_reference_right = st.columns([1, 2, 1])
+with _style_reference_center:
+    _style_reference_upload = st.file_uploader(
+        "上傳參考畫風圖檔",
+        type=["jpg", "jpeg", "png", "webp"],
+        key="v12_style_reference_upload",
+        on_change=_v12_style_reference_upload_changed,
+        help="這張圖只會作為本次生成的畫風、線條、色彩與氛圍參考。",
+    )
+
+if _style_reference_upload is not None:
+    try:
+        _v12_set_style_reference_from_upload(_style_reference_upload)
+    except Exception:
+        st.session_state["v12_style_reference_image_bytes"] = None
+        st.session_state["v12_style_reference_filename"] = ""
+        st.session_state["v12_style_reference_fingerprint"] = ""
+        st.error("❌ 無法讀取這張參考畫風圖，請改用 JPG、PNG 或 WEBP。")
+elif st.session_state.get("v12_style_reference_fingerprint"):
+    # 使用者在原生上傳欄位按下清除後，不保留舊的畫風參考。
+    st.session_state["v12_style_reference_image_bytes"] = None
+    st.session_state["v12_style_reference_filename"] = ""
+    st.session_state["v12_style_reference_fingerprint"] = ""
+
+_style_reference_active = bool(st.session_state.get("v12_style_reference_image_bytes"))
+if _style_reference_active:
+    # 有畫風圖時不混用上方預設／自定義風格，避免互相拉扯。
+    style = "↓ 請選擇風格"
+    custom_style = ""
+    _reference_preview_left, _reference_preview_center, _reference_preview_right = st.columns([1, 2, 1])
+    with _reference_preview_center:
+        st.image(
+            st.session_state["v12_style_reference_image_bytes"],
+            caption=(
+                "畫風參考："
+                + str(st.session_state.get("v12_style_reference_filename", "參考圖片"))
+            ),
+            width=240,
+        )
+    st.success("✅ 已啟用畫風參考：本次生成會優先參考這張圖，不會套用上方貼圖風格。")
+    st.caption("參考圖只用於本次瀏覽工作階段的生成，不會保存到「我的作品」。")
 
 with st.expander("📚 查看全部預設風格",expanded=False):
     st.write("、".join(_style_options[2:]))
@@ -5036,7 +5121,16 @@ prompt = build_prompt(
     expression_specs=expression_specs,
 )
 
-if style_mode == V8_STYLE_CUSTOM_OPTION:
+if _style_reference_active:
+    prompt += (
+        "\n【畫風參考模式】本次輸入的第二張圖片是畫風參考圖。"
+        "請優先參考它的高階視覺特徵，包括線條與筆觸、角色比例、配色、"
+        "陰影方式、表情誇張程度與整體氛圍。"
+        "請保留第一張人物照片的身份特徵，並創作全新的八格貼圖；"
+        "不要直接複製參考圖中的既有角色、文字、標誌、版面或任何單一貼圖內容。"
+        "不要套用其他預設或自定義貼圖風格。"
+    )
+elif style_mode == V8_STYLE_CUSTOM_OPTION:
     prompt += (
         "\n【V10 風格模式】目前使用「自定義風格」模式。"
         "請不要另外套用任何 預設風格，只依照使用者自定義風格描述生成。"
@@ -5370,6 +5464,19 @@ if st.session_state.get("v11_generation_pending", False):
                     "size": "1536x1024",
                     "output_format": "png",
                 }
+
+                if _style_reference_active:
+                    _style_reference_bytes = bytes(
+                        st.session_state.get("v12_style_reference_image_bytes") or b""
+                    )
+                    if not _style_reference_bytes:
+                        raise RuntimeError("畫風參考圖已失效，請重新上傳後再生成。")
+                    _image_edit_kwargs["image"] = [
+                        ("person.png", ib, "image/png"),
+                        ("style-reference.jpg", BytesIO(_style_reference_bytes), "image/jpeg"),
+                    ]
+                    _image_edit_kwargs["input_fidelity"] = "high"
+                    _status.info("🖼️ 正在分析人物照片與畫風參考圖……")
 
                 if transparent:
                     _generation_prompt += (
