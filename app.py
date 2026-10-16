@@ -1539,6 +1539,7 @@ def _beta_library_metadata(record):
         "font_name", "text_style", "generation_method", "transparent_background",
         "style_mode", "custom_style_snapshot", "character_features",
         "custom_character", "custom_character_enabled",
+        "sticker_mode", "expression_specs",
         "sticker_texts", "sticker_color_segments", "schema_version", "identity",
         "timestamps", "creative_settings", "package_settings", "main_no", "tab_no",
     )
@@ -2269,6 +2270,68 @@ def _v12_clean_character_features(value):
     return list(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
 
 
+V12_STICKER_TEXT_MODE = "💬 使用文字貼圖"
+V12_STICKER_EXPRESSION_MODE = "😶 使用表情貼圖（無文字）"
+V12_EXPRESSION_EFFECTS = [
+    "無額外特效（專注表情特寫）",
+    "漫畫速度線",
+    "漫畫驚嘆圖框",
+    "放射聚焦背景",
+    "人物朦朧殘影",
+    "馬賽克眼神",
+    "冷汗水滴",
+    "怒氣爆筋符號",
+    "頭頂烏雲",
+    "閃亮星星特效",
+    "愛心泡泡",
+    "震動波浪線",
+    "聚光燈",
+    "幽靈半透明",
+]
+
+
+def _v12_default_expression_specs():
+    return [
+        {"emotion": "", "effect": V12_EXPRESSION_EFFECTS[0]}
+        for _ in range(8)
+    ]
+
+
+def _v12_normalize_expression_specs(value):
+    """Normalize the 8 expression-sticker directions stored with a project."""
+    raw = value if isinstance(value, list) else []
+    normalized = []
+    for i in range(8):
+        item = raw[i] if i < len(raw) and isinstance(raw[i], dict) else {}
+        effect = str(item.get("effect", "") or "").strip()
+        if effect not in V12_EXPRESSION_EFFECTS:
+            effect = V12_EXPRESSION_EFFECTS[0]
+        normalized.append({
+            "emotion": str(item.get("emotion", "") or "").strip()[:160],
+            "effect": effect,
+        })
+    return normalized
+
+
+def _v12_sticker_mode_value(value=None):
+    value = str(value if value is not None else st.session_state.get(
+        "v12_sticker_content_mode", V12_STICKER_TEXT_MODE
+    ))
+    return "expression" if value == V12_STICKER_EXPRESSION_MODE else "text"
+
+
+def _v12_get_expression_specs():
+    return _v12_normalize_expression_specs([
+        {
+            "emotion": st.session_state.get(f"v12_expression_emotion_{i}", ""),
+            "effect": st.session_state.get(
+                f"v12_expression_effect_{i}", V12_EXPRESSION_EFFECTS[0]
+            ),
+        }
+        for i in range(8)
+    ])
+
+
 def _v12_current_custom_style_snapshot():
     """Capture the exact custom style used by the current project, including a draft."""
     mode = str(st.session_state.get("v10_style_mode", "") or "")
@@ -2336,6 +2399,8 @@ def _v12_new_project_metadata():
         "character_features": [],
         "custom_character": "",
         "custom_character_enabled": False,
+        "sticker_mode": "text",
+        "expression_specs": _v12_default_expression_specs(),
         "sticker_texts": [""] * 8,
         "sticker_color_segments": [],
         "source_image": None,
@@ -2363,6 +2428,8 @@ def _v12_new_project_metadata():
             "character_features": [],
             "custom_character": "",
             "custom_character_enabled": False,
+            "sticker_mode": "text",
+            "expression_specs": _v12_default_expression_specs(),
             "sticker_texts": [""] * 8,
             "sticker_color_segments": [],
         },
@@ -2415,6 +2482,12 @@ def _v12_normalize_project_metadata(metadata):
             "custom_character_enabled",
             creative.get("custom_character_enabled", False),
         )
+    )
+    sticker_mode = str(data.get("sticker_mode", creative.get("sticker_mode", "text")) or "text")
+    if sticker_mode not in {"text", "expression"}:
+        sticker_mode = "text"
+    expression_specs = _v12_normalize_expression_specs(
+        data.get("expression_specs", creative.get("expression_specs", []))
     )
 
     project_id = str(data.get("project_id") or identity.get("project_id") or base["project_id"])
@@ -2473,6 +2546,8 @@ def _v12_normalize_project_metadata(metadata):
         "character_features": character_features,
         "custom_character": custom_character,
         "custom_character_enabled": custom_character_enabled,
+        "sticker_mode": sticker_mode,
+        "expression_specs": expression_specs,
         "sticker_texts": sticker_texts,
         "sticker_color_segments": normalized_color_segments,
         "schema_version": "v12.project.1",
@@ -2499,6 +2574,8 @@ def _v12_normalize_project_metadata(metadata):
         "character_features": list(normalized["character_features"]),
         "custom_character": normalized["custom_character"],
         "custom_character_enabled": normalized["custom_character_enabled"],
+        "sticker_mode": normalized["sticker_mode"],
+        "expression_specs": list(normalized["expression_specs"]),
         "sticker_texts": list(normalized["sticker_texts"]),
         "sticker_color_segments": list(normalized["sticker_color_segments"]),
     }
@@ -2635,6 +2712,18 @@ def _v12_load_history_record(record):
     else:
         st.session_state.pop("v12_loaded_project_custom_style", None)
 
+    loaded_sticker_mode = str(metadata.get("sticker_mode", "text") or "text")
+    st.session_state["v12_sticker_content_mode"] = (
+        V12_STICKER_EXPRESSION_MODE
+        if loaded_sticker_mode == "expression"
+        else V12_STICKER_TEXT_MODE
+    )
+    for i, spec in enumerate(_v12_normalize_expression_specs(
+        metadata.get("expression_specs", [])
+    )):
+        st.session_state[f"v12_expression_emotion_{i}"] = spec["emotion"]
+        st.session_state[f"v12_expression_effect_{i}"] = spec["effect"]
+
     texts = list(metadata.get("sticker_texts") or [""] * 8)
     for i in range(8):
         value = str(texts[i] if i < len(texts) else "")
@@ -2713,6 +2802,8 @@ def _v12_project_snapshot():
     project["sticker_color_segments"] = _v12_valid_color_segments(
         project["sticker_texts"]
     )
+    project["sticker_mode"] = _v12_sticker_mode_value()
+    project["expression_specs"] = _v12_get_expression_specs()
     project["transparent_background"] = bool(
         st.session_state.get("transparent_png_option", False)
     )
@@ -3495,20 +3586,32 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
         st.session_state["v12_ai_copy_last_applied"] = False
 
 def build_prompt(style, custom_style, selected_character, custom_character,
-                 texts, transparent, color_segments=None, ai_copy_topic="", ai_copy_tone="", ai_copy_topics=None):
+                 texts, transparent, color_segments=None, ai_copy_topic="", ai_copy_tone="", ai_copy_topics=None,
+                 sticker_mode="text", expression_specs=None):
     p = [
         "請以我提供的人物照片作為主要人物參考。",
         "保留人物身份辨識特徵，不任意改變人物核心外觀。",
         "請一次生成一張清楚的4×2八格LINE貼圖總圖。",
         "第一排四格、第二排四格；依使用者輸入順序由左至右、由上至下對應。",
         "八格人物維持同一人物身份與主要視覺風格。",
-        "每格人物完整呈現，不要裁切頭部、臉部、身體或四肢。",
         "人物與該格邊界保持安全距離。",
         "不要拉伸、變形或壓縮人物。",
         "非常重要：圖片中禁止出現01、02、03、04、05、06、07、08等編號。",
         "禁止加入格號、序號、位置標籤或數字標記。",
-        "只有使用者指定的貼圖文字可以出現在圖片中。",
     ]
+    sticker_mode = "expression" if sticker_mode == "expression" else "text"
+    if sticker_mode == "expression":
+        p.extend([
+            "本次為「使用表情貼圖（無文字）」模式。",
+            "八格都禁止出現任何漢字、英文字母、數字、標點、對話框文字或標籤。",
+            "每格優先呈現人物臉部與肩膀以上的清楚特寫；眼神、眉毛、嘴型與姿態要能一眼辨識情緒。",
+            "可以有少量手勢輔助情緒，但不要讓身體或背景搶走表情焦點。",
+        ])
+    else:
+        p.extend([
+            "每格人物完整呈現，不要裁切頭部、臉部、身體或四肢。",
+            "只有使用者指定的貼圖文字可以出現在圖片中。",
+        ])
     if style != "↓ 請選擇風格":
         p.append(f"主要貼圖風格：{style}。")
     if custom_style.strip():
@@ -3525,10 +3628,18 @@ def build_prompt(style, custom_style, selected_character, custom_character,
         p.append("本次貼圖可同時採用上述多個主題；它們不是互相衝突的不同世界，而是同一套貼圖的不同主題切面。請依各格文字情境自然參考相關主題，並維持整組人物與視覺一致性。")
     if str(ai_copy_tone or "").strip():
         p.append(f"AI 貼圖文案語氣方向：{str(ai_copy_tone).strip()}。")
-    for i, t in enumerate(texts):
-        p.append(f"第{i+1}格的指定貼圖文字為：「{t.strip() or '（此格未指定文字）'}」。")
+    if sticker_mode == "expression":
+        for i, spec in enumerate(_v12_normalize_expression_specs(expression_specs)):
+            emotion = spec["emotion"] or "自然、清楚且容易辨識的情緒反應"
+            p.append(
+                f"第{i+1}格：表情／情緒為「{emotion}」；"
+                f"視覺特效為「{spec['effect']}」。"
+            )
+    else:
+        for i, t in enumerate(texts):
+            p.append(f"第{i+1}格的指定貼圖文字為：「{t.strip() or '（此格未指定文字）'}」。")
 
-    color_segments = color_segments or []
+    color_segments = [] if sticker_mode == "expression" else (color_segments or [])
     for item in color_segments:
         p.append(
             f"第{item['sticker_index']}格的文字片段「{item['text']}」"
@@ -4155,8 +4266,20 @@ if st.button("💾 儲存人物／場景設定",key="v10_save_character",use_con
     else:
         st.error("❌ 儲存失敗")
 
-v10_section('💬 ④ 01～08 貼圖文字<br><span style="font-size:.72em;">使用「✨ 主題 AI 幫想」或「🎲 隨機用語」</span>', '#3498db')
-st.caption("先選擇你想使用的文字來源；01～08 文字格會一直保留顯示。")
+st.session_state.setdefault("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
+_sticker_content_choice = st.radio(
+    "💬 ④ 貼圖類型",
+    [V12_STICKER_TEXT_MODE, V12_STICKER_EXPRESSION_MODE],
+    key="v12_sticker_content_mode",
+    horizontal=True,
+)
+_sticker_mode = _v12_sticker_mode_value(_sticker_content_choice)
+if _sticker_mode == "text":
+    v10_section('💬 ④ 使用文字貼圖<br><span style="font-size:.72em;">使用「✨ 主題 AI 幫想」或「🎲 隨機用語」</span>', '#3498db')
+    st.caption("先選擇你想使用的文字來源；01～08 文字格會一直保留顯示。")
+else:
+    v10_section("😶 ④ 使用表情貼圖（無文字）", "#3498db")
+    st.caption("每格都不會出現文字；AI 會優先呈現臉部與上半身特寫，讓情緒一眼可辨。")
 
 # V12｜文字來源面板：只有使用者主動點選後，才展開對應功能，
 # 避免 AI 文案與隨機用語區塊同時堆在畫面上。
@@ -4168,25 +4291,26 @@ def _v12_toggle_text_source(_panel):
     else:
         st.session_state["v12_text_source_panel"] = _panel
 
-_src_a, _src_b = st.columns(2)
-with _src_a:
-    st.button(
-        "✨ AI 幫想 8 句貼圖文字",
-        key="v12_open_ai_copy_panel",
-        use_container_width=True,
-        type="primary" if st.session_state.get("v12_text_source_panel") == "ai" else "secondary",
-        on_click=_v12_toggle_text_source,
-        args=("ai",),
-    )
-with _src_b:
-    st.button(
-        "🎲 隨機用語與自定義語詞池",
-        key="v12_open_random_panel",
-        use_container_width=True,
-        type="primary" if st.session_state.get("v12_text_source_panel") == "random" else "secondary",
-        on_click=_v12_toggle_text_source,
-        args=("random",),
-    )
+if _sticker_mode == "text":
+    _src_a, _src_b = st.columns(2)
+    with _src_a:
+        st.button(
+            "✨ AI 幫想 8 句貼圖文字",
+            key="v12_open_ai_copy_panel",
+            use_container_width=True,
+            type="primary" if st.session_state.get("v12_text_source_panel") == "ai" else "secondary",
+            on_click=_v12_toggle_text_source,
+            args=("ai",),
+        )
+    with _src_b:
+        st.button(
+            "🎲 隨機用語與自定義語詞池",
+            key="v12_open_random_panel",
+            use_container_width=True,
+            type="primary" if st.session_state.get("v12_text_source_panel") == "random" else "secondary",
+            on_click=_v12_toggle_text_source,
+            args=("random",),
+        )
 
 # V12｜AI 貼圖文案助手 V1：只負責文字，不碰原本圖片生成流程。
 #
@@ -4407,7 +4531,38 @@ def _v12_render_text_slots():
     st.info(f"已填寫 {filled} / 8 格")
 
 
-if st.session_state.get("v12_text_source_panel") == "ai":
+@st.fragment
+def _v12_render_expression_sticker_slots():
+    """Keep expression-only edits local, like the text editor fragment."""
+    st.caption("表情欄位可自由輸入，例如：慌張、驚恐、傻眼、得意、委屈。未填時會由 AI 自然安排清楚的情緒。")
+    for row_start in (0, 4):
+        cols = st.columns(4)
+        for offset, col in enumerate(cols):
+            i = row_start + offset
+            with col:
+                st.markdown(f"**圖片 {i + 1:02d}**")
+                st.session_state.setdefault(f"v12_expression_emotion_{i}", "")
+                st.session_state.setdefault(
+                    f"v12_expression_effect_{i}", V12_EXPRESSION_EFFECTS[0]
+                )
+                st.text_input(
+                    "表情欄位",
+                    key=f"v12_expression_emotion_{i}",
+                    placeholder="例如：慌張",
+                )
+                st.selectbox(
+                    "想帶入什麼特效？",
+                    V12_EXPRESSION_EFFECTS,
+                    key=f"v12_expression_effect_{i}",
+                )
+    configured = sum(
+        bool(spec["emotion"] or spec["effect"] != V12_EXPRESSION_EFFECTS[0])
+        for spec in _v12_get_expression_specs()
+    )
+    st.info(f"已設定 {configured} / 8 格的表情方向")
+
+
+if _sticker_mode == "text" and st.session_state.get("v12_text_source_panel") == "ai":
     if _v12_current_api_mode == OWN_API_MODE:
         st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；自備 Key 模式不使用會員每日文案額度。")
     else:
@@ -4511,16 +4666,21 @@ def _v12_render_random_phrase_panel():
             st.rerun()
 
 
-if st.session_state.get("v12_text_source_panel") == "random":
+if _sticker_mode == "text" and st.session_state.get("v12_text_source_panel") == "random":
     _v12_render_random_phrase_panel()
 
-_v12_render_text_slots()
+if _sticker_mode == "text":
+    _v12_render_text_slots()
+else:
+    _v12_render_expression_sticker_slots()
 texts = get_texts()
+expression_specs = _v12_get_expression_specs()
 
-with st.expander("📚 查看全部語詞分類與內容",expanded=False):
-    for cat,vals in V8_RANDOM_POOLS.items():
-        st.markdown(f"**{cat}**")
-        st.write("、".join(vals))
+if _sticker_mode == "text":
+    with st.expander("📚 查看全部語詞分類與內容",expanded=False):
+        for cat,vals in V8_RANDOM_POOLS.items():
+            st.markdown(f"**{cat}**")
+            st.write("、".join(vals))
 
 st.divider()
 v10_section("🔤 ⑤ 貼圖字型＋125 種帶圖字型", "#8e67d8")
@@ -4757,6 +4917,8 @@ prompt = build_prompt(
     ai_copy_topic=st.session_state.get("v12_ai_copy_topic_used", st.session_state.get("v12_ai_copy_topic", "")),
     ai_copy_tone=st.session_state.get("v12_ai_copy_tone_used", st.session_state.get("v12_ai_copy_tone", "")),
     ai_copy_topics=st.session_state.get("v12_selected_themes", []),
+    sticker_mode=_sticker_mode,
+    expression_specs=expression_specs,
 )
 
 if style_mode == V8_STYLE_CUSTOM_OPTION:
@@ -4771,9 +4933,9 @@ else:
     )
 
 _selected_font_for_prompt = st.session_state.get("v8_selected_font")
-if text_style:
+if _sticker_mode == "text" and text_style:
     prompt += f"\n文字貼圖效果：{text_style}。"
-if _selected_font_for_prompt:
+if _sticker_mode == "text" and _selected_font_for_prompt:
     prompt += (
         f"\n125種帶圖字型參考：{_selected_font_for_prompt:03d}｜"
         f"{V8_TEXT_EFFECT_CATALOG[_selected_font_for_prompt]}。"
