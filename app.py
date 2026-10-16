@@ -2333,7 +2333,7 @@ V12_EXPRESSION_EFFECTS = [
 
 def _v12_default_expression_specs():
     return [
-        {"emotion": "", "effect": V12_EXPRESSION_EFFECTS[0]}
+        {"emotion": "", "effect": V12_EXPRESSION_EFFECTS[0], "effect_action_prompt": ""}
         for _ in range(8)
     ]
 
@@ -2350,6 +2350,9 @@ def _v12_normalize_expression_specs(value):
         normalized.append({
             "emotion": str(item.get("emotion", "") or "").strip()[:160],
             "effect": effect,
+            "effect_action_prompt": str(
+                item.get("effect_action_prompt", "") or ""
+            ).strip()[:500],
         })
     return normalized
 
@@ -2367,6 +2370,9 @@ def _v12_get_expression_specs():
             "emotion": st.session_state.get(f"v12_expression_emotion_{i}", ""),
             "effect": st.session_state.get(
                 f"v12_expression_effect_{i}", V12_EXPRESSION_EFFECTS[0]
+            ),
+            "effect_action_prompt": st.session_state.get(
+                f"v12_expression_effect_action_prompt_{i}", ""
             ),
         }
         for i in range(8)
@@ -2764,6 +2770,9 @@ def _v12_load_history_record(record):
     )):
         st.session_state[f"v12_expression_emotion_{i}"] = spec["emotion"]
         st.session_state[f"v12_expression_effect_{i}"] = spec["effect"]
+        st.session_state[f"v12_expression_effect_action_prompt_{i}"] = spec[
+            "effect_action_prompt"
+        ]
 
     texts = list(metadata.get("sticker_texts") or [""] * 8)
     for i in range(8):
@@ -3676,6 +3685,11 @@ def build_prompt(style, custom_style, selected_character, custom_character,
                 f"第{i+1}格：表情／情緒為「{emotion}」；"
                 f"視覺特效為「{spec['effect']}」。"
             )
+            if spec["effect_action_prompt"]:
+                p.append(
+                    f"第{i+1}格的特效／動作補充方向："
+                    f"「{spec['effect_action_prompt']}」。"
+                )
     else:
         for i, t in enumerate(texts):
             p.append(f"第{i+1}格的指定貼圖文字為：「{t.strip() or '（此格未指定文字）'}」。")
@@ -4589,8 +4603,20 @@ def _v12_render_expression_sticker_slots():
                     V12_EXPRESSION_EFFECTS,
                     key=f"v12_expression_effect_{i}",
                 )
+                st.session_state.setdefault(
+                    f"v12_expression_effect_action_prompt_{i}", ""
+                )
+                st.text_input(
+                    "特效或動作提示詞",
+                    key=f"v12_expression_effect_action_prompt_{i}",
+                    placeholder="例如：雙手抱頭後退、冷風吹過",
+                )
     configured = sum(
-        bool(spec["emotion"] or spec["effect"] != V12_EXPRESSION_EFFECTS[0])
+        bool(
+            spec["emotion"]
+            or spec["effect"] != V12_EXPRESSION_EFFECTS[0]
+            or spec["effect_action_prompt"]
+        )
         for spec in _v12_get_expression_specs()
     )
     st.info(f"已設定 {configured} / 8 格的表情方向")
