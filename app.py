@@ -5356,11 +5356,22 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
         _saved_labels = ["↓ 請選擇已儲存風格"] + [
             f"{i:02d}｜{name}" for i, name, _ in _custom_style_slots
         ]
+        _pending_saved_style_choice = st.session_state.pop(
+            "v12_pending_saved_custom_style_choice", ""
+        )
+        _show_saved_style_notice = bool(
+            st.session_state.pop("v12_show_saved_style_notice", False)
+        )
+        if _pending_saved_style_choice in _saved_labels:
+            # 必須在 selectbox 建立前更新，才能安全地同步新名稱與選取狀態。
+            st.session_state["v12_saved_custom_style_choice"] = _pending_saved_style_choice
         _saved_choice = st.selectbox(
             "💾 選擇已儲存的自定義風格",
             _saved_labels,
             key="v12_saved_custom_style_choice",
         )
+        if _show_saved_style_notice:
+            st.success("✅ 此風格已儲存，並已同步更新到上方選單。")
         if _saved_choice != "↓ 請選擇已儲存風格":
             st.session_state.pop("v12_loaded_project_custom_style", None)
             _pos = _saved_labels.index(_saved_choice) - 1
@@ -5403,8 +5414,21 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 with _eb:
                     _clear_style_editor = st.form_submit_button("🧹 清空此風格", use_container_width=True)
             if _save_style_editor:
+                try:
+                    _saved_slot = int(st.session_state.get("v12_style_editor_slot", 1))
+                except Exception:
+                    _saved_slot = 1
+                _saved_slot = max(1, min(10, _saved_slot))
+                _saved_name = (
+                    str(st.session_state.get("v12_style_editor_name", "") or "").strip()
+                    or f"使用者自定{_saved_slot}"
+                )
                 _v12_save_style_editor()
-                st.success("✅ 此風格已儲存")
+                st.session_state["v12_pending_saved_custom_style_choice"] = (
+                    f"{_saved_slot:02d}｜{_saved_name}"
+                )
+                st.session_state["v12_show_saved_style_notice"] = True
+                st.rerun()
             if _clear_style_editor:
                 try:
                     _slot = int(st.session_state.get("v12_style_editor_slot", 1))
