@@ -1576,6 +1576,16 @@ def _v12_webp_bytes(image_or_bytes, quality=86):
     return buf.getvalue()
 
 
+def _v12_jpeg_bytes(image_or_bytes, quality=90):
+    """Restore a browser-safe JPEG input for the style-reference image API slot."""
+    image = image_or_bytes
+    if not isinstance(image, Image.Image):
+        image = Image.open(BytesIO(bytes(image_or_bytes)))
+    buf = BytesIO()
+    image.convert("RGB").save(buf, "JPEG", quality=quality, optimize=True)
+    return buf.getvalue()
+
+
 def _beta_library_metadata(record):
     """Keep project settings only; asset bytes and all session-only data stay out."""
     metadata = _v12_normalize_project_metadata(record)
@@ -1751,10 +1761,15 @@ def _beta_load_library_project_record(session, project):
     preview_path = str(project.get("preview_path") or "")
     if preview_path:
         download_paths["preview"] = preview_path
-    if manifest.get("has_source_photo") and project.get("source_photo_path"):
-        download_paths["source_photo"] = str(project["source_photo_path"])
-    if manifest.get("has_style_reference") and project.get("style_reference_path"):
-        download_paths["style_reference"] = str(project["style_reference_path"])
+    asset_root = prefix.rsplit("stickers/", 1)[0]
+    if manifest.get("has_source_photo"):
+        download_paths["source_photo"] = str(
+            project.get("source_photo_path") or asset_root + "source-photo.webp"
+        )
+    if manifest.get("has_style_reference"):
+        download_paths["style_reference"] = str(
+            project.get("style_reference_path") or asset_root + "style-reference.webp"
+        )
     if not any(name.startswith("sticker:") for name in download_paths):
         raise RuntimeError("library_assets_missing")
 
@@ -1786,9 +1801,15 @@ def _beta_load_library_project_record(session, project):
             Image.open(BytesIO(downloaded_assets["preview"]))
         )
     if downloaded_assets.get("source_photo"):
-        record["source_photo_bytes"] = downloaded_assets["source_photo"]
+        # 雲端為節省空間保存 WEBP；載回時轉回 PNG，與 images.edit 的
+        # image/png 宣告保持一致，避免照片雖下載成功卻無法再次生成。
+        record["source_photo_bytes"] = _v12_png_bytes(
+            Image.open(BytesIO(downloaded_assets["source_photo"]))
+        )
     if downloaded_assets.get("style_reference"):
-        record["style_reference_bytes"] = downloaded_assets["style_reference"]
+        record["style_reference_bytes"] = _v12_jpeg_bytes(
+            Image.open(BytesIO(downloaded_assets["style_reference"]))
+        )
     return record
 
 
@@ -5283,6 +5304,20 @@ if uploaded:
     except Exception as e:
         st.error("❌ 無法讀取人物照片")
         st.code(str(e))
+elif st.session_state.get("uploaded_image_bytes"):
+    # 載回作品時，瀏覽器安全機制不允許替 file_uploader 回填原始檔名。
+    # 但已保存的照片仍存在 Session，必須明確顯示，避免誤以為人物照遺失。
+    try:
+        restored_photo = Image.open(
+            BytesIO(st.session_state["uploaded_image_bytes"])
+        )
+        restored_photo.load()
+        _img_c1, _img_c2, _img_c3 = st.columns([1, 2, 1])
+        with _img_c2:
+            st.image(restored_photo, caption="已載回的人物照片", width=420)
+        st.info("📦 已載回已保存的人物照片；雖然上傳欄不會顯示原始檔名，仍可直接繼續生成。")
+    except Exception:
+        st.warning("已載回人物照片資料，但預覽暫時無法顯示；可重新上傳同一張照片後繼續。")
 
 st.divider()
 V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
