@@ -5115,9 +5115,9 @@ def _v12_render_ai_copy_assistant():
     # ------------------------------------------------------------
     _topic_before = str(st.session_state.get("v12_ai_copy_topic", "") or "").strip()
     _topic = st.text_input(
-        "💡 你想做什麼主題？",
+        t("ai_topic"),
         key="v12_ai_copy_topic",
-        placeholder="例如：醫師日常篇、情侶吵架篇、媽媽的日常",
+        placeholder=t("ai_topic_placeholder"),
     ).strip()
 
     # 使用者修改尚未建立的創作主題時，清除上一批候選文案，避免拿舊主題的結果誤存到新主題。
@@ -5132,7 +5132,7 @@ def _v12_render_ai_copy_assistant():
     # ② 文案語氣
     # ------------------------------------------------------------
     _tone = st.selectbox(
-        "🎭 希望文案是什麼感覺？",
+        t("ai_tone"),
         V12_AI_COPY_TONES,
         key="v12_ai_copy_tone",
     )
@@ -5143,24 +5143,21 @@ def _v12_render_ai_copy_assistant():
     if _copy_status_session:
         try:
             _copy_status = _beta_copy_usage_status_cached(_copy_status_session)
-            st.info(
-                "✨ 今日 AI幫想額度（台灣時間）："
-                f"剩 {_copy_status['remaining_count']} / {_copy_status['daily_limit']} 次"
-            )
+            st.info(t("ai_quota", remaining=_copy_status["remaining_count"], limit=_copy_status["daily_limit"]))
         except Exception:
             st.warning("今日文案額度暫時無法確認，請稍後再試。")
     else:
         st.info("完成 Google 登入後，即可查看並使用每日 AI幫想額度。")
 
     _generate = st.button(
-        "✨ AI 幫我想 16 句",
+        t("ai_generate"),
         type="primary",
         use_container_width=True,
         key="v12_ai_copy_generate",
     )
     if _generate:
         if not _topic:
-            st.warning("請先輸入一個主題，例如「職場的憤憤不平」。")
+            st.warning(t("ai_topic_required"))
         else:
             _copy_session = None
             _copy_reservation = None
@@ -6112,10 +6109,10 @@ if uploaded:
         st.session_state.uploaded_image_bytes = b.getvalue()
         _img_c1,_img_c2,_img_c3=st.columns([1,2,1])
         with _img_c2:
-            st.image(im, caption="人物照片", width=420)
-        st.success("✅ 人物照片已載入")
+            st.image(im, caption=t("photo_preview"), width=420)
+        st.success(t("photo_loaded"))
     except Exception as e:
-        st.error("❌ 無法讀取人物照片")
+        st.error(t("photo_failed"))
         st.code(str(e))
 elif st.session_state.get("uploaded_image_bytes"):
     # 載回作品時，瀏覽器安全機制不允許替 file_uploader 回填原始檔名。
@@ -6127,10 +6124,10 @@ elif st.session_state.get("uploaded_image_bytes"):
         restored_photo.load()
         _img_c1, _img_c2, _img_c3 = st.columns([1, 2, 1])
         with _img_c2:
-            st.image(restored_photo, caption="已載回的人物照片", width=420)
-        st.info("📦 已載回已保存的人物照片；雖然上傳欄不會顯示原始檔名，仍可直接繼續生成。")
+            st.image(restored_photo, caption=t("photo_restored_preview"), width=420)
+        st.info(t("photo_restored"))
     except Exception:
-        st.warning("已載回人物照片資料，但預覽暫時無法顯示；可重新上傳同一張照片後繼續。")
+        st.warning(t("photo_restore_failed"))
 
 st.divider()
 V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
@@ -6184,9 +6181,9 @@ custom_style = ""
 _style_reference_active = False
 
 if _style_source_mode == V12_STYLE_PRESET_MODE:
-    st.caption("🌈 選擇預設風格，或改用你已保存的自定義風格。")
+    st.caption(t("style_preset_caption"))
     style_mode = st.selectbox(
-        "🌈 貼圖風格",
+        t("style_label"),
         _style_options,
         key="v10_style_mode",
     )
@@ -6298,16 +6295,16 @@ else:
     style_mode = "↓ 請選擇風格"
     style = style_mode
     custom_style = ""
-    st.markdown("<div style='text-align:center;margin:16px 0 6px;font-size:19px;font-weight:800;'>🖼️ 畫風參考</div>", unsafe_allow_html=True)
-    st.caption("上傳圖檔後，本次生成會以它的線條、比例、配色與視覺語言為主，不會套用貼圖風格快選。")
+    st.markdown(f"<div style='text-align:center;margin:16px 0 6px;font-size:19px;font-weight:800;'>{t('style_reference_title')}</div>", unsafe_allow_html=True)
+    st.caption(t("style_reference_caption"))
     _style_reference_left, _style_reference_center, _style_reference_right = st.columns([1, 2, 1])
     with _style_reference_center:
         _style_reference_upload = st.file_uploader(
-            "上傳參考畫風圖檔",
+            t("style_reference_upload"),
             type=["jpg", "jpeg", "png", "webp"],
             key="v12_style_reference_upload",
             on_change=_v12_style_reference_upload_changed,
-            help="這張圖只會作為本次生成的畫風、線條、色彩與氛圍參考。",
+            help=t("style_reference_help"),
         )
     if _style_reference_upload is not None:
         try:
@@ -6316,57 +6313,62 @@ else:
             st.session_state["v12_style_reference_image_bytes"] = None
             st.session_state["v12_style_reference_filename"] = ""
             st.session_state["v12_style_reference_fingerprint"] = ""
-            st.error("❌ 無法讀取這張參考畫風圖，請改用 JPG、PNG 或 WEBP。")
+            st.error(t("style_reference_failed"))
     _style_reference_active = bool(st.session_state.get("v12_style_reference_image_bytes"))
     if _style_reference_active:
         _reference_preview_left, _reference_preview_center, _reference_preview_right = st.columns([1, 2, 1])
         with _reference_preview_center:
             st.image(
                 st.session_state["v12_style_reference_image_bytes"],
-                caption="畫風參考：" + str(st.session_state.get("v12_style_reference_filename", "參考圖片")),
+                caption=t("style_reference_preview") + "：" + str(st.session_state.get("v12_style_reference_filename", "reference")),
                 width=240,
             )
-        st.success("✅ 已啟用畫風參考：本次生成會優先參考這張圖，不會套用貼圖風格快選。")
+        st.success(t("style_reference_enabled"))
         st.caption("調整下列設定時不會重新讀取頁面；完成後再按「套用畫風設定」。")
         with st.form("v12_style_reference_details_form", border=False):
             st.radio(
-                "畫風融入程度",
+                t("style_strength"),
                 ["柔和融入", "明顯融入", "強烈融入"],
                 horizontal=True,
                 key="v12_style_reference_strength",
+                format_func=lambda value: {
+                    "柔和融入": t("style_strength_soft"),
+                    "明顯融入": t("style_strength_clear"),
+                    "強烈融入": t("style_strength_strong"),
+                }[value],
                 help="只改變新作品的線條、比例、配色、陰影與表情語言；不會複製參考圖中的角色、文字或單張貼圖。",
             )
             st.text_area(
-                "自訂代表性元素（選填）",
+                t("style_elements"),
                 key="v12_style_reference_custom_elements",
-                placeholder="例如：漫畫名稱風格、強調圖片上的某些特徵、保留圖片人物的神情",
+                placeholder=t("style_elements_placeholder"),
                 max_chars=1200,
             )
             with st.container(key="v12_style_reference_save_button"):
                 _apply_style_reference_details = st.form_submit_button(
-                    "自訂代表性元素(輸入完請點選套用)",
+                    t("style_apply"),
                     type="primary",
                     use_container_width=True,
                 )
         if _apply_style_reference_details:
-            st.success("✅ 畫風參考設定已套用")
+            st.success(t("style_applied"))
         st.caption("💡 這段說明會直接補充給 AI，協助它把你指定的特色融入新人物；不會複製參考圖中的角色、文字或版面。")
         st.caption("若打包時同步保存並勾選「保存私人創作素材」，這張參考圖會一併保存，供日後載回續作。")
 
 v10_section(t("section_features"), "#2ecc71")
 st.caption(t("features_intro"))
 with st.form("v12_character_settings_form", border=False):
-    selected_character=st.multiselect("🎯 人物／畫面特色（可複選）",CHARACTER_OPTIONS,key="v10_character_options")
+    selected_character=st.multiselect(t("feature_select"),CHARACTER_OPTIONS,key="v10_character_options")
     _c1,_c2=st.columns([1,8])
     with _c1:
-        st.checkbox("啟用", key="v10_character_enabled_1")
+        st.checkbox(t("enable"), key="v10_character_enabled_1")
     with _c2:
         st.text_area(
-            "自定義人物／場景需求",
+            t("custom_character"),
             key="v10_character_custom_1",
             height=70,
         )
-    _save_character_settings = st.form_submit_button("💾 儲存人物／場景設定", use_container_width=True)
+    _save_character_settings = st.form_submit_button(t("save_character"), use_container_width=True)
 custom_character = (
     str(st.session_state.get("v10_character_custom_1", "") or "").strip()
     if st.session_state.get("v10_character_enabled_1", False)
@@ -6374,9 +6376,9 @@ custom_character = (
 )
 if _save_character_settings:
     if _save_v10_presets():
-        st.success("✅ 人物／場景設定已儲存")
+        st.success(t("character_saved"))
     else:
-        st.error("❌ 儲存失敗")
+        st.error(t("save_failed"))
 
 st.session_state.setdefault("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
 v10_section(t("section_content"), "#3498db")
@@ -6418,10 +6420,10 @@ with _mode_expression_col:
 _sticker_mode = _v12_sticker_mode_value(_sticker_content_choice)
 if _sticker_mode == "text":
     v12_mode_panel_heading(t("text_source_heading"), '#3498db')
-    st.caption("先選擇你想使用的文字來源；01～08 文字格會一直保留顯示。")
+    st.caption(t("text_source_caption"))
 else:
     v12_mode_panel_heading(t("expression_heading"), "#3498db")
-    st.caption("每格都不會出現文字；AI 會優先呈現臉部與上半身特寫，讓情緒一眼可辨。")
+    st.caption(t("expression_caption"))
 
 # V12｜文字來源面板：只有使用者主動點選後，才展開對應功能，
 # 避免 AI 文案與隨機用語區塊同時堆在畫面上。
@@ -6437,7 +6439,7 @@ if _sticker_mode == "text":
     _src_a, _src_b = st.columns(2)
     with _src_a:
         st.button(
-            "✨ AI 幫想 8 句貼圖文字",
+            t("ai_copy_button"),
             key="v12_open_ai_copy_panel",
             use_container_width=True,
             type="primary" if st.session_state.get("v12_text_source_panel") == "ai" else "secondary",
@@ -6446,7 +6448,7 @@ if _sticker_mode == "text":
         )
     with _src_b:
         st.button(
-            "🎲 隨機用語與自定義語詞池",
+            t("random_phrases_button"),
             key="v12_open_random_panel",
             use_container_width=True,
             type="primary" if st.session_state.get("v12_text_source_panel") == "random" else "secondary",
@@ -6469,11 +6471,11 @@ def _v12_render_text_slot(i):
         str(st.session_state.get(f"sticker_text_{i}", "") or ""),
     )
     st.text_input(
-        f"{i+1:02d}",
+        t("text_slot", number=i + 1),
         key=_widget_key,
         on_change=_v12_sync_sticker_text,
         args=(i,),
-        placeholder="輸入想要的文字",
+        placeholder=t("text_placeholder"),
     )
     # 本輪 widget 可能剛被渲染；canonical state 直接取目前 widget 值，
     # 確保後續局部上色 rerun 仍保有最新的 01～08 文字。
@@ -6488,7 +6490,7 @@ def _v12_render_text_slot(i):
         bool(_action_draft_item["enabled"]),
     )
     _action_enabled = st.checkbox(
-        "🎬 啟用動作指令",
+        t("action_enable"),
         key=_action_enabled_widget_key,
         on_change=_v12_sync_sticker_action_enabled,
         args=(i,),
@@ -6501,11 +6503,11 @@ def _v12_render_text_slot(i):
             str(_action_draft_item["prompt"] or ""),
         )
         st.text_input(
-            "輸入希望動作指令",
+            t("action_prompt"),
             key=_action_prompt_widget_key,
             on_change=_v12_sync_sticker_action_prompt,
             args=(i,),
-            placeholder="例如：雙手抱頭後退、指著文字大笑、比出勝利手勢",
+            placeholder=t("action_placeholder"),
             max_chars=500,
         )
         _v12_write_sticker_action_draft_slot(
@@ -6515,7 +6517,7 @@ def _v12_render_text_slot(i):
 
     _color_enabled_widget_key = f"v12_text_color_enabled_widget_{i}"
     _color_enabled = st.checkbox(
-        "🎨 啟用局部文字上色",
+        t("color_enable"),
         key=_color_enabled_widget_key,
         on_change=_v12_sync_text_color_enabled,
         args=(i,),
@@ -6550,7 +6552,7 @@ def _v12_render_text_slot(i):
                         f"""
                         <div style="display:flex;align-items:center;gap:8px;
                                     margin:0 0 6px 0;font-weight:700;">
-                            <span>文字片段 {j+1}</span>
+                            <span>{t('color_segment', number=j + 1)}</span>
                             <span style="display:inline-flex;align-items:center;gap:5px;
                                          padding:2px 8px 2px 6px;border-radius:999px;
                                          background:rgba(127,127,127,.10);
@@ -6567,11 +6569,11 @@ def _v12_render_text_slot(i):
                     )
                 else:
                     st.markdown(
-                        f'<div style="margin:0 0 6px 0;font-weight:700;">文字片段 {j+1}</div>',
+                        f'<div style="margin:0 0 6px 0;font-weight:700;">{t("color_segment", number=j + 1)}</div>',
                         unsafe_allow_html=True,
                     )
                 st.button(
-                    "自動帶入文字",
+                    t("paste_text"),
                     key=f"v12_text_color_segment_paste_{i}_{j}",
                     on_click=_v12_paste_sticker_text_to_color_segment,
                     args=(i, j),
@@ -6579,7 +6581,7 @@ def _v12_render_text_slot(i):
                     use_container_width=True,
                 )
                 st.text_input(
-                    f"文字片段 {j+1}",
+                    t("color_segment", number=j + 1),
                     key=f"v12_text_color_segment_{i}_{j}",
                     placeholder="例如：你還有",
                     label_visibility="collapsed",
@@ -6589,7 +6591,7 @@ def _v12_render_text_slot(i):
                 )
 
             with _b:
-                st.markdown("**🎨 選擇顏色**")
+                st.markdown(f"**{t('color_choose')}**")
                 color_cols = st.columns(4)
                 for k, (name, hex_code, icon) in enumerate(V12_TEXT_COLOR_PALETTE):
                     with color_cols[k % 4]:
@@ -6621,7 +6623,7 @@ def _v12_render_text_slot(i):
 
         if count < 3:
             st.button(
-                "＋ 新增一段文字顏色",
+                t("color_add"),
                 key=f"v12_text_color_add_{i}",
                 use_container_width=True,
                 on_click=_v12_add_text_color_segment,
@@ -6688,23 +6690,19 @@ def _v12_render_text_slots():
 
     texts = get_texts()
     filled = sum(bool(x.strip()) for x in texts)
-    st.info(f"已填寫 {filled} / 8 格")
+    st.info(t("text_filled", filled=filled))
 
 
 @st.fragment
 def _v12_render_expression_sticker_slots():
     """Keep expression-only edits local, like the text editor fragment."""
-    st.caption(
-        "表情欄位可自由輸入，例如：慌張、驚恐、傻眼、得意、委屈。"
-        "勾選「隨機」時，AI 會自由安排表情、動作與鏡頭；同一批 8 張會刻意避開相同表情、手勢與構圖。"
-        "除非你自行指定，系統不會自動塞入大面積背景或搶眼特效。"
-    )
+    st.caption(t("expression_intro"))
     for row_start in (0, 4):
         cols = st.columns(4)
         for offset, col in enumerate(cols):
             i = row_start + offset
             with col:
-                st.markdown(f"**圖片 {i + 1:02d}**")
+                st.markdown(f"**{t('image_number', number=i + 1)}**")
                 st.session_state.setdefault(f"v12_expression_emotion_{i}", "")
                 st.session_state.setdefault(
                     f"v12_expression_emotion_random_{i}", False
@@ -6713,17 +6711,17 @@ def _v12_render_expression_sticker_slots():
                     f"v12_expression_effect_{i}", V12_EXPRESSION_EFFECTS[0]
                 )
                 emotion_random = st.checkbox(
-                    "隨機",
+                    t("random"),
                     key=f"v12_expression_emotion_random_{i}",
                 )
                 st.text_input(
-                    "表情欄位",
+                    t("expression_field"),
                     key=f"v12_expression_emotion_{i}",
-                    placeholder="例如：慌張",
+                    placeholder=t("expression_placeholder"),
                     disabled=emotion_random,
                 )
                 st.selectbox(
-                    "想帶入什麼特效？",
+                    t("effect_question"),
                     V12_EXPRESSION_EFFECTS,
                     key=f"v12_expression_effect_{i}",
                 )
@@ -6731,9 +6729,9 @@ def _v12_render_expression_sticker_slots():
                     f"v12_expression_effect_action_prompt_{i}", ""
                 )
                 st.text_input(
-                    "特效或動作提示詞",
+                    t("effect_action"),
                     key=f"v12_expression_effect_action_prompt_{i}",
-                    placeholder="例如：大動作、荒謬、搶眼特效",
+                    placeholder=t("effect_action_placeholder"),
                 )
     configured = sum(
         bool(
@@ -6744,11 +6742,11 @@ def _v12_render_expression_sticker_slots():
         )
         for spec in _v12_get_expression_specs()
     )
-    st.info(f"已設定 {configured} / 8 格的表情方向")
+    st.info(t("expression_configured", configured=configured))
 
 
 if _sticker_mode == "text" and st.session_state.get("v12_text_source_panel") == "ai":
-    st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；會員模式會使用每日 AI幫想額度，不會扣除圖片生成次數。")
+    st.caption(t("ai_result_intro"))
     _v12_render_ai_copy_assistant()
 
 
@@ -6869,16 +6867,16 @@ if _sticker_mode == "text":
 
 if _sticker_mode == "text":
     st.divider()
-    v10_section("🔤 貼圖字型＋125 種帶圖字型", "#8e67d8")
-    v10_subsection("🧩 文字外框／形狀效果", "#8e67d8")
-    st.caption("125 種帶圖字型決定字本身的筆畫與材質；這裡只決定文字外圍的描邊、對話框或裝飾形狀，兩者可以同時使用。")
+    v10_section(t("font_section"), "#8e67d8")
+    v10_subsection(t("font_outline"), "#8e67d8")
+    st.caption(t("font_outline_caption"))
     _saved_text_style = str(st.session_state.get("v8_text_style", "") or "")
     if _saved_text_style not in V8_TEXT_STYLE_OPTIONS:
         st.session_state["v8_text_style"] = V8_TEXT_STYLE_LEGACY_MAP.get(
             _saved_text_style, "不使用外框"
         )
     text_style = st.selectbox(
-        "文字外框／形狀效果",
+        t("font_label"),
         V8_TEXT_STYLE_OPTIONS,
         index=0,
         key="v8_text_style",
@@ -6888,7 +6886,7 @@ else:
 
 _selected_font = st.session_state.get("v8_selected_font", None)
 if _sticker_mode == "text":
-    v10_subsection("🔤 125 種帶圖字型", "#8e67d8")
+    v10_subsection(t("font_catalog"), "#8e67d8")
 
 # 125 種帶圖字型｜快速選擇＋分頁圖卡總覽
 # 手機不再一次渲染 125 張大圖，降低滑動成本。
@@ -6903,10 +6901,10 @@ if "v12_font_quick_pick" not in st.session_state:
 
 _quick_font_choice = "— 快速選擇字型｜可直接輸入數字 —"
 if _sticker_mode == "text":
-    st.caption("選擇字型後會立即套用並更新下方預覽。")
+    st.caption(t("font_pick_caption"))
     st.markdown('<div id="v10-font-result-anchor" style="scroll-margin-top: 72px;"></div>', unsafe_allow_html=True)
     _quick_font_choice = st.selectbox(
-        "⚡ 快速選擇 125 種字型",
+        t("font_quick_pick"),
         ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
         key="v12_font_quick_pick",
     )
@@ -6919,7 +6917,7 @@ if _sticker_mode == "text":
     if _selected_font:
         st.success(f"🎨 已選擇 125 字型：{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}")
     else:
-        st.info("尚未指定 125 種字型；可從下方總覽選用。")
+        st.info(t("font_none"))
 
 # 選字型圖卡後回到快速選單與目前選擇提示的位置。
 if _sticker_mode == "text" and st.session_state.pop("v10_scroll_to_font_result", False):
@@ -7082,11 +7080,11 @@ if _sticker_mode == "text":
 
 st.divider()
 v10_section(t("section_background"), "#16a085")
-st.markdown('<div class="v11-transparent-title">🖼️ 透明背景</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="v11-transparent-title">{t("background_transparent")}</div>', unsafe_allow_html=True)
 with st.container(key="transparent_png_option"):
-    transparent = st.checkbox("使用透明背景 PNG", value=False)
+    transparent = st.checkbox(t("transparent_png"), value=False)
 
-v10_subsection("🌈 貼圖設定查看", "#ff9f43")
+v10_subsection(t("settings_review"), "#ff9f43")
 style_mode = st.session_state.get("v10_style_mode", "↓ 請選擇風格")
 
 _prompt_color_segments = _v12_valid_color_segments(texts)
@@ -7169,7 +7167,7 @@ if _sticker_mode == "text" and _selected_font_for_prompt:
         "若同時指定文字外框／形狀效果，兩者必須融合呈現、不可互相覆蓋。"
         "不要照搬參考圖中的人物或其他內容。"
     )
-with st.expander("🔍 點選查看貼圖設定"):
+with st.expander(t("prompt_view")):
     st.markdown(
         """
         <div style="
@@ -7338,7 +7336,7 @@ with st.expander("🔍 點選查看貼圖設定"):
             unsafe_allow_html=True,
         )
     else:
-        st.info("目前尚未產生 AI Prompt。")
+        st.info(t("prompt_unavailable"))
 
 
 
@@ -7372,20 +7370,20 @@ _generation_locked = _generation_pending or _generation_in_progress
 # 然後才進入長時間 AI 工作。
 # ------------------------------------------------------------
 if st.button(
-    "🔄 AI 正在生成，請稍候……" if _generation_locked else "✨ 生成 4×2 八格總圖",
+    t("generating") if _generation_locked else t("generate"),
     type="primary",
     use_container_width=True,
     disabled=_generation_locked,
     key="v11_generate_4x2",
 ):
     if not st.session_state.uploaded_image_bytes:
-        st.warning("請先上傳人物照片。")
+        st.warning(t("upload_first"))
         st.stop()
 
     # 文字模式至少需要一格文字；無文字表情模式則由每格的表情／特效方向生成，
     # 不應共用「必須填貼圖文字」的驗證。
     if _sticker_mode == "text" and not any(str(text or "").strip() for text in texts):
-        st.warning("請至少輸入一格貼圖文字。")
+        st.warning(t("text_first"))
         st.stop()
 
     _click_beta_session = _beta_current_user()
