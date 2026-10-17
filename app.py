@@ -2034,19 +2034,20 @@ div[class*="st-key-v12_color_selected_white_"] button::after{
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-<div class="v12-quick-nav" aria-label="創作步驟快捷鍵">
+st.markdown(f"""
+<div class="v12-quick-nav" aria-label="{t('quick_nav_menu')}">
   <details>
-    <summary title="開啟創作步驟快捷鍵" aria-label="開啟創作步驟快捷鍵">✦</summary>
-    <nav class="v12-quick-nav-menu" aria-label="移動到創作步驟">
-      <a class="v12-quick-nav-link" style="--nav-accent:#ff5c7a" href="#v12-step-01" title="01 人物照片"><span class="v12-quick-nav-label">人物</span><span class="v12-quick-nav-number">01</span></a>
-      <a class="v12-quick-nav-link" style="--nav-accent:#ff9f43" href="#v12-step-02" title="02 貼圖風格"><span class="v12-quick-nav-label">風格</span><span class="v12-quick-nav-number">02</span></a>
-      <a class="v12-quick-nav-link" style="--nav-accent:#2ecc71" href="#v12-step-03" title="03 人物特色"><span class="v12-quick-nav-label">特色</span><span class="v12-quick-nav-number">03</span></a>
-      <a class="v12-quick-nav-link" style="--nav-accent:#3498db" href="#v12-step-04" title="04 貼圖內容"><span class="v12-quick-nav-label">文字</span><span class="v12-quick-nav-number">04</span></a>
-      <a class="v12-quick-nav-link" style="--nav-accent:#8e67d8" href="#v12-step-05" title="05 背景設定"><span class="v12-quick-nav-label">背景</span><span class="v12-quick-nav-number">05</span></a>
-      <a class="v12-quick-nav-link" style="--nav-accent:#e67e22" href="#v12-step-06" title="06 開始生成"><span class="v12-quick-nav-label">生成</span><span class="v12-quick-nav-number">06</span></a>
-      <a class="v12-quick-nav-link" style="--nav-accent:#32c6c0" href="#v12-step-07" title="07 檢視成果"><span class="v12-quick-nav-label">成果</span><span class="v12-quick-nav-number">07</span></a>
-      <a class="v12-quick-nav-link" style="--nav-accent:#e74c3c" href="#v12-step-08" title="08 裁切下載"><span class="v12-quick-nav-label">裁切</span><span class="v12-quick-nav-number">08</span></a>
+    <summary title="{t('quick_nav_open')}" aria-label="{t('quick_nav_open')}">✦</summary>
+    <nav class="v12-quick-nav-menu" aria-label="{t('quick_nav_menu')}">
+      <a class="v12-quick-nav-link" style="--nav-accent:#7c5cff" href="?v12_view=library" title="{t('quick_nav_library_title')}" aria-label="{t('quick_nav_library_title')}"><span class="v12-quick-nav-label">{t('quick_nav_library')}</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#ff5c7a" href="#v12-step-01" title="01 {t('quick_nav_01')}"><span class="v12-quick-nav-label">{t('quick_nav_01')}</span><span class="v12-quick-nav-number">01</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#ff9f43" href="#v12-step-02" title="02 {t('quick_nav_02')}"><span class="v12-quick-nav-label">{t('quick_nav_02')}</span><span class="v12-quick-nav-number">02</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#2ecc71" href="#v12-step-03" title="03 {t('quick_nav_03')}"><span class="v12-quick-nav-label">{t('quick_nav_03')}</span><span class="v12-quick-nav-number">03</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#3498db" href="#v12-step-04" title="04 {t('quick_nav_04')}"><span class="v12-quick-nav-label">{t('quick_nav_04')}</span><span class="v12-quick-nav-number">04</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#8e67d8" href="#v12-step-05" title="05 {t('quick_nav_05')}"><span class="v12-quick-nav-label">{t('quick_nav_05')}</span><span class="v12-quick-nav-number">05</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#e67e22" href="#v12-step-06" title="06 {t('quick_nav_06')}"><span class="v12-quick-nav-label">{t('quick_nav_06')}</span><span class="v12-quick-nav-number">06</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#32c6c0" href="#v12-step-07" title="07 {t('quick_nav_07')}"><span class="v12-quick-nav-label">{t('quick_nav_07')}</span><span class="v12-quick-nav-number">07</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#e74c3c" href="#v12-step-08" title="08 {t('quick_nav_08')}"><span class="v12-quick-nav-label">{t('quick_nav_08')}</span><span class="v12-quick-nav-number">08</span></a>
     </nav>
   </details>
 </div>
@@ -5974,6 +5975,12 @@ with _v12_nav_cols[2]:
         st.rerun()
 
 st.session_state.setdefault("v12_view", "create")
+
+# The floating quick menu is plain HTML, so use a one-shot URL flag to enter
+# the Streamlit-rendered library view, then remove it so normal navigation works.
+if str(st.query_params.get("v12_view", "") or "") == "library":
+    st.session_state["v12_view"] = "library"
+    del st.query_params["v12_view"]
 
 if st.session_state["v12_view"] == "pricing":
     _v12_render_pricing_page()

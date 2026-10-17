@@ -13,6 +13,10 @@ _ZH = {
     "nav_create": "✨ 開始製作",
     "nav_pricing": "💳 購買方案",
     "nav_library": "📚 我的作品",
+    "quick_nav_menu": "創作步驟快捷選單", "quick_nav_open": "開啟創作步驟快捷選單",
+    "quick_nav_library": "作品<br>集", "quick_nav_library_title": "作品集",
+    "quick_nav_01": "人物", "quick_nav_02": "風格", "quick_nav_03": "特色", "quick_nav_04": "文字",
+    "quick_nav_05": "背景", "quick_nav_06": "生成", "quick_nav_07": "成果", "quick_nav_08": "裁切",
     "main_title": "🎨 LINE 貼圖創作室",
     "login_title": "✨ 會員 Beta",
     "login_trial": "初次登入會員有 2 次體驗額度。",
@@ -91,6 +95,10 @@ _ZH = {
 
 _EN = {
     "language": "Language", "nav_contact": "💬 Contact", "nav_create": "✨ Create Stickers", "nav_pricing": "💳 Plans", "nav_library": "📚 My Works",
+    "quick_nav_menu": "Creation-step shortcuts", "quick_nav_open": "Open creation-step shortcuts",
+    "quick_nav_library": "My<br>Works", "quick_nav_library_title": "My Works",
+    "quick_nav_01": "Photo", "quick_nav_02": "Style", "quick_nav_03": "Traits", "quick_nav_04": "Text",
+    "quick_nav_05": "Scene", "quick_nav_06": "Make", "quick_nav_07": "Results", "quick_nav_08": "Crop",
     "main_title": "🎨 LINE Sticker Studio", "login_title": "✨ Member Beta", "login_trial": "New members receive 2 trial generations.",
     "login_google": "Sign in with Google", "login_expiry": "This sign-in link is valid for 10 minutes and will return you here when complete.",
     "login_required": "⚠️ Please sign in with Google to use your Member Beta allowance.",
@@ -138,6 +146,10 @@ _EN = {
 
 _JA = {
     "language": "言語", "nav_contact": "💬 お問い合わせ", "nav_create": "✨ ステッカーを作る", "nav_pricing": "💳 プラン", "nav_library": "📚 マイ作品",
+    "quick_nav_menu": "制作手順ショートカット", "quick_nav_open": "制作手順ショートカットを開く",
+    "quick_nav_library": "作品<br>集", "quick_nav_library_title": "作品集",
+    "quick_nav_01": "人物", "quick_nav_02": "画風", "quick_nav_03": "特徴", "quick_nav_04": "文字",
+    "quick_nav_05": "背景", "quick_nav_06": "生成", "quick_nav_07": "結果", "quick_nav_08": "切抜",
     "main_title": "🎨 LINE ステッカー制作室", "login_title": "✨ メンバー Beta", "login_trial": "初回ログインのメンバーには体験生成 2 回分を付与します。",
     "login_google": "Google アカウントでログイン", "login_expiry": "ログインリンクの有効期限は10分です。完了後はこのサイトに戻ります。",
     "login_required": "⚠️ メンバー Beta の利用には Google ログインが必要です。",
