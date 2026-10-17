@@ -2295,6 +2295,40 @@ def _beta_credit_balance(session):
         raise RuntimeError("beta_invalid_balance") from exc
 
 
+def _beta_effective_entitlement(session):
+    """Read the member's currently effective subscription or credit-pack rights."""
+    response = _beta_rpc(
+        "get_my_effective_entitlement", {}, access_token=session["access_token"]
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("beta_invalid_entitlement")
+    return response
+
+
+def _beta_entitlement_label(entitlement):
+    product_names = {
+        "basic_monthly": "基本方案",
+        "standard_monthly": "標準方案",
+        "advanced_monthly": "進階方案",
+        "credit_pack_7": "7 點點數包",
+    }
+    kind = str(entitlement.get("entitlement_kind", "free") or "free")
+    product_name = product_names.get(
+        str(entitlement.get("product_code", "") or ""), "會員體驗"
+    )
+    if kind == "subscription":
+        prefix = "目前訂閱方案"
+    elif kind == "credit_pack":
+        prefix = "目前使用"
+    else:
+        return "目前權益：免費體驗"
+    expires_at = str(entitlement.get("expires_at", "") or "")[:10]
+    expiry_text = f"｜權益至 {expires_at}" if expires_at else ""
+    return f"{prefix}：{product_name}{expiry_text}"
+
+
 def _beta_reserve_generation(session):
     response = _beta_rpc(
         "reserve_generation_credit",
@@ -2608,6 +2642,10 @@ def _beta_render_account_panel():
         with refresh_balance_col:
             if st.button("刷新次數", key="beta_refresh_credit_balance", use_container_width=True):
                 _beta_clear_cached_copy_usage_status()
+        try:
+            st.caption(f"📋 {_beta_entitlement_label(_beta_effective_entitlement(session))}")
+        except Exception:
+            st.caption("📋 目前方案暫時無法讀取。")
         try:
             copy_status = _beta_copy_usage_status_cached(session)
             st.caption(
