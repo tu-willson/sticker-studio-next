@@ -15,6 +15,7 @@ import urllib.request
 import urllib.error
 import urllib.parse
 import secrets
+import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from i18n import LANGUAGES, tr
 
@@ -39,7 +40,7 @@ def _v12_pricing_rules_markdown():
     """Public checkout rules, kept separate so they can be fully localized."""
     locale = _v12_ui_locale()
     if locale == "en":
-        return """
+        return textwrap.dedent("""
         - Each successfully generated **4×2 original sticker grid** uses **1 image generation**. Failed generations do not use a generation.
         - The AI Ideas allowance resets daily in Taiwan time and is separate from image generations.
         - A one-time generation pack does not renew automatically and is valid for 30 days.
@@ -52,9 +53,9 @@ def _v12_pricing_rules_markdown():
         > **Example:** For a May 10–June 9 cycle, cancelling on May 20 keeps your generation, AI Ideas, and library benefits until June 9. There is no renewal charge or new allowance on June 10.
 
         - Each project can save up to 40 selected stickers; MAIN/TAB export images do not count. ZIP files are not stored and can be created again after loading the project back into the studio.
-        """
+        """).strip()
     if locale == "ja":
-        return """
+        return textwrap.dedent("""
         - **4×2 の元ステッカー総画像**を1回正常に生成すると、画像生成回数を **1回** 使用します。生成失敗時は回数を消費しません。
         - AIアイデアの利用枠は台湾時間で毎日計算され、画像生成回数とは別に管理されます。
         - 単発の生成パックは自動更新されず、購入後30日間有効です。
@@ -67,8 +68,8 @@ def _v12_pricing_rules_markdown():
         > **例：**5月10日から6月9日までの期間に5月20日に解約した場合、6月9日までは画像生成、AIアイデア、作品庫の特典を利用できます。6月10日に更新請求や新しい利用枠の追加はありません。
 
         - 1作品につき選択したステッカーを最大40枚保存できます。MAIN／TABの書き出し画像は上限に含まれません。ZIPは保存されず、作品を制作ページへ読み戻して再作成できます。
-        """
-    return """
+        """).strip()
+    return textwrap.dedent("""
     - 每次成功生成 1 張 **4×2 原始貼圖總圖**，扣除 1 次圖片生成次數；生成失敗不扣次數。
     - AI幫想額度按台灣時間每日計算，與圖片生成次數分開計算。
     - 訂閱方案每月自付款成功日生效；未使用的訂閱生成次數可保留至下一個帳務週期結束，系統優先使用最早到期的次數。
@@ -81,7 +82,7 @@ def _v12_pricing_rules_markdown():
     > **例子：**你的訂閱週期是 5 月 10 日至 6 月 9 日；若在 5 月 20 日取消，仍可使用當期的圖片生成次數、AI幫想額度與作品庫權益至 6 月 9 日。6 月 10 日起不會再扣款，也不會發放新一期的方案額度。
 
     - 每組作品最多保存 40 張已選貼圖；MAIN／TAB 規格圖不計入上限。ZIP 檔不會保存，可載回創作頁後重新下載。
-    """
+    """).strip()
 
 
 def _v12_member_rules_markdown():
