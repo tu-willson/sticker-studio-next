@@ -35,7 +35,7 @@ begin
   delete from public.oauth_login_states where expires_at < now();
 
   insert into public.oauth_login_states (state_digest, code_verifier, expires_at)
-  values (p_state_digest, p_code_verifier, now() + interval '10 minutes');
+  values (p_state_digest, p_code_verifier, now() + interval '24 hours');
 end;
 $$;
 
