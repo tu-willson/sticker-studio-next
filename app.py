@@ -6028,7 +6028,6 @@ if st.session_state["v12_view"] == "library":
 
     if not _projects:
         st.info("📭 目前還沒有保存的作品")
-        st.caption("完成「裁切＋製作貼圖檔案＋一鍵打包」後，作品會自動出現在這裡。")
     else:
         for _idx, _project in enumerate(_projects):
             _pid = str(_project.get("project_id", _idx))
@@ -6102,7 +6101,6 @@ if st.session_state["v12_view"] == "library":
 
             st.divider()
 
-    st.caption(f"本機暫存最多 {V12_HISTORY_LIMIT} 組；不保存 API Key，也不寫入網站每日 AI 額度資料。")
     st.stop()
 
 
