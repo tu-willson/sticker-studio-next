@@ -6156,7 +6156,7 @@ _style_preset_col, _style_reference_col = st.columns(2)
 with _style_preset_col:
     st.button(
         ("✓ " if _style_source_mode == V12_STYLE_PRESET_MODE else "")
-        + V12_STYLE_PRESET_MODE,
+        + t("style_preset_mode"),
         key="v12_select_style_preset_mode",
         use_container_width=True,
         type="primary" if _style_source_mode == V12_STYLE_PRESET_MODE else "secondary",
@@ -6166,7 +6166,7 @@ with _style_preset_col:
 with _style_reference_col:
     st.button(
         ("✓ " if _style_source_mode == V12_STYLE_REFERENCE_MODE else "")
-        + V12_STYLE_REFERENCE_MODE,
+        + t("style_reference_mode"),
         key="v12_select_style_reference_mode",
         use_container_width=True,
         type="primary" if _style_source_mode == V12_STYLE_REFERENCE_MODE else "secondary",
@@ -6397,7 +6397,7 @@ _mode_text_col, _mode_expression_col = st.columns(2)
 with _mode_text_col:
     st.button(
         ("✓ " if _sticker_content_choice == V12_STICKER_TEXT_MODE else "")
-        + V12_STICKER_TEXT_MODE,
+        + t("content_text_mode"),
         key="v12_select_text_sticker_mode",
         use_container_width=True,
         type="primary" if _sticker_content_choice == V12_STICKER_TEXT_MODE else "secondary",
@@ -6407,7 +6407,7 @@ with _mode_text_col:
 with _mode_expression_col:
     st.button(
         ("✓ " if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "")
-        + V12_STICKER_EXPRESSION_MODE,
+        + t("content_expression_mode"),
         key="v12_select_expression_sticker_mode",
         use_container_width=True,
         type="primary" if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "secondary",
@@ -6416,10 +6416,10 @@ with _mode_expression_col:
     )
 _sticker_mode = _v12_sticker_mode_value(_sticker_content_choice)
 if _sticker_mode == "text":
-    v12_mode_panel_heading('使用「✨ 主題 AI 幫想」或「🎲 隨機用語」', '#3498db')
+    v12_mode_panel_heading(t("text_source_heading"), '#3498db')
     st.caption("先選擇你想使用的文字來源；01～08 文字格會一直保留顯示。")
 else:
-    v12_mode_panel_heading("😶 使用表情貼圖（無文字）", "#3498db")
+    v12_mode_panel_heading(t("expression_heading"), "#3498db")
     st.caption("每格都不會出現文字；AI 會優先呈現臉部與上半身特寫，讓情緒一眼可辨。")
 
 # V12｜文字來源面板：只有使用者主動點選後，才展開對應功能，
