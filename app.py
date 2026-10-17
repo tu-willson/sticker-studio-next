@@ -6722,6 +6722,18 @@ if st.session_state.generated_4x2_bytes:
             st.error(f"加入暫存作品籃失敗：{error}")
     st.caption("暫存作品籃只保留在目前瀏覽工作階段；可累積不限張數，最後才會下載 ZIP。")
     _v12_render_sticker_basket_workspace()
+    _basket_library_col = st.columns([1, 2, 1])[1]
+    with _basket_library_col:
+        if st.button(
+            "📚 前往我的作品",
+            key="v12_basket_library",
+            type="primary",
+            use_container_width=True,
+        ):
+            _public02a_sync_style_bank_from_widgets()
+            _save_v10_presets()
+            st.session_state["v12_view"] = "library"
+            st.rerun()
 
     # 舊版 01～08 立即打包區保留在原始碼中作為回溯參考，但不再執行。
     # 新版以暫存作品籃作為唯一的裁切後工作流程。
