@@ -3703,6 +3703,12 @@ def _v12_load_history_record(record):
         st.session_state[f"v12_sticker_action_prompt_widget_{i}"] = action_prompt
         st.session_state[f"v12_sticker_action_enabled_{i}"] = bool(action_prompt)
         st.session_state[f"v12_sticker_action_enabled_widget_{i}"] = bool(action_prompt)
+    st.session_state["v12_sticker_action_draft"] = [
+        {"enabled": bool(action_prompt), "prompt": action_prompt}
+        for action_prompt in _v12_normalize_sticker_action_prompts(
+            metadata.get("sticker_action_prompts", [])
+        )
+    ]
 
     _v12_clear_text_color_segments()
     for item in metadata.get("sticker_color_segments", []) or []:
@@ -3990,40 +3996,90 @@ def _v12_clear_text_color_segments():
             st.session_state.pop(f"v12_text_color_segment_{i}_{j}", None)
 
 
+def _v12_action_draft():
+    """Persistent action draft, deliberately independent from conditional widgets."""
+    raw = st.session_state.get("v12_sticker_action_draft")
+    raw = raw if isinstance(raw, list) else []
+    normalized = []
+    for i in range(8):
+        item = raw[i] if i < len(raw) and isinstance(raw[i], dict) else {}
+        normalized.append({
+            "enabled": bool(item.get(
+                "enabled", st.session_state.get(f"v12_sticker_action_enabled_{i}", False)
+            )),
+            "prompt": str(item.get(
+                "prompt", st.session_state.get(f"v12_sticker_action_prompt_{i}", "")
+            ) or "").strip()[:500],
+        })
+    st.session_state["v12_sticker_action_draft"] = normalized
+    return normalized
+
+
+def _v12_write_sticker_action_draft_slot(i, enabled=None, prompt=None):
+    draft = _v12_action_draft()
+    if 0 <= i < 8:
+        if enabled is not None:
+            draft[i]["enabled"] = bool(enabled)
+        if prompt is not None:
+            draft[i]["prompt"] = str(prompt or "").strip()[:500]
+        st.session_state[f"v12_sticker_action_enabled_{i}"] = bool(draft[i]["enabled"])
+        st.session_state[f"v12_sticker_action_prompt_{i}"] = str(draft[i]["prompt"])
+    st.session_state["v12_sticker_action_draft"] = draft
+
+
+def _v12_capture_sticker_action_draft():
+    """Capture visible widgets before their text-mode branch disappears."""
+    for i in range(8):
+        draft = _v12_action_draft()[i]
+        enabled = st.session_state.get(
+            f"v12_sticker_action_enabled_widget_{i}", draft["enabled"]
+        )
+        prompt = st.session_state.get(
+            f"v12_sticker_action_prompt_widget_{i}", draft["prompt"]
+        )
+        _v12_write_sticker_action_draft_slot(i, enabled=enabled, prompt=prompt)
+
+
+def _v12_restore_sticker_action_widgets():
+    """Restore widget values from the persistent draft before text widgets render."""
+    for i, item in enumerate(_v12_action_draft()):
+        enabled = bool(item["enabled"])
+        prompt = str(item["prompt"])
+        st.session_state[f"v12_sticker_action_enabled_{i}"] = enabled
+        st.session_state[f"v12_sticker_action_prompt_{i}"] = prompt
+        st.session_state[f"v12_sticker_action_enabled_widget_{i}"] = enabled
+        st.session_state[f"v12_sticker_action_prompt_widget_{i}"] = prompt
+
+
 def _v12_sync_sticker_action_enabled(i):
-    st.session_state[f"v12_sticker_action_enabled_{i}"] = bool(
-        st.session_state.get(f"v12_sticker_action_enabled_widget_{i}", False)
+    _v12_write_sticker_action_draft_slot(
+        i,
+        enabled=st.session_state.get(f"v12_sticker_action_enabled_widget_{i}", False),
     )
 
 
 def _v12_sync_sticker_action_prompt(i):
-    st.session_state[f"v12_sticker_action_prompt_{i}"] = str(
-        st.session_state.get(f"v12_sticker_action_prompt_widget_{i}", "") or ""
-    ).strip()[:500]
+    _v12_write_sticker_action_draft_slot(
+        i,
+        prompt=st.session_state.get(f"v12_sticker_action_prompt_widget_{i}", ""),
+    )
 
 
 def _v12_init_sticker_action_state():
-    for i in range(8):
-        canonical_enabled = f"v12_sticker_action_enabled_{i}"
-        widget_enabled = f"v12_sticker_action_enabled_widget_{i}"
-        canonical_prompt = f"v12_sticker_action_prompt_{i}"
-        widget_prompt = f"v12_sticker_action_prompt_widget_{i}"
-        st.session_state.setdefault(canonical_enabled, False)
-        st.session_state.setdefault(widget_enabled, bool(st.session_state[canonical_enabled]))
-        st.session_state.setdefault(canonical_prompt, "")
-        st.session_state.setdefault(widget_prompt, st.session_state[canonical_prompt])
+    _v12_action_draft()
+    for i, item in enumerate(_v12_action_draft()):
+        st.session_state.setdefault(f"v12_sticker_action_enabled_{i}", bool(item["enabled"]))
+        st.session_state.setdefault(f"v12_sticker_action_prompt_{i}", str(item["prompt"]))
 
 
 def _v12_get_sticker_action_prompts():
-    return [
-        str(st.session_state.get(f"v12_sticker_action_prompt_{i}", "") or "").strip()[:500]
-        if st.session_state.get(f"v12_sticker_action_enabled_{i}", False)
-        else ""
-        for i in range(8)
-    ]
+    return [item["prompt"] if item["enabled"] else "" for item in _v12_action_draft()]
 
 
 def _v12_clear_sticker_action_prompts():
+    st.session_state["v12_sticker_action_draft"] = [
+        {"enabled": False, "prompt": ""} for _ in range(8)
+    ]
     for i in range(8):
         st.session_state[f"v12_sticker_action_enabled_{i}"] = False
         st.session_state[f"v12_sticker_action_enabled_widget_{i}"] = False
@@ -5381,12 +5437,11 @@ v10_section("💬 ④ 貼圖類型", "#3498db")
 st.caption("選擇這組貼圖要使用文字，或以人物表情特寫呈現。")
 
 def _v12_set_sticker_content_mode(mode):
-    # 切換到表情模式前，先把條件式文字區塊目前的值寫回獨立狀態；
-    # 否則 Streamlit 在隱藏該區塊後會清除 widget key。
+    # 切換模式前後都以獨立草稿保存／回填，不依賴條件式 widget state。
     if mode == V12_STICKER_EXPRESSION_MODE:
-        for i in range(8):
-            _v12_sync_sticker_action_enabled(i)
-            _v12_sync_sticker_action_prompt(i)
+        _v12_capture_sticker_action_draft()
+    elif mode == V12_STICKER_TEXT_MODE:
+        _v12_restore_sticker_action_widgets()
     st.session_state["v12_sticker_content_mode"] = mode
 
 
@@ -5503,9 +5558,10 @@ def _v12_render_text_slot(i):
     )
 
     _action_enabled_widget_key = f"v12_sticker_action_enabled_widget_{i}"
+    _action_draft_item = _v12_action_draft()[i]
     st.session_state.setdefault(
         _action_enabled_widget_key,
-        bool(st.session_state.get(f"v12_sticker_action_enabled_{i}", False)),
+        bool(_action_draft_item["enabled"]),
     )
     _action_enabled = st.checkbox(
         "🎬 啟用動作指令",
@@ -5513,12 +5569,12 @@ def _v12_render_text_slot(i):
         on_change=_v12_sync_sticker_action_enabled,
         args=(i,),
     )
-    st.session_state[f"v12_sticker_action_enabled_{i}"] = bool(_action_enabled)
+    _v12_write_sticker_action_draft_slot(i, enabled=_action_enabled)
     if _action_enabled:
         _action_prompt_widget_key = f"v12_sticker_action_prompt_widget_{i}"
         st.session_state.setdefault(
             _action_prompt_widget_key,
-            str(st.session_state.get(f"v12_sticker_action_prompt_{i}", "") or ""),
+            str(_action_draft_item["prompt"] or ""),
         )
         st.text_input(
             "輸入希望動作指令",
@@ -5528,9 +5584,10 @@ def _v12_render_text_slot(i):
             placeholder="例如：雙手抱頭後退、指著文字大笑、比出勝利手勢",
             max_chars=500,
         )
-        st.session_state[f"v12_sticker_action_prompt_{i}"] = str(
-            st.session_state.get(_action_prompt_widget_key, "") or ""
-        ).strip()[:500]
+        _v12_write_sticker_action_draft_slot(
+            i,
+            prompt=st.session_state.get(_action_prompt_widget_key, ""),
+        )
 
     _color_enabled_widget_key = f"v12_text_color_enabled_widget_{i}"
     _color_enabled = st.checkbox(
