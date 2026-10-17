@@ -2416,6 +2416,8 @@ def _v12_clean_character_features(value):
 
 V12_STICKER_TEXT_MODE = "💬 使用文字貼圖"
 V12_STICKER_EXPRESSION_MODE = "😶 使用表情貼圖（無文字）"
+V12_STYLE_PRESET_MODE = "貼圖風格快選"
+V12_STYLE_REFERENCE_MODE = "畫風參考上傳"
 V12_EXPRESSION_EFFECTS = [
     "無額外特效（專注表情特寫）",
     "漫畫速度線",
@@ -2432,19 +2434,6 @@ V12_EXPRESSION_EFFECTS = [
     "聚光燈",
     "幽靈半透明",
 ]
-
-# 畫風圖通常只能讓模型辨識整體氣氛；這組可選項把使用者想要的
-# 「代表性元素」轉成明確、可套用到人物本身的生成指令。
-V12_STYLE_REFERENCE_ELEMENT_PROMPTS = {
-    "重複圓點／幾何紋樣": "將參考圖的重複圓點或幾何紋樣，明確套用在人物服裝、配件或身體局部；不要只放在背景。",
-    "粗黑輪廓線": "以明顯、手繪感的粗黑輪廓線勾勒人物、表情與手勢，讓線條成為角色設計的一部分。",
-    "半色調網點": "在人物的陰影、腮紅或局部色塊採用可見但不遮臉的半色調網點質感。",
-    "水彩暈染": "將水彩般的顏色暈染、邊緣滲色與手繪筆觸融入人物本身，而不是另外畫成背景。",
-    "金屬／箔面質感": "在服裝、飾品或局部色塊融入參考圖的金屬、箔面或反光質感；保持插畫感，不要變成寫實照片。",
-    "蠟筆／粉蠟筆筆觸": "在人物的上色與輪廓中使用明顯蠟筆或粉蠟筆的顆粒筆觸。",
-    "拼貼紙材質": "讓人物服裝、髮飾或局部色塊呈現手作剪貼紙張的邊緣與層次，不要只把拼貼放在背景。",
-}
-V12_STYLE_REFERENCE_ELEMENT_OPTIONS = list(V12_STYLE_REFERENCE_ELEMENT_PROMPTS)
 
 # 「隨機」不是交由模型任意猜測，而是先在網站端抽出具體配方。
 # 每個配方另有臉部、動作與鏡頭的變化池；即使新一輪再次抽到同一配方，
@@ -2965,19 +2954,9 @@ def _v12_normalize_project_metadata(metadata):
     )
     if style_reference_strength not in {"柔和融入", "明顯融入", "強烈融入"}:
         style_reference_strength = "明顯融入"
-    raw_style_reference_elements = data.get(
-        "style_reference_elements", creative.get("style_reference_elements", [])
-    )
-    if not isinstance(raw_style_reference_elements, list):
-        raw_style_reference_elements = []
-    style_reference_elements = [
-        item for item in V12_STYLE_REFERENCE_ELEMENT_OPTIONS
-        if item in {str(value).strip() for value in raw_style_reference_elements}
-    ]
-    style_reference_elements_enabled = bool(data.get(
-        "style_reference_elements_enabled",
-        creative.get("style_reference_elements_enabled", bool(style_reference_elements)),
-    ))
+    # V12｜畫風參考改為單一自訂說明，不再保存已移除的多選元素。
+    style_reference_elements = []
+    style_reference_elements_enabled = False
     style_reference_custom_elements = str(data.get(
         "style_reference_custom_elements",
         creative.get("style_reference_custom_elements", ""),
@@ -3361,9 +3340,15 @@ def _v12_render_sticker_basket_workspace():
     else:
         st.caption("登入會員後可選擇同步保存到雲端「我的作品」。未勾選時，作品僅暫存於本次瀏覽。")
 
+    _active_style_reference_for_save = (
+        st.session_state.get("v12_style_source_mode") == V12_STYLE_REFERENCE_MODE
+    )
     has_creation_materials = bool(
         st.session_state.get("uploaded_image_bytes")
-        or st.session_state.get("v12_style_reference_image_bytes")
+        or (
+            _active_style_reference_for_save
+            and st.session_state.get("v12_style_reference_image_bytes")
+        )
     )
     save_creation_materials = st.checkbox(
         "🔒 同時保存私人創作素材（人物照片／畫風參考），方便下次繼續製作",
@@ -3416,7 +3401,7 @@ def _v12_render_sticker_basket_workspace():
                 source_photo_bytes=st.session_state.get("uploaded_image_bytes") or b"",
                 style_reference_bytes=(
                     st.session_state.get("v12_style_reference_image_bytes") or b""
-                ),
+                ) if _active_style_reference_for_save else b"",
             )
             history_record["cloud_main_asset_index"] = next(
                 index for index, item in enumerate(selected, start=1)
@@ -3572,17 +3557,15 @@ def _v12_load_history_record(record):
     else:
         st.session_state["v12_style_reference_filename"] = ""
         st.session_state["v12_style_reference_fingerprint"] = ""
+    st.session_state["v12_style_source_mode"] = (
+        V12_STYLE_REFERENCE_MODE if style_reference else V12_STYLE_PRESET_MODE
+    )
 
     st.session_state["v12_style_reference_strength"] = str(
         metadata.get("style_reference_strength", "明顯融入") or "明顯融入"
     )
-    st.session_state["v12_style_reference_elements_enabled"] = bool(
-        metadata.get("style_reference_elements_enabled", False)
-    )
-    st.session_state["v12_style_reference_elements"] = [
-        item for item in V12_STYLE_REFERENCE_ELEMENT_OPTIONS
-        if item in set(metadata.get("style_reference_elements", []) or [])
-    ]
+    st.session_state["v12_style_reference_elements_enabled"] = False
+    st.session_state["v12_style_reference_elements"] = []
     st.session_state["v12_style_reference_custom_elements"] = str(
         metadata.get("style_reference_custom_elements", "") or ""
     )
@@ -3764,13 +3747,8 @@ def _v12_project_snapshot():
     project["style_reference_strength"] = str(
         st.session_state.get("v12_style_reference_strength", "明顯融入")
     )
-    project["style_reference_elements_enabled"] = bool(
-        st.session_state.get("v12_style_reference_elements_enabled", False)
-    )
-    project["style_reference_elements"] = [
-        item for item in V12_STYLE_REFERENCE_ELEMENT_OPTIONS
-        if item in set(st.session_state.get("v12_style_reference_elements", []) or [])
-    ]
+    project["style_reference_elements_enabled"] = False
+    project["style_reference_elements"] = []
     project["style_reference_custom_elements"] = str(
         st.session_state.get("v12_style_reference_custom_elements", "") or ""
     ).strip()[:1200]
@@ -3838,6 +3816,7 @@ st.session_state.setdefault("uploaded_image_bytes", None)
 st.session_state.setdefault("v12_style_reference_image_bytes", None)
 st.session_state.setdefault("v12_style_reference_filename", "")
 st.session_state.setdefault("v12_style_reference_fingerprint", "")
+st.session_state.setdefault("v12_style_source_mode", V12_STYLE_PRESET_MODE)
 st.session_state.setdefault("v12_expression_used_recipe_ids", [])
 st.session_state.setdefault("v12_expression_used_visual_pack_ids", [])
 st.session_state.setdefault("v12_expression_last_recipe_labels", [])
@@ -4690,10 +4669,16 @@ def _v12_set_style_reference_from_upload(uploaded_file):
 
 
 def _v12_style_reference_upload_changed():
-    """A new reference takes precedence over the selected preset style."""
+    """Keep the active reference in sync with its upload control."""
     if st.session_state.get("v12_style_reference_upload") is not None:
+        st.session_state["v12_style_source_mode"] = V12_STYLE_REFERENCE_MODE
         st.session_state["v10_style_mode"] = "↓ 請選擇風格"
         st.session_state.pop("v12_loaded_project_custom_style", None)
+    else:
+        # This callback is only invoked when the user clears the uploader.
+        st.session_state["v12_style_reference_image_bytes"] = None
+        st.session_state["v12_style_reference_filename"] = ""
+        st.session_state["v12_style_reference_fingerprint"] = ""
 
 # ------------------------------------------------------------
 # UI
@@ -5100,214 +5085,184 @@ st.divider()
 V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
 
 v10_section("🎨 ② 貼圖風格", "#ff9f43")
-st.caption("🌈 預設風格與「自定義風格」二選一。選擇自定義後，才會出現可套用的 10 組儲存風格。")
+st.caption("先選擇一種風格設定方式，再展開對應的設定內容；兩種方式不會同時套用。")
+st.session_state.setdefault("v12_style_source_mode", V12_STYLE_PRESET_MODE)
+
+def _v12_set_style_source_mode(mode):
+    st.session_state["v12_style_source_mode"] = mode
+    if mode == V12_STYLE_REFERENCE_MODE:
+        st.session_state["v10_style_mode"] = "↓ 請選擇風格"
+        st.session_state.pop("v12_loaded_project_custom_style", None)
+
+
+_style_source_mode = str(st.session_state.get(
+    "v12_style_source_mode", V12_STYLE_PRESET_MODE
+))
+if _style_source_mode not in {V12_STYLE_PRESET_MODE, V12_STYLE_REFERENCE_MODE}:
+    _style_source_mode = V12_STYLE_PRESET_MODE
+    st.session_state["v12_style_source_mode"] = _style_source_mode
+
+_style_preset_col, _style_reference_col = st.columns(2)
+with _style_preset_col:
+    st.button(
+        ("✓ " if _style_source_mode == V12_STYLE_PRESET_MODE else "")
+        + V12_STYLE_PRESET_MODE,
+        key="v12_select_style_preset_mode",
+        use_container_width=True,
+        type="primary" if _style_source_mode == V12_STYLE_PRESET_MODE else "secondary",
+        on_click=_v12_set_style_source_mode,
+        args=(V12_STYLE_PRESET_MODE,),
+    )
+with _style_reference_col:
+    st.button(
+        ("✓ " if _style_source_mode == V12_STYLE_REFERENCE_MODE else "")
+        + V12_STYLE_REFERENCE_MODE,
+        key="v12_select_style_reference_mode",
+        use_container_width=True,
+        type="primary" if _style_source_mode == V12_STYLE_REFERENCE_MODE else "secondary",
+        on_click=_v12_set_style_source_mode,
+        args=(V12_STYLE_REFERENCE_MODE,),
+    )
 
 # 自定義風格放在第 2 個位置，方便快速選擇。
-_v8_style_items=[x for x in V8_STYLES if not x.startswith("⭐ 自訂")]
-_style_options=["↓ 請選擇風格", "⭐ 自定義風格"] + _v8_style_items
+_v8_style_items = [x for x in V8_STYLES if not x.startswith("⭐ 自訂")]
+_style_options = ["↓ 請選擇風格", "⭐ 自定義風格"] + _v8_style_items
+style_mode = str(st.session_state.get("v10_style_mode", "↓ 請選擇風格"))
+style = style_mode
+custom_style = ""
+_style_reference_active = False
 
-style_mode=st.selectbox(
-    "🌈 貼圖風格",
-    _style_options,
-    key="v10_style_mode",
-)
-
-if style_mode=="⭐ 自定義風格":
-    style="↓ 請選擇風格"
-    st.success("✨ 已切換到「自定義風格」模式")
-
-    # V12 REFACTOR｜Style Bank is the only source of truth.
-    _style_bank = _public02a_get_style_bank()
-    _custom_style_slots = [
-        (_i, str(_style_bank[str(_i)]["name"]).strip() or f"使用者自定{_i}",
-         str(_style_bank[str(_i)]["prompt"]).strip())
-        for _i in range(1, 11)
-        if str(_style_bank[str(_i)]["prompt"]).strip()
-    ]
-
-    _saved_labels = ["↓ 請選擇已儲存風格"] + [
-        f"{i:02d}｜{name}" for i, name, _ in _custom_style_slots
-    ]
-    _saved_choice = st.selectbox(
-        "💾 選擇已儲存的自定義風格",
-        _saved_labels,
-        key="v12_saved_custom_style_choice",
+if _style_source_mode == V12_STYLE_PRESET_MODE:
+    st.caption("🌈 選擇預設風格，或改用你已保存的自定義風格。")
+    style_mode = st.selectbox(
+        "🌈 貼圖風格",
+        _style_options,
+        key="v10_style_mode",
     )
 
-    custom_style = ""
-    if _saved_choice != "↓ 請選擇已儲存風格":
-        # 使用者主動選擇清單中的風格時，改用目前儲存版本。
-        st.session_state.pop("v12_loaded_project_custom_style", None)
-        _pos = _saved_labels.index(_saved_choice) - 1
-        custom_style = _custom_style_slots[_pos][2]
-        st.info(f"💾 已套用：{_custom_style_slots[_pos][0]:02d}｜{_custom_style_slots[_pos][1]}")
-    else:
-        _loaded_project_style = st.session_state.get("v12_loaded_project_custom_style")
-        _draft_style_prompt = str(
-            st.session_state.get("v12_style_editor_prompt", "") or ""
-        ).strip()
-        if (
-            isinstance(_loaded_project_style, dict)
-            and str(_loaded_project_style.get("prompt", "") or "").strip()
-        ):
-            custom_style = str(_loaded_project_style.get("prompt", "") or "").strip()
-            _loaded_style_name = str(_loaded_project_style.get("name", "") or "").strip()
-            st.info(
-                "📦 已載入作品當時的自定義風格"
-                + (f"：{_loaded_style_name}" if _loaded_style_name else "")
-            )
-        elif _draft_style_prompt:
-            # 草稿不必先存進個人風格庫，也能用於這次作品並一起保存。
-            custom_style = _draft_style_prompt
-            st.info("✏️ 正在使用尚未儲存的自定義風格草稿。")
+    if style_mode == "⭐ 自定義風格":
+        style = "↓ 請選擇風格"
+        st.success("✨ 已切換到「自定義風格」模式")
+        _style_bank = _public02a_get_style_bank()
+        _custom_style_slots = [
+            (_i, str(_style_bank[str(_i)]["name"]).strip() or f"使用者自定{_i}",
+             str(_style_bank[str(_i)]["prompt"]).strip())
+            for _i in range(1, 11)
+            if str(_style_bank[str(_i)]["prompt"]).strip()
+        ]
+        _saved_labels = ["↓ 請選擇已儲存風格"] + [
+            f"{i:02d}｜{name}" for i, name, _ in _custom_style_slots
+        ]
+        _saved_choice = st.selectbox(
+            "💾 選擇已儲存的自定義風格",
+            _saved_labels,
+            key="v12_saved_custom_style_choice",
+        )
+        if _saved_choice != "↓ 請選擇已儲存風格":
+            st.session_state.pop("v12_loaded_project_custom_style", None)
+            _pos = _saved_labels.index(_saved_choice) - 1
+            custom_style = _custom_style_slots[_pos][2]
+            st.info(f"💾 已套用：{_custom_style_slots[_pos][0]:02d}｜{_custom_style_slots[_pos][1]}")
         else:
-            st.info("👆 請選擇一個已儲存風格；或先在下方建立新的風格。")
+            _loaded_project_style = st.session_state.get("v12_loaded_project_custom_style")
+            _draft_style_prompt = str(st.session_state.get("v12_style_editor_prompt", "") or "").strip()
+            if isinstance(_loaded_project_style, dict) and str(_loaded_project_style.get("prompt", "") or "").strip():
+                custom_style = str(_loaded_project_style.get("prompt", "") or "").strip()
+                _loaded_style_name = str(_loaded_project_style.get("name", "") or "").strip()
+                st.info("📦 已載入作品當時的自定義風格" + (f"：{_loaded_style_name}" if _loaded_style_name else ""))
+            elif _draft_style_prompt:
+                custom_style = _draft_style_prompt
+                st.info("✏️ 正在使用尚未儲存的自定義風格草稿。")
+            else:
+                st.info("👆 請選擇一個已儲存風格；或先在下方建立新的風格。")
 
-    # Single fixed editor: only two text widgets are ever used.
-    with st.expander("✏️ 管理我的自定義風格", expanded=False):
-        st.caption("選擇 01～10 的一個位置進行編輯。風格內容只儲存在 Style Bank，不依賴 10 組條件式 Widget。")
-
-        # Initialize the fixed editor before creating its widgets.
-        st.session_state.setdefault("v12_style_editor_slot", 1)
-        if (
-            "v12_style_editor_name" not in st.session_state
-            or "v12_style_editor_prompt" not in st.session_state
-        ):
-            _v12_load_style_editor_from_slot()
-
-        st.selectbox(
-            "📁 編輯哪一組風格",
-            list(range(1, 11)),
-            format_func=lambda x: f"{x:02d}｜{str(_public02a_get_style_bank()[str(x)]['name']).strip() or f'使用者自定{x}'}",
-            key="v12_style_editor_slot",
-            on_change=_v12_load_style_editor_from_slot,
-        )
-
-        st.text_input(
-            "🏷️ 風格名稱",
-            key="v12_style_editor_name",
-            placeholder="例如：童趣手繪漫畫",
-        )
-
-        st.text_area(
-            "🎨 自定義風格 Prompt",
-            key="v12_style_editor_prompt",
-            height=180,
-            placeholder="在這裡輸入完整的風格 Prompt…",
-        )
-
-        _ea, _eb = st.columns(2)
-        with _ea:
-            if st.button("💾 儲存此風格", key="v12_save_single_style", use_container_width=True):
-                _v12_save_style_editor()
-                st.success("✅ 此風格已儲存")
-                st.rerun()
-        with _eb:
-            if st.button("🧹 清空此風格", key="v12_clear_single_style", use_container_width=True):
-                try:
-                    _slot = int(st.session_state.get("v12_style_editor_slot", 1))
-                except Exception:
-                    _slot = 1
-                _bank = _public02a_get_style_bank()
-                _bank[str(_slot)] = {
-                    "name": f"使用者自定{_slot}",
-                    "prompt": "",
-                }
-                _public02a_set_style_bank(_bank)
-                _save_v10_presets()
+        with st.expander("✏️ 管理我的自定義風格", expanded=False):
+            st.caption("選擇 01～10 的一個位置進行編輯。風格內容只儲存在 Style Bank，不依賴 10 組條件式 Widget。")
+            st.session_state.setdefault("v12_style_editor_slot", 1)
+            if "v12_style_editor_name" not in st.session_state or "v12_style_editor_prompt" not in st.session_state:
                 _v12_load_style_editor_from_slot()
-                st.success("🧹 此風格已清空")
-                st.rerun()
-
-    st.warning("ℹ️ 目前只使用「自定義風格」，不會同時套用其他預設風格。")
+            st.selectbox(
+                "📁 編輯哪一組風格",
+                list(range(1, 11)),
+                format_func=lambda x: f"{x:02d}｜{str(_public02a_get_style_bank()[str(x)]['name']).strip() or f'使用者自定{x}'}",
+                key="v12_style_editor_slot",
+                on_change=_v12_load_style_editor_from_slot,
+            )
+            st.text_input("🏷️ 風格名稱", key="v12_style_editor_name", placeholder="例如：童趣手繪漫畫")
+            st.text_area("🎨 自定義風格 Prompt", key="v12_style_editor_prompt", height=180, placeholder="在這裡輸入完整的風格 Prompt…")
+            _ea, _eb = st.columns(2)
+            with _ea:
+                if st.button("💾 儲存此風格", key="v12_save_single_style", use_container_width=True):
+                    _v12_save_style_editor()
+                    st.success("✅ 此風格已儲存")
+                    st.rerun()
+            with _eb:
+                if st.button("🧹 清空此風格", key="v12_clear_single_style", use_container_width=True):
+                    try:
+                        _slot = int(st.session_state.get("v12_style_editor_slot", 1))
+                    except Exception:
+                        _slot = 1
+                    _bank = _public02a_get_style_bank()
+                    _bank[str(_slot)] = {"name": f"使用者自定{_slot}", "prompt": ""}
+                    _public02a_set_style_bank(_bank)
+                    _save_v10_presets()
+                    _v12_load_style_editor_from_slot()
+                    st.success("🧹 此風格已清空")
+                    st.rerun()
+        st.warning("ℹ️ 目前只使用「自定義風格」，不會同時套用其他預設風格。")
+    else:
+        style = style_mode
+        st.session_state.pop("v12_loaded_project_custom_style", None)
+    with st.expander("📚 查看全部預設風格", expanded=False):
+        st.write("、".join(_style_options[2:]))
 else:
-    style=style_mode
-    custom_style=""
-    st.session_state.pop("v12_loaded_project_custom_style", None)
-
-st.markdown(
-    """
-    <div style="text-align:center;margin:22px 0 4px;font-size:19px;font-weight:800;">
-        🖼️ 畫風參考
-    </div>
-    <div style="text-align:center;margin:0 0 10px;font-size:14px;opacity:.78;">
-        上傳圖檔後請勿再挑選上方貼圖風格
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-_style_reference_left, _style_reference_center, _style_reference_right = st.columns([1, 2, 1])
-with _style_reference_center:
-    _style_reference_upload = st.file_uploader(
-        "上傳參考畫風圖檔",
-        type=["jpg", "jpeg", "png", "webp"],
-        key="v12_style_reference_upload",
-        on_change=_v12_style_reference_upload_changed,
-        help="這張圖只會作為本次生成的畫風、線條、色彩與氛圍參考。",
-    )
-
-if _style_reference_upload is not None:
-    try:
-        _v12_set_style_reference_from_upload(_style_reference_upload)
-    except Exception:
-        st.session_state["v12_style_reference_image_bytes"] = None
-        st.session_state["v12_style_reference_filename"] = ""
-        st.session_state["v12_style_reference_fingerprint"] = ""
-        st.error("❌ 無法讀取這張參考畫風圖，請改用 JPG、PNG 或 WEBP。")
-elif st.session_state.get("v12_style_reference_fingerprint"):
-    # 使用者在原生上傳欄位按下清除後，不保留舊的畫風參考。
-    st.session_state["v12_style_reference_image_bytes"] = None
-    st.session_state["v12_style_reference_filename"] = ""
-    st.session_state["v12_style_reference_fingerprint"] = ""
-
-_style_reference_active = bool(st.session_state.get("v12_style_reference_image_bytes"))
-if _style_reference_active:
-    # 有畫風圖時不混用上方預設／自定義風格，避免互相拉扯。
-    style = "↓ 請選擇風格"
+    style_mode = "↓ 請選擇風格"
+    style = style_mode
     custom_style = ""
-    _reference_preview_left, _reference_preview_center, _reference_preview_right = st.columns([1, 2, 1])
-    with _reference_preview_center:
-        st.image(
-            st.session_state["v12_style_reference_image_bytes"],
-            caption=(
-                "畫風參考："
-                + str(st.session_state.get("v12_style_reference_filename", "參考圖片"))
-            ),
-            width=240,
+    st.markdown("<div style='text-align:center;margin:16px 0 6px;font-size:19px;font-weight:800;'>🖼️ 畫風參考</div>", unsafe_allow_html=True)
+    st.caption("上傳圖檔後，本次生成會以它的線條、比例、配色與視覺語言為主，不會套用貼圖風格快選。")
+    _style_reference_left, _style_reference_center, _style_reference_right = st.columns([1, 2, 1])
+    with _style_reference_center:
+        _style_reference_upload = st.file_uploader(
+            "上傳參考畫風圖檔",
+            type=["jpg", "jpeg", "png", "webp"],
+            key="v12_style_reference_upload",
+            on_change=_v12_style_reference_upload_changed,
+            help="這張圖只會作為本次生成的畫風、線條、色彩與氛圍參考。",
         )
-    st.success("✅ 已啟用畫風參考：本次生成會優先參考這張圖，不會套用上方貼圖風格。")
-    st.radio(
-        "畫風融入程度",
-        ["柔和融入", "明顯融入", "強烈融入"],
-        horizontal=True,
-        key="v12_style_reference_strength",
-        help="只改變新作品的線條、比例、配色、陰影與表情語言；不會複製參考圖中的角色、文字或單張貼圖。",
-    )
-    st.caption("建議先用「明顯融入」；若成品仍太像原照片或太寫實，再選「強烈融入」。")
-    st.markdown("#### 🎯 代表性元素套用")
-    st.caption("把畫風圖中最有辨識度的圖樣或筆觸，直接融入人物服裝、配件、輪廓或局部上色；未啟用時只做一般畫風轉譯。")
-    _style_elements_enabled = st.checkbox(
-        "將代表性元素直接套用到人物設計",
-        key="v12_style_reference_elements_enabled",
-    )
-    if _style_elements_enabled:
-        st.multiselect(
-            "選擇要套用的代表性元素（可複選）",
-            V12_STYLE_REFERENCE_ELEMENT_OPTIONS,
-            key="v12_style_reference_elements",
-            help="例如圓點要出現在人物服裝或身體局部，不能只作為背景裝飾。",
+    if _style_reference_upload is not None:
+        try:
+            _v12_set_style_reference_from_upload(_style_reference_upload)
+        except Exception:
+            st.session_state["v12_style_reference_image_bytes"] = None
+            st.session_state["v12_style_reference_filename"] = ""
+            st.session_state["v12_style_reference_fingerprint"] = ""
+            st.error("❌ 無法讀取這張參考畫風圖，請改用 JPG、PNG 或 WEBP。")
+    _style_reference_active = bool(st.session_state.get("v12_style_reference_image_bytes"))
+    if _style_reference_active:
+        _reference_preview_left, _reference_preview_center, _reference_preview_right = st.columns([1, 2, 1])
+        with _reference_preview_center:
+            st.image(
+                st.session_state["v12_style_reference_image_bytes"],
+                caption="畫風參考：" + str(st.session_state.get("v12_style_reference_filename", "參考圖片")),
+                width=240,
+            )
+        st.success("✅ 已啟用畫風參考：本次生成會優先參考這張圖，不會套用貼圖風格快選。")
+        st.radio(
+            "畫風融入程度",
+            ["柔和融入", "明顯融入", "強烈融入"],
+            horizontal=True,
+            key="v12_style_reference_strength",
+            help="只改變新作品的線條、比例、配色、陰影與表情語言；不會複製參考圖中的角色、文字或單張貼圖。",
         )
         st.text_area(
             "自訂代表性元素（選填）",
             key="v12_style_reference_custom_elements",
-            placeholder="例如：衣服與身體局部佈滿大小不一的彩色圓點，臉部保留乾淨表情。",
+            placeholder="例如：漫畫名稱風格、強調圖片上的某些特徵、保留圖片人物的神情",
             max_chars=1200,
         )
-        st.caption("💡 元素會套用在人物本身；AI 仍會創作全新角色與貼圖，不會複製參考圖中的角色、文字或版面。")
-    st.caption("若打包時同步保存並勾選「保存私人創作素材」，這張參考圖會一併保存，供日後載回續作。")
-
-with st.expander("📚 查看全部預設風格",expanded=False):
-    st.write("、".join(_style_options[2:]))
+        st.caption("💡 這段說明會直接補充給 AI，協助它把你指定的特色融入新人物；不會複製參考圖中的角色、文字或版面。")
+        st.caption("若打包時同步保存並勾選「保存私人創作素材」，這張參考圖會一併保存，供日後載回續作。")
 
 v10_section("👤 ③ 人物與畫面特色", "#2ecc71")
 st.caption("可複選；自定義人物／場景需求只有打勾才會啟用。")
@@ -6083,27 +6038,16 @@ if _style_reference_active:
         "不要直接複製參考圖中的既有角色、文字、標誌、版面或任何單一貼圖內容。"
         "不要套用其他預設或自定義貼圖風格。"
     )
-    if bool(st.session_state.get("v12_style_reference_elements_enabled", False)):
-        _style_reference_elements = [
-            item for item in V12_STYLE_REFERENCE_ELEMENT_OPTIONS
-            if item in set(st.session_state.get("v12_style_reference_elements", []) or [])
-        ]
-        _style_reference_custom_elements = str(
-            st.session_state.get("v12_style_reference_custom_elements", "") or ""
-        ).strip()
-        if _style_reference_elements or _style_reference_custom_elements:
-            prompt += (
-                "\n【代表性元素套用】除了整體畫風外，以下元素必須明確融入人物設計，"
-                "優先放在服裝、配件、輪廓、局部上色或身體表面，而不是只作為背景裝飾。"
-            )
-            for _style_element in _style_reference_elements:
-                prompt += "\n- " + V12_STYLE_REFERENCE_ELEMENT_PROMPTS[_style_element]
-            if _style_reference_custom_elements:
-                prompt += (
-                    "\n- 使用者指定的代表性元素：「"
-                    + _style_reference_custom_elements
-                    + "」。請將其轉譯為全新人物的設計語言。"
-                )
+    _style_reference_custom_elements = str(
+        st.session_state.get("v12_style_reference_custom_elements", "") or ""
+    ).strip()
+    if _style_reference_custom_elements:
+        prompt += (
+            "\n【畫風參考補充】除了整體畫風外，使用者特別希望保留或轉譯以下特色：「"
+            + _style_reference_custom_elements
+            + "」。請將其明確融入全新人物的設計、表情或局部視覺語言；"
+            "不要只當成背景裝飾，也不要直接複製參考圖中的既有角色、文字或版面。"
+        )
 elif style_mode == V8_STYLE_CUSTOM_OPTION:
     prompt += (
         "\n【V10 風格模式】目前使用「自定義風格」模式。"
