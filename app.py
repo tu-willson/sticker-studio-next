@@ -5892,7 +5892,7 @@ def _v12_render_text_slot(i):
         key=_widget_key,
         on_change=_v12_sync_sticker_text,
         args=(i,),
-        placeholder="例如：我知道你還有錢",
+        placeholder="輸入想要的文字",
     )
     # 本輪 widget 可能剛被渲染；canonical state 直接取目前 widget 值，
     # 確保後續局部上色 rerun 仍保有最新的 01～08 文字。
