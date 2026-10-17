@@ -8337,26 +8337,46 @@ def _public02a_settings_panel():
             color:#cbd5e1;
         }
 
-        /* 只控制我們自己建立的兩張功能卡片。 */
+        /* 匯出／匯入收合為兩個無色的全寬外框按鈕。 */
         div.st-key-v12_settings_export_card,
         div.st-key-v12_settings_import_card{
             width:min(620px, calc(100vw - 2rem));
             max-width:620px;
-            margin:0 auto 24px;
-            padding:20px 24px;
-            border:1px solid #394150;
-            border-radius:16px;
-            background:#1c222c;
+            margin:0 auto 14px;
+            padding:0;
             box-sizing:border-box;
         }
 
-        div.st-key-v12_settings_export_card .v12-settings-card-heading,
-        div.st-key-v12_settings_import_card .v12-settings-card-heading{
-            margin:0 0 6px;
-            text-align:center;
-            font-size:22px;
-            font-weight:800;
-            line-height:1.35;
+        div.st-key-v12_settings_export_card [data-testid="stExpander"],
+        div.st-key-v12_settings_import_card [data-testid="stExpander"]{
+            border:1px solid #4b5563 !important;
+            border-radius:12px !important;
+            background:#1c222c !important;
+            overflow:hidden;
+        }
+
+        div.st-key-v12_settings_export_card [data-testid="stExpander"] summary,
+        div.st-key-v12_settings_import_card [data-testid="stExpander"] summary{
+            min-height:52px !important;
+            display:flex !important;
+            align-items:center !important;
+            justify-content:center !important;
+            padding:0 18px !important;
+            font-size:18px !important;
+            font-weight:800 !important;
+        }
+
+        div.st-key-v12_settings_export_card [data-testid="stExpander"] summary p,
+        div.st-key-v12_settings_import_card [data-testid="stExpander"] summary p{
+            color:#ffffff !important;
+            font-size:18px !important;
+            font-weight:800 !important;
+            text-align:center !important;
+        }
+
+        div.st-key-v12_settings_export_card [data-testid="stExpanderDetails"],
+        div.st-key-v12_settings_import_card [data-testid="stExpanderDetails"]{
+            padding:0 16px 16px !important;
         }
 
         /*
@@ -8412,13 +8432,13 @@ def _public02a_settings_panel():
             div.st-key-v12_settings_export_card,
             div.st-key-v12_settings_import_card{
                 width:calc(100vw - 1.25rem);
-                padding:18px 14px;
-                border-radius:14px;
+                margin-bottom:12px;
             }
 
-            div.st-key-v12_settings_export_card .v12-settings-card-heading,
-            div.st-key-v12_settings_import_card .v12-settings-card-heading{
-                font-size:20px;
+            div.st-key-v12_settings_export_card [data-testid="stExpander"] summary,
+            div.st-key-v12_settings_import_card [data-testid="stExpander"] summary{
+                min-height:50px !important;
+                font-size:17px !important;
             }
         }
         </style>
@@ -8427,39 +8447,32 @@ def _public02a_settings_panel():
     )
 
     # ============================================================
-    # 📤 匯出卡片
+    # 📤 匯出按鈕
     # ============================================================
     with st.container(key="v12_settings_export_card"):
-        st.markdown(
-            f'<div class="v12-settings-card-heading">{t("export_custom")}</div>',
-            unsafe_allow_html=True,
-        )
-
-        st.download_button(
-            label=t("export_custom"),
-            data=export_data,
-            file_name="LINE貼圖工具_自定義設定.json",
-            mime="application/json",
-            use_container_width=True,
-            key="public02a_export_settings",
-        )
+        with st.expander(t("export_custom"), expanded=False):
+            st.download_button(
+                label=t("export_custom"),
+                data=export_data,
+                file_name="LINE貼圖工具_自定義設定.json",
+                mime="application/json",
+                use_container_width=True,
+                key="public02a_export_settings",
+            )
 
     # ============================================================
-    # 📥 匯入卡片
+    # 📥 匯入按鈕
     # ============================================================
     with st.container(key="v12_settings_import_card"):
-        st.markdown(
-            f'<div class="v12-settings-card-heading">{t("import_custom")}</div>',
-            unsafe_allow_html=True,
-        )
-
-        # 使用原生 uploader，不再對它的內部 button 做文字或定位覆蓋。
-        imported = st.file_uploader(
-            t("import_custom"),
-            type=["json"],
-            key="public02a_import_settings",
-            help=t("import_help"),
-        )
+        with st.expander(t("import_custom"), expanded=False):
+            # 使用原生 uploader，不再對它的內部 button 做文字或定位覆蓋。
+            imported = st.file_uploader(
+                t("import_custom"),
+                type=["json"],
+                key="public02a_import_settings",
+                help=t("import_help"),
+                label_visibility="collapsed",
+            )
 
     # ============================================================
     # 匯入處理邏輯：保持原有功能
