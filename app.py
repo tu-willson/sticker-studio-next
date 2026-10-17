@@ -597,6 +597,30 @@ st.markdown("""
   background:#e53e57 !important;
   border-color:#e53e57 !important;
 }
+/* 人物照與畫風參考共用醒目的粉紅色原生上傳按鈕。 */
+.st-key-v12_person_photo_upload [data-testid="stFileUploaderDropzone"] button,
+.st-key-v12_style_reference_upload [data-testid="stFileUploaderDropzone"] button{
+  min-height:42px !important;
+  padding:0 16px !important;
+  color:transparent !important;
+  background:#ff4f67 !important;
+  border-color:#ff4f67 !important;
+  border-radius:10px !important;
+  font-weight:850 !important;
+  box-shadow:0 5px 13px rgba(255,79,103,.24) !important;
+}
+.st-key-v12_person_photo_upload [data-testid="stFileUploaderDropzone"] button::after,
+.st-key-v12_style_reference_upload [data-testid="stFileUploaderDropzone"] button::after{
+  content:"上傳";
+  color:#fff;
+  font-size:1rem;
+  font-weight:850;
+}
+.st-key-v12_person_photo_upload [data-testid="stFileUploaderDropzone"] button:hover,
+.st-key-v12_style_reference_upload [data-testid="stFileUploaderDropzone"] button:hover{
+  background:#e53e57 !important;
+  border-color:#e53e57 !important;
+}
 /* 登出屬於帳號狀態操作，使用紅色警示按鈕避免誤認為一般設定。 */
 .st-key-beta_logout button{
   background:#e53935 !important;
@@ -5546,7 +5570,8 @@ st.divider()
 
 v10_section("📷 ① 上傳人物照片", "#ff5c7a")
 st.caption("📌 先上傳一張清楚的人物照片，後續所有貼圖都會以這張照片作為主要參考。")
-uploaded = st.file_uploader("選擇人物照片", type=["jpg","jpeg","png","webp"])
+with st.container(key="v12_person_photo_upload"):
+    uploaded = st.file_uploader("選擇人物照片", type=["jpg","jpeg","png","webp"])
 if uploaded:
     try:
         uploaded.seek(0)
