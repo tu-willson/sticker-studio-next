@@ -833,28 +833,125 @@ st.markdown("""
 }
 .v10-section{
   position:relative;
-  margin:2.8rem 0 1.4rem;
-  padding:1.15rem 1rem 1rem;
-  border-top:5px solid var(--accent);
-  border-bottom:2px solid color-mix(in srgb,var(--accent) 45%, transparent);
-  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 9%, transparent),transparent);
-  border-radius:12px;
-  text-align:center;
+  width:min(1050px,100%);
+  margin:2.25rem auto .7rem;
+  padding:.8rem 1.05rem;
+  display:flex;
+  align-items:center;
+  gap:.85rem;
+  overflow:hidden;
+  border:1px solid color-mix(in srgb,var(--accent) 48%, rgba(255,255,255,.10));
+  border-left:5px solid var(--accent);
+  border-radius:18px;
+  background:linear-gradient(115deg,
+    color-mix(in srgb,var(--accent) 19%, rgba(18,26,42,.91)),
+    rgba(18,26,42,.78) 58%,
+    color-mix(in srgb,var(--accent) 8%, rgba(18,26,42,.78)));
+  box-shadow:0 12px 28px rgba(4,9,19,.16);
+}
+.v10-section::before{
+  content:"";
+  position:absolute;
+  width:160px;
+  height:160px;
+  right:-72px;
+  top:-92px;
+  border-radius:50%;
+  background:radial-gradient(circle,color-mix(in srgb,var(--accent) 34%, transparent),transparent 68%);
+  pointer-events:none;
 }
 .v10-section::after{
-  content:"";
-  display:block;
-  width:150px;
-  height:5px;
-  border-radius:99px;
-  background:var(--accent);
-  margin:.8rem auto 0;
+  display:none;
+}
+.v10-section > *{position:relative;z-index:1;}
+.v10-section-icon{
+  flex:0 0 50px;
+  width:50px;
+  height:50px;
+  display:grid;
+  place-items:center;
+  border-radius:16px;
+  font-size:1.75rem;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 70%, #fff),var(--accent));
+  box-shadow:0 7px 16px color-mix(in srgb,var(--accent) 32%, transparent),inset 0 1px 0 rgba(255,255,255,.42);
+  filter:saturate(1.08);
+}
+.v10-section-copy{min-width:0;text-align:left;}
+.v10-section-step{
+  margin:0 0 .12rem;
+  color:color-mix(in srgb,var(--accent) 72%, #fff);
+  font-size:.72rem;
+  font-weight:900;
+  letter-spacing:.12em;
 }
 .v10-section-title{
-  font-size:clamp(1.65rem,3vw,2.35rem);
-  line-height:1.2;
+  font-size:clamp(1.25rem,2.45vw,1.8rem);
+  line-height:1.18;
   font-weight:900;
-  letter-spacing:.03em;
+  letter-spacing:.015em;
+}
+.v12-journey{
+  width:min(1080px,100%);
+  margin:.35rem auto 1rem;
+  padding:.85rem 1rem 1rem;
+  border:1px solid rgba(180,197,224,.22);
+  border-radius:18px;
+  background:linear-gradient(135deg,rgba(17,27,45,.92),rgba(27,35,57,.79));
+  box-shadow:0 12px 28px rgba(4,9,19,.16);
+}
+.v12-journey-heading{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:.5rem;
+  margin:0 0 .72rem;
+  font-size:1.04rem;
+  font-weight:900;
+}
+.v12-journey-icon{
+  display:grid;
+  place-items:center;
+  width:27px;
+  height:27px;
+  border-radius:9px;
+  background:linear-gradient(145deg,#ff7e94,#ff4f70);
+}
+.v12-journey-steps{
+  display:grid;
+  grid-template-columns:repeat(8,minmax(0,1fr));
+  gap:.38rem;
+}
+.v12-journey-step{
+  min-width:0;
+  padding:.44rem .25rem .48rem;
+  border:1px solid color-mix(in srgb,var(--journey-accent) 48%, rgba(255,255,255,.11));
+  border-radius:11px;
+  text-align:center;
+  background:color-mix(in srgb,var(--journey-accent) 12%, rgba(255,255,255,.035));
+}
+.v12-journey-number{
+  display:block;
+  margin-bottom:.13rem;
+  color:var(--journey-accent);
+  font-size:.72rem;
+  line-height:1;
+  font-weight:950;
+}
+.v12-journey-label{
+  display:block;
+  overflow:hidden;
+  color:rgba(244,247,252,.94);
+  font-size:.73rem;
+  font-weight:800;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+@media (max-width:720px){
+  .v10-section{margin-top:1.7rem;padding:.72rem .8rem;gap:.65rem;border-radius:15px;}
+  .v10-section-icon{flex-basis:42px;width:42px;height:42px;border-radius:13px;font-size:1.45rem;}
+  .v10-section-title{font-size:1.18rem;}
+  .v12-journey-steps{grid-template-columns:repeat(4,minmax(0,1fr));gap:.42rem;}
+  .v12-journey-step{padding:.42rem .2rem;}
 }
 .v10-transparent-box{
   width:min(760px,100%);
@@ -1490,9 +1587,29 @@ div[class*="st-key-v12_color_selected_white_"] button::after{
 st.markdown('<a class="v12-back-to-top" href="#v12-page-top" title="快速回到頁面頂端" aria-label="快速回到頁面頂端">⬆️</a>', unsafe_allow_html=True)
 
 def v10_section(title, accent="#7c4dff"):
+    """Render every major area as one consistent, compact creation-step card."""
+    title = str(title or "")
+    matched = re.match(r"^(\S+)\s+([①②③④⑤⑥⑦⑧])\s+(.+)$", title)
+    flow_names = {
+        "①": "素材準備", "②": "畫風設定", "③": "人物設計", "④": "貼圖內容",
+        "⑤": "畫面設定", "⑥": "開始生成", "⑦": "成果確認", "⑧": "裁切輸出",
+    }
+    if matched:
+        icon, circled_step, label = matched.groups()
+        step_number = "①②③④⑤⑥⑦⑧".index(circled_step) + 1
+        eyebrow = f"STEP {step_number:02d} · {flow_names[circled_step]}"
+    else:
+        parts = title.split(maxsplit=1)
+        icon = parts[0] if parts else "✨"
+        label = parts[1] if len(parts) > 1 else title
+        eyebrow = "創作工具"
     st.markdown(
         f'<div class="v10-section" style="--accent:{accent}">'
-        f'<div class="v10-section-title">{title}</div></div>',
+        f'<div class="v10-section-icon">{html.escape(icon)}</div>'
+        f'<div class="v10-section-copy">'
+        f'<div class="v10-section-step">{html.escape(eyebrow)}</div>'
+        f'<div class="v10-section-title">{html.escape(label)}</div>'
+        f'</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -5301,25 +5418,21 @@ if not _beta_session:
 
 
 st.markdown("""
-<div class="v11-onboarding">
-  <div class="v11-onboarding-title">✨ 第一次使用？照著 3 個步驟就可以開始</div>
-  <div class="v11-onboarding-grid">
-    <div class="v11-onboarding-card">
-      <div class="v11-onboarding-step">① 上傳照片＋設定貼圖</div>
-      <div class="v11-onboarding-text">依序選擇風格、人物特色、貼圖文字、字型與背景。</div>
-    </div>
-    <div class="v11-onboarding-card">
-      <div class="v11-onboarding-step">② 登入會員並確認額度</div>
-      <div class="v11-onboarding-text">使用 Google 登入會員 Beta，以帳號點數使用站方 AI 服務。</div>
-    </div>
-    <div class="v11-onboarding-card">
-      <div class="v11-onboarding-step">③ 生成 → 裁切 → 下載</div>
-      <div class="v11-onboarding-text">生成八格總圖後，再調整裁切範圍並完成下載。</div>
-    </div>
+<div class="v12-journey">
+  <div class="v12-journey-heading"><span class="v12-journey-icon">🎯</span>照著創作路徑完成一組貼圖</div>
+  <div class="v12-journey-steps">
+    <div class="v12-journey-step" style="--journey-accent:#ff6b86"><span class="v12-journey-number">01</span><span class="v12-journey-label">人物照片</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#ffad54"><span class="v12-journey-number">02</span><span class="v12-journey-label">貼圖風格</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#53d68b"><span class="v12-journey-number">03</span><span class="v12-journey-label">人物特色</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#55b8ff"><span class="v12-journey-number">04</span><span class="v12-journey-label">貼圖內容</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#a78bfa"><span class="v12-journey-number">05</span><span class="v12-journey-label">背景設定</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#ffad54"><span class="v12-journey-number">06</span><span class="v12-journey-label">開始生成</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#5ad7d1"><span class="v12-journey-number">07</span><span class="v12-journey-label">確認成果</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#ff748f"><span class="v12-journey-number">08</span><span class="v12-journey-label">裁切下載</span></div>
   </div>
 </div>
 """, unsafe_allow_html=True)
-st.markdown('<div class="v11-section-tip">💡 <b>小提醒：</b>第一次使用只要依照畫面上的 ①～⑥ 順序往下設定即可，不需要先閱讀複雜說明。</div>', unsafe_allow_html=True)
+st.markdown('<div class="v11-section-tip">💡 <b>小提醒：</b>依照 01～08 往下設定即可；只有選擇的模式會展開，不需要先閱讀全部功能。</div>', unsafe_allow_html=True)
 st.divider()
 
 v10_section("📷 ① 上傳人物照片", "#ff5c7a")
@@ -6847,6 +6960,9 @@ if (
 
 
 if st.session_state.generated_4x2_bytes:
+    st.divider()
+    v10_section("🖼️ ⑦ 檢視生成結果", "#32c6c0")
+    st.caption("確認這張 4×2 總圖後，再往下微調每一格的裁切範圍並加入暫存作品籃。")
     st.divider()
     v10_section("✂️ ⑧ 直接用滑鼠調整 8 個裁切框", "#e74c3c")
 
