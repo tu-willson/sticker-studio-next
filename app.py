@@ -622,6 +622,77 @@ st.markdown("""
   --v10-max: 1180px;
   --v10-control: 820px;
 }
+/* 櫻花創作工作室：背景只營造氛圍，不覆蓋任何操作元件。 */
+[data-testid="stAppViewContainer"]{
+  position:relative;
+  isolation:isolate;
+  background:
+    radial-gradient(circle at 8% 8%, rgba(255,255,255,.46), transparent 28%),
+    radial-gradient(circle at 94% 20%, rgba(255,202,216,.22), transparent 22%),
+    linear-gradient(135deg, #e6e1dd 0%, #e9e5e1 48%, #e1ddd9 100%);
+}
+[data-testid="stAppViewContainer"]::before,
+[data-testid="stAppViewContainer"]::after{
+  content:"";
+  position:fixed;
+  z-index:0;
+  inset:-22vh -8vw;
+  pointer-events:none;
+  background-repeat:repeat-y;
+  will-change:transform;
+}
+[data-testid="stAppViewContainer"]::before{
+  opacity:.58;
+  background-size:100% 920px;
+  background-image:
+    radial-gradient(ellipse 5px 9px at 6% 7%, rgba(255,151,181,.75) 0 58%, transparent 62%),
+    radial-gradient(ellipse 4px 7px at 17% 24%, rgba(255,190,207,.80) 0 58%, transparent 62%),
+    radial-gradient(ellipse 6px 4px at 29% 11%, rgba(250,161,188,.70) 0 58%, transparent 62%),
+    radial-gradient(ellipse 4px 8px at 42% 36%, rgba(255,203,217,.88) 0 58%, transparent 62%),
+    radial-gradient(ellipse 6px 4px at 56% 17%, rgba(252,148,181,.74) 0 58%, transparent 62%),
+    radial-gradient(ellipse 4px 7px at 69% 42%, rgba(255,196,212,.82) 0 58%, transparent 62%),
+    radial-gradient(ellipse 5px 8px at 81% 9%, rgba(248,161,188,.70) 0 58%, transparent 62%),
+    radial-gradient(ellipse 4px 6px at 93% 31%, rgba(255,207,219,.86) 0 58%, transparent 62%);
+  animation:v12-sakura-fall-a 35s linear infinite;
+}
+[data-testid="stAppViewContainer"]::after{
+  opacity:.38;
+  background-size:100% 1180px;
+  background-image:
+    radial-gradient(ellipse 4px 8px at 11% 44%, rgba(255,182,202,.86) 0 58%, transparent 62%),
+    radial-gradient(ellipse 6px 4px at 24% 18%, rgba(246,137,172,.72) 0 58%, transparent 62%),
+    radial-gradient(ellipse 4px 7px at 37% 55%, rgba(255,214,224,.92) 0 58%, transparent 62%),
+    radial-gradient(ellipse 5px 8px at 51% 27%, rgba(249,169,193,.80) 0 58%, transparent 62%),
+    radial-gradient(ellipse 4px 6px at 64% 63%, rgba(255,198,214,.88) 0 58%, transparent 62%),
+    radial-gradient(ellipse 6px 4px at 76% 35%, rgba(244,145,176,.70) 0 58%, transparent 62%),
+    radial-gradient(ellipse 4px 8px at 89% 57%, rgba(255,211,222,.88) 0 58%, transparent 62%);
+  animation:v12-sakura-fall-b 49s linear infinite;
+}
+[data-testid="stAppViewContainer"] .main,
+[data-testid="stAppViewContainer"] .block-container,
+[data-testid="stHeader"]{
+  position:relative;
+  z-index:1;
+}
+@keyframes v12-sakura-fall-a{
+  from{transform:translate3d(-1vw,-10vh,0) rotate(0deg)}
+  to{transform:translate3d(3vw,112vh,0) rotate(18deg)}
+}
+@keyframes v12-sakura-fall-b{
+  from{transform:translate3d(3vw,-18vh,0) rotate(12deg)}
+  to{transform:translate3d(-2vw,108vh,0) rotate(-14deg)}
+}
+@media (prefers-reduced-motion:reduce){
+  [data-testid="stAppViewContainer"]::before,
+  [data-testid="stAppViewContainer"]::after{animation:none;}
+}
+@media (max-width:640px){
+  [data-testid="stAppViewContainer"]::after{display:none;}
+  [data-testid="stAppViewContainer"]::before{
+    opacity:.35;
+    animation-duration:44s;
+  }
+}
 .block-container{
   max-width:1180px !important;
   padding-left:2rem !important;

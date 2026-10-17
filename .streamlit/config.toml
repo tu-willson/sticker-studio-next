@@ -1,17 +1,17 @@
 [theme]
 base = "light"
 primaryColor = "#ff5c7a"
-backgroundColor = "#f3f0ec"
-secondaryBackgroundColor = "#fbf9f6"
-textColor = "#2f3138"
-borderColor = "#ddd7d0"
+backgroundColor = "#e6e1dd"
+secondaryBackgroundColor = "#f4f1ed"
+textColor = "#34343a"
+borderColor = "#d6d0c9"
 showWidgetBorder = true
 
 [theme.light]
-backgroundColor = "#f3f0ec"
-secondaryBackgroundColor = "#fbf9f6"
-textColor = "#2f3138"
-borderColor = "#ddd7d0"
+backgroundColor = "#e6e1dd"
+secondaryBackgroundColor = "#f4f1ed"
+textColor = "#34343a"
+borderColor = "#d6d0c9"
 
 [theme.dark]
 backgroundColor = "#17191d"
