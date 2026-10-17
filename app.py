@@ -1537,6 +1537,14 @@ div[class*="st-key-v12_quick_step_05"]{bottom:calc(440px + env(safe-area-inset-b
 div[class*="st-key-v12_quick_step_06"]{bottom:calc(494px + env(safe-area-inset-bottom, 0px));}
 div[class*="st-key-v12_quick_step_07"]{bottom:calc(548px + env(safe-area-inset-bottom, 0px));}
 div[class*="st-key-v12_quick_step_08"]{bottom:calc(602px + env(safe-area-inset-bottom, 0px));}
+div[class*="st-key-v12_quick_step_01"] button{background:linear-gradient(145deg,#ff9aac,#ff5c7a) !important;}
+div[class*="st-key-v12_quick_step_02"] button{background:linear-gradient(145deg,#ffc078,#ff9f43) !important;}
+div[class*="st-key-v12_quick_step_03"] button{background:linear-gradient(145deg,#75e3a0,#2ecc71) !important;}
+div[class*="st-key-v12_quick_step_04"] button{background:linear-gradient(145deg,#79c7fa,#3498db) !important;}
+div[class*="st-key-v12_quick_step_05"] button{background:linear-gradient(145deg,#ab8cec,#8e67d8) !important;}
+div[class*="st-key-v12_quick_step_06"] button{background:linear-gradient(145deg,#f2ae69,#e67e22) !important;}
+div[class*="st-key-v12_quick_step_07"] button{background:linear-gradient(145deg,#72dfda,#32c6c0) !important;}
+div[class*="st-key-v12_quick_step_08"] button{background:linear-gradient(145deg,#ef8d84,#e74c3c) !important;}
 html{scroll-behavior:smooth;}
 [id^="v12-step-"]{scroll-margin-top:1rem;}
 .v12-font-gallery-note{
