@@ -587,17 +587,13 @@ st.markdown("""
   font-weight:800 !important;
 }
 /* 畫風參考的自訂元素需明確儲存，以紅色按鈕提高辨識度。 */
-.st-key-v12_style_reference_save_button button,
-.st-key-v12_text_style_apply_button button,
-.st-key-v12_font_quick_pick_apply_button button{
+.st-key-v12_style_reference_save_button button{
   background:#ff4f67 !important;
   border-color:#ff4f67 !important;
   color:#fff !important;
   font-weight:800 !important;
 }
-.st-key-v12_style_reference_save_button button:hover,
-.st-key-v12_text_style_apply_button button:hover,
-.st-key-v12_font_quick_pick_apply_button button:hover{
+.st-key-v12_style_reference_save_button button:hover{
   background:#e53e57 !important;
   border-color:#e53e57 !important;
 }
@@ -6092,65 +6088,18 @@ if _sticker_mode == "text":
         st.session_state["v8_text_style"] = V8_TEXT_STYLE_LEGACY_MAP.get(
             _saved_text_style, "不使用外框"
         )
-    with st.form("v12_text_style_form", border=False):
-        text_style = st.selectbox(
-            "文字外框／形狀效果",
-            V8_TEXT_STYLE_OPTIONS,
-            index=0,
-            key="v8_text_style"
-        )
-        with st.container(key="v12_text_style_apply_button"):
-            _apply_text_style = st.form_submit_button(
-                "選擇或更改請點選套用",
-                type="primary",
-                use_container_width=True,
-            )
-    if _apply_text_style:
-        st.success("✅ 文字外框／形狀效果已套用")
+    text_style = st.selectbox(
+        "文字外框／形狀效果",
+        V8_TEXT_STYLE_OPTIONS,
+        index=0,
+        key="v8_text_style",
+    )
 else:
     text_style = ""
 
 _selected_font = st.session_state.get("v8_selected_font", None)
-# 選完字型後的回跳定位點：刻意放在「125 種帶圖字型」標題之前，
-# 讓回跳後可直接看到「已選擇 125 字型」成功提示，而不是停在提示下方。
 if _sticker_mode == "text":
-    st.markdown('<div id="v10-font-result-anchor" style="scroll-margin-top: 72px;"></div>', unsafe_allow_html=True)
     v10_subsection("🔤 125 種帶圖字型", "#8e67d8")
-    if _selected_font:
-        st.success(f"🎨 已選擇 125 字型：{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}")
-    else:
-        st.info("尚未指定 125 種字型；可從下方總覽選用。")
-
-# ------------------------------------------------------------
-# ------------------------------------------------------------
-# 選字後真正跳回「已選字型」位置
-# 使用 Streamlit Components v2 的原生 DOM JavaScript。
-# ------------------------------------------------------------
-if _sticker_mode == "text" and st.session_state.pop("v10_scroll_to_font_result", False):
-    import streamlit.components.v2 as components
-    _v10_font_scroll = components.component(
-        "v10_font_scroll",
-        html="<span aria-hidden='true'></span>",
-        js="""
-        export default function(component) {
-            const anchor = document.querySelector("#v10-font-result-anchor");
-            if (!anchor) return;
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    // 直接定位到「125 種帶圖字型」區塊的上方定位點。
-                    // 這個定位點比成功提示更上面，因此回跳後會保留完整的
-                    // 「已選擇 125 字型：XXX｜名稱」提示在可視範圍內。
-                    anchor.scrollIntoView({
-                        behavior: "instant",
-                        block: "start"
-                    });
-                });
-            });
-        }
-        """,
-        isolate_styles=False,
-    )
-    _v10_font_scroll(key="font_scroll_once")
 
 # 125 種帶圖字型｜快速選擇＋分頁圖卡總覽
 # 手機不再一次渲染 125 張大圖，降低滑動成本。
@@ -6163,38 +6112,46 @@ _font_labels = [
 if "v12_font_quick_pick" not in st.session_state:
     st.session_state["v12_font_quick_pick"] = "— 快速選擇字型｜可直接輸入數字 —"
 
-def _v12_apply_quick_font_pick():
-    """Commit the staged quick-font choice only when its form is submitted."""
-    choice = str(st.session_state.get("v12_font_quick_pick", "") or "")
-    placeholder = "— 快速選擇字型｜可直接輸入數字 —"
-    if choice == placeholder:
-        return
-    try:
-        font_no = int(choice.split("｜", 1)[0])
-    except (TypeError, ValueError):
-        return
-    if st.session_state.get("v8_selected_font") != font_no:
-        st.session_state["v8_selected_font"] = font_no
-        st.session_state["v10_font_gallery_open"] = False
-        st.session_state["v10_scroll_to_font_result"] = True
-
-
 _quick_font_choice = "— 快速選擇字型｜可直接輸入數字 —"
 if _sticker_mode == "text":
-    st.caption("先選擇字型；只有按下套用時才會更新下方預覽與重新讀取。")
-    with st.form("v12_font_quick_pick_form", border=False):
-        _quick_font_choice = st.selectbox(
-            "⚡ 快速選擇 125 種字型",
-            ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
-            key="v12_font_quick_pick",
-        )
-        with st.container(key="v12_font_quick_pick_apply_button"):
-            st.form_submit_button(
-                "選擇或更改請點選套用",
-                type="primary",
-                use_container_width=True,
-                on_click=_v12_apply_quick_font_pick,
-            )
+    st.caption("選擇字型後會立即套用並更新下方預覽。")
+    st.markdown('<div id="v10-font-result-anchor" style="scroll-margin-top: 72px;"></div>', unsafe_allow_html=True)
+    _quick_font_choice = st.selectbox(
+        "⚡ 快速選擇 125 種字型",
+        ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
+        key="v12_font_quick_pick",
+    )
+    if _quick_font_choice != "— 快速選擇字型｜可直接輸入數字 —":
+        _quick_font_no = int(_quick_font_choice.split("｜", 1)[0])
+        if st.session_state.get("v8_selected_font") != _quick_font_no:
+            st.session_state["v8_selected_font"] = _quick_font_no
+            st.session_state["v10_font_gallery_open"] = False
+        _selected_font = _quick_font_no
+    if _selected_font:
+        st.success(f"🎨 已選擇 125 字型：{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}")
+    else:
+        st.info("尚未指定 125 種字型；可從下方總覽選用。")
+
+# 選字型圖卡後回到快速選單與目前選擇提示的位置。
+if _sticker_mode == "text" and st.session_state.pop("v10_scroll_to_font_result", False):
+    import streamlit.components.v2 as components
+    _v10_font_scroll = components.component(
+        "v10_font_scroll",
+        html="<span aria-hidden='true'></span>",
+        js="""
+        export default function(component) {
+            const anchor = document.querySelector("#v10-font-result-anchor");
+            if (!anchor) return;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    anchor.scrollIntoView({behavior: "instant", block: "start"});
+                });
+            });
+        }
+        """,
+        isolate_styles=False,
+    )
+    _v10_font_scroll(key="font_scroll_once")
 
 if "v10_font_gallery_open" not in st.session_state:
     st.session_state.v10_font_gallery_open = False
