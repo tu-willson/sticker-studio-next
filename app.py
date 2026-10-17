@@ -15,6 +15,7 @@ import urllib.request
 import urllib.error
 import urllib.parse
 import secrets
+from concurrent.futures import ThreadPoolExecutor
 
 # ------------------------------------------------------------
 # V10 使用者資料本／獨立儲存區
@@ -1722,16 +1723,41 @@ def _beta_load_library_project_record(session, project):
     prefix = str(project.get("sticker_prefix") or "")
     if not prefix:
         raise RuntimeError("library_assets_missing")
-    sticker_bytes = {}
+    download_paths = {}
     for position, item in enumerate(manifest["stickers"], start=1):
         if not isinstance(item, dict):
             continue
         relative_path = str(item.get("path") or "")
         if not relative_path:
             continue
-        sticker_bytes[f"{position:02d}"] = _beta_storage_download(
-            session, prefix.rsplit("stickers/", 1)[0] + relative_path
+        download_paths[f"sticker:{position:02d}"] = (
+            prefix.rsplit("stickers/", 1)[0] + relative_path
         )
+    preview_path = str(project.get("preview_path") or "")
+    if preview_path:
+        download_paths["preview"] = preview_path
+    if manifest.get("has_source_photo") and project.get("source_photo_path"):
+        download_paths["source_photo"] = str(project["source_photo_path"])
+    if manifest.get("has_style_reference") and project.get("style_reference_path"):
+        download_paths["style_reference"] = str(project["style_reference_path"])
+    if not any(name.startswith("sticker:") for name in download_paths):
+        raise RuntimeError("library_assets_missing")
+
+    # 雲端作品通常有多張精選貼圖；改為並行下載以避免每張網路往返累加。
+    with ThreadPoolExecutor(max_workers=min(6, len(download_paths))) as executor:
+        futures = {
+            name: executor.submit(_beta_storage_download, session, object_path)
+            for name, object_path in download_paths.items()
+        }
+        downloaded_assets = {
+            name: future.result() for name, future in futures.items()
+        }
+
+    sticker_bytes = {
+        name.split(":", 1)[1]: asset
+        for name, asset in downloaded_assets.items()
+        if name.startswith("sticker:")
+    }
     if not sticker_bytes:
         raise RuntimeError("library_assets_missing")
 
@@ -1740,17 +1766,14 @@ def _beta_load_library_project_record(session, project):
     record["grid_bytes"] = b""
     record["sticker_bytes"] = sticker_bytes
     record["cloud_asset_manifest"] = manifest
-    preview_path = str(project.get("preview_path") or "")
-    if preview_path:
+    if downloaded_assets.get("preview"):
         record["main_bytes"] = _v12_png_bytes(
-            Image.open(BytesIO(_beta_storage_download(session, preview_path)))
+            Image.open(BytesIO(downloaded_assets["preview"]))
         )
-    if manifest.get("has_source_photo") and project.get("source_photo_path"):
-        record["source_photo_bytes"] = _beta_storage_download(
-            session, str(project["source_photo_path"]))
-    if manifest.get("has_style_reference") and project.get("style_reference_path"):
-        record["style_reference_bytes"] = _beta_storage_download(
-            session, str(project["style_reference_path"]))
+    if downloaded_assets.get("source_photo"):
+        record["source_photo_bytes"] = downloaded_assets["source_photo"]
+    if downloaded_assets.get("style_reference"):
+        record["style_reference_bytes"] = downloaded_assets["style_reference"]
     return record
 
 
@@ -5358,6 +5381,12 @@ v10_section("💬 ④ 貼圖類型", "#3498db")
 st.caption("選擇這組貼圖要使用文字，或以人物表情特寫呈現。")
 
 def _v12_set_sticker_content_mode(mode):
+    # 切換到表情模式前，先把條件式文字區塊目前的值寫回獨立狀態；
+    # 否則 Streamlit 在隱藏該區塊後會清除 widget key。
+    if mode == V12_STICKER_EXPRESSION_MODE:
+        for i in range(8):
+            _v12_sync_sticker_action_enabled(i)
+            _v12_sync_sticker_action_prompt(i)
     st.session_state["v12_sticker_content_mode"] = mode
 
 
@@ -5474,6 +5503,10 @@ def _v12_render_text_slot(i):
     )
 
     _action_enabled_widget_key = f"v12_sticker_action_enabled_widget_{i}"
+    st.session_state.setdefault(
+        _action_enabled_widget_key,
+        bool(st.session_state.get(f"v12_sticker_action_enabled_{i}", False)),
+    )
     _action_enabled = st.checkbox(
         "🎬 啟用動作指令",
         key=_action_enabled_widget_key,
