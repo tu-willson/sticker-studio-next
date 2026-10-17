@@ -1227,6 +1227,62 @@ html{scroll-behavior:smooth;}
   font-weight:700;
   line-height:1.55;
 }
+.v12-pricing-hero{
+  width:min(1000px,100%);
+  margin:1rem auto 1.35rem;
+  padding:1.35rem 1.5rem;
+  text-align:center;
+  border:1px solid rgba(255,128,154,.55);
+  border-radius:22px;
+  background:linear-gradient(135deg,rgba(255,79,103,.25),rgba(89,93,211,.19) 55%,rgba(21,34,57,.7));
+  box-shadow:0 16px 34px rgba(2,7,18,.25);
+}
+.v12-pricing-kicker{
+  color:#ffc0cc;
+  font-size:.73rem;
+  font-weight:950;
+  letter-spacing:.16em;
+}
+.v12-pricing-hero h1{margin:.25rem 0 .42rem;color:#fff;font-size:clamp(1.8rem,4vw,2.6rem);}
+.v12-pricing-hero p{margin:0;color:rgba(245,248,255,.88);font-weight:650;}
+.v12-pricing-card{
+  position:relative;
+  min-height:258px;
+  margin-bottom:.6rem;
+  padding:1.1rem .9rem .92rem;
+  overflow:hidden;
+  border:1px solid rgba(177,196,233,.26);
+  border-radius:17px;
+  background:linear-gradient(155deg,rgba(37,50,78,.96),rgba(18,28,46,.94));
+  box-shadow:0 8px 20px rgba(1,6,18,.22);
+}
+.v12-pricing-card-featured{border-color:rgba(255,176,79,.85);box-shadow:0 10px 26px rgba(255,143,55,.20);}
+.v12-pricing-badge,.v12-pricing-current{
+  display:inline-block;
+  margin:0 0 .5rem;
+  padding:.2rem .52rem;
+  border-radius:999px;
+  color:#201505;
+  background:#ffbf58;
+  font-size:.7rem;
+  font-weight:950;
+}
+.v12-pricing-current{margin-left:.35rem;color:#fff;background:#39c98a;}
+.v12-pricing-plan-name{color:#fff;font-size:1.25rem;font-weight:950;}
+.v12-pricing-price{margin:.28rem 0 .75rem;color:#ff9cad;font-size:1.7rem;font-weight:950;line-height:1;}
+.v12-pricing-price span{display:block;margin-top:.26rem;color:rgba(221,230,246,.78);font-size:.73rem;font-weight:750;}
+.v12-pricing-benefit{margin:.4rem 0;color:rgba(244,247,253,.94);font-size:.87rem;font-weight:730;line-height:1.35;}
+.v12-pricing-selection{
+  width:min(720px,100%);
+  margin:1.35rem auto;
+  padding:1rem 1.15rem;
+  border:1px solid rgba(255,161,179,.48);
+  border-radius:16px;
+  background:rgba(255,79,103,.11);
+}
+.v12-pricing-selection h3{text-align:center;margin:.1rem 0 .65rem;}
+@media (max-width:900px){.v12-pricing-card{min-height:232px;padding:.9rem .72rem;}.v12-pricing-plan-name{font-size:1.08rem;}.v12-pricing-price{font-size:1.42rem;}.v12-pricing-benefit{font-size:.78rem;}}
+@media (max-width:640px){.v12-pricing-hero{padding:1rem .8rem;border-radius:16px;}.v12-pricing-hero p{font-size:.9rem;}.v12-pricing-card{min-height:0;margin-bottom:.42rem;padding:.78rem .55rem;}.v12-pricing-plan-name{font-size:.95rem;}.v12-pricing-price{font-size:1.16rem;}.v12-pricing-benefit{font-size:.7rem;}.v12-pricing-badge,.v12-pricing-current{padding:.15rem .32rem;font-size:.57rem;}}
 
 /* V12｜STEP 01B③｜125 種帶圖字型響應式圖卡牆 */
 .v12-font-grid{
@@ -5391,6 +5447,146 @@ def _v12_style_reference_upload_changed():
         st.session_state["v12_style_reference_filename"] = ""
         st.session_state["v12_style_reference_fingerprint"] = ""
 
+
+def _v12_render_pricing_page():
+    """Render the public-ready plan selection screen before ECPay checkout goes live."""
+    products = [
+        {
+            "code": "basic_monthly",
+            "name": "基本方案",
+            "price": "NT$99",
+            "period": "每月訂閱",
+            "credits": "20 點圖片點數／月",
+            "copy": "AI幫想每日 15 次",
+            "library": "雲端作品庫 20 組",
+            "button": "選擇基本方案",
+        },
+        {
+            "code": "standard_monthly",
+            "name": "標準方案",
+            "price": "NT$149",
+            "period": "每月訂閱",
+            "credits": "30 點圖片點數／月",
+            "copy": "AI幫想每日 20 次",
+            "library": "雲端作品庫 30 組",
+            "button": "選擇標準方案",
+            "recommended": True,
+        },
+        {
+            "code": "advanced_monthly",
+            "name": "進階方案",
+            "price": "NT$199",
+            "period": "每月訂閱",
+            "credits": "40 點圖片點數／月",
+            "copy": "AI幫想每日 25 次",
+            "library": "雲端作品庫 40 組",
+            "button": "選擇進階方案",
+        },
+        {
+            "code": "credit_pack_7",
+            "name": "7 點點數包",
+            "price": "NT$49",
+            "period": "單次購買・30 天效期",
+            "credits": "7 點圖片點數",
+            "copy": "AI幫想每日 7 次",
+            "library": "雲端作品庫 7 組",
+            "button": "選擇點數包",
+        },
+    ]
+    selected_code = str(st.session_state.get("v12_pending_purchase_product", "") or "")
+    session = _beta_current_user() if _beta_config() else None
+    current_code = ""
+    current_label = ""
+    if session:
+        try:
+            entitlement = _beta_effective_entitlement(session)
+            current_code = str(entitlement.get("product_code", "") or "")
+            current_label = _beta_entitlement_label(entitlement)
+        except Exception:
+            pass
+
+    st.markdown(
+        """
+        <div class="v12-pricing-hero">
+          <div class="v12-pricing-kicker">STICKER STUDIO NEXT</div>
+          <h1>💳 購買方案</h1>
+          <p>選擇適合你的創作額度。圖片點數、AI幫想額度與雲端作品庫會依方案立即提供。</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if current_label:
+        st.success(f"📋 {current_label}")
+    else:
+        st.info("登入後即可選擇方案；付款完成後會自動更新圖片點數與會員權益。")
+
+    plan_cols = st.columns(4, gap="medium")
+    for col, product in zip(plan_cols, products):
+        is_selected = selected_code == product["code"]
+        is_current = current_code == product["code"]
+        card_class = " v12-pricing-card-featured" if product.get("recommended") else ""
+        with col:
+            badge = '<div class="v12-pricing-badge">最受歡迎</div>' if product.get("recommended") else ""
+            state = '<div class="v12-pricing-current">目前方案</div>' if is_current else ""
+            st.markdown(
+                f"""
+                <div class="v12-pricing-card{card_class}">
+                  {badge}
+                  {state}
+                  <div class="v12-pricing-plan-name">{product['name']}</div>
+                  <div class="v12-pricing-price">{product['price']}<span>{product['period']}</span></div>
+                  <div class="v12-pricing-benefit">🖼️ {product['credits']}</div>
+                  <div class="v12-pricing-benefit">✨ {product['copy']}</div>
+                  <div class="v12-pricing-benefit">☁️ {product['library']}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                "✓ 已選擇" if is_selected else product["button"],
+                key=f"v12_select_product_{product['code']}",
+                type="primary" if product.get("recommended") else "secondary",
+                use_container_width=True,
+                disabled=is_current,
+            ):
+                st.session_state["v12_pending_purchase_product"] = product["code"]
+                st.rerun()
+
+    chosen = next((item for item in products if item["code"] == selected_code), None)
+    if chosen:
+        st.markdown("<div class='v12-pricing-selection'>", unsafe_allow_html=True)
+        st.markdown(f"### 已選擇：{chosen['name']}｜{chosen['price']}")
+        if session:
+            st.info("綠界付款串接審核中。付款功能開通後，這裡會直接進入安全結帳頁面；目前不會扣款。")
+            st.button(
+                "⏳ 綠界付款審核中",
+                key="v12_ecpay_checkout_pending",
+                type="primary",
+                use_container_width=True,
+                disabled=True,
+            )
+        else:
+            st.warning("請先登入 Google 帳號，付款開通後才能將方案權益正確加入你的帳戶。")
+            if st.button("✨ 前往登入", key="v12_pricing_go_login", type="primary", use_container_width=True):
+                st.session_state["v12_view"] = "create"
+                st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("### 📌 方案使用說明")
+    with st.expander("查看訂閱、點數與雲端作品庫規則", expanded=True):
+        st.markdown(
+            """
+            - 每次成功生成 1 張 **4×2 原始貼圖總圖**，扣除 1 點圖片點數；生成失敗不扣點。
+            - AI幫想額度按台灣時間每日計算，與圖片點數分開計算。
+            - 訂閱方案每月自付款成功日生效；未使用的訂閱點數可保留至下一個帳務週期結束，系統優先使用最早到期的點數。
+            - 點數包為一次性購買，不會自動續訂，購買後有效期為 30 天。
+            - 取消訂閱後，當期權益可使用至帳務週期結束，下一期不再續扣。作品數超過新方案上限時，不會自動刪除，但須整理後才能新增保存。
+            - 每組作品最多保存 40 張已選貼圖；MAIN／TAB 規格圖不計入上限。ZIP 檔不會保存，可載回創作頁後重新下載。
+            """
+        )
+    st.caption("服務提供 AI 輔助貼圖創作、單張／ZIP 下載與私人雲端作品保存。正式付款頁將揭示付款、續訂、取消與退款說明。")
+
+
 # ------------------------------------------------------------
 # UI
 # ------------------------------------------------------------
@@ -5419,6 +5615,7 @@ st.markdown(
 
     /* V12｜01B① UI 微調：主導航與 LINE 連結按鈕使用同一套紅色視覺。 */
     .st-key-v12_nav_create button,
+    .st-key-v12_nav_pricing button,
     .st-key-v12_nav_library button,
     .st-key-v12_footer_library button{
       width:100% !important;
@@ -5433,6 +5630,7 @@ st.markdown(
       box-shadow:none !important;
     }
     .st-key-v12_nav_create button:hover,
+    .st-key-v12_nav_pricing button:hover,
     .st-key-v12_nav_library button:hover,
     .st-key-v12_footer_library button:hover{
       background:#FF3333 !important;
@@ -5441,6 +5639,7 @@ st.markdown(
       color:#FFFFFF !important;
     }
     .st-key-v12_nav_create button p,
+    .st-key-v12_nav_pricing button p,
     .st-key-v12_nav_library button p,
     .st-key-v12_footer_library button p{
       color:#FFFFFF !important;
@@ -5452,11 +5651,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-_v12_nav_cols = st.columns(2)
+_v12_nav_cols = st.columns(3)
 with _v12_nav_cols[0]:
-    # V12 微調：創作頁上方改為「聯繫作者」；進入「我的作品」後保留「開始製作」。
+    # V12 微調：創作頁上方改為「聯繫作者」；其他頁面保留「開始製作」。
     _v12_current_view = st.session_state.get("v12_view", "create")
-    if _v12_current_view == "library":
+    if _v12_current_view in {"library", "pricing"}:
         if st.button("✨ 開始製作", key="v12_nav_create", use_container_width=True):
             st.session_state["v12_view"] = "create"
             st.rerun()
@@ -5467,6 +5666,12 @@ with _v12_nav_cols[0]:
             use_container_width=True,
         )
 with _v12_nav_cols[1]:
+    if st.button("💳 購買方案", key="v12_nav_pricing", use_container_width=True):
+        _public02a_sync_style_bank_from_widgets()
+        _save_v10_presets()
+        st.session_state["v12_view"] = "pricing"
+        st.rerun()
+with _v12_nav_cols[2]:
     if st.button("📚 我的作品", key="v12_nav_library", use_container_width=True):
         # FIX11: leave-create navigation explicitly commits the dedicated style bank
         # before conditional editor widgets disappear.
@@ -5476,6 +5681,10 @@ with _v12_nav_cols[1]:
         st.rerun()
 
 st.session_state.setdefault("v12_view", "create")
+
+if st.session_state["v12_view"] == "pricing":
+    _v12_render_pricing_page()
+    st.stop()
 
 if st.session_state["v12_view"] == "library":
     st.markdown('<div class="v10-main-title">📚 我的作品</div>', unsafe_allow_html=True)
