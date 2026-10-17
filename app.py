@@ -5334,8 +5334,11 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 st.info("👆 請選擇一個已儲存風格；或先在下方建立新的風格。")
 
         with st.expander("✏️ 管理我的自定義風格", expanded=False):
-            st.caption("選擇 01～10 的一個位置進行編輯。風格內容只儲存在 Style Bank，不依賴 10 組條件式 Widget。")
+            st.caption("選擇 01～10 的一個位置進行編輯。輸入時不會重新讀取頁面，完成後再按「儲存此風格」。")
             st.session_state.setdefault("v12_style_editor_slot", 1)
+            if st.session_state.pop("v12_style_editor_clear_pending", False):
+                _v12_load_style_editor_from_slot()
+                st.success("🧹 此風格已清空")
             if "v12_style_editor_name" not in st.session_state or "v12_style_editor_prompt" not in st.session_state:
                 _v12_load_style_editor_from_slot()
             st.selectbox(
@@ -5345,27 +5348,28 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 key="v12_style_editor_slot",
                 on_change=_v12_load_style_editor_from_slot,
             )
-            st.text_input("🏷️ 風格名稱", key="v12_style_editor_name", placeholder="例如：童趣手繪漫畫")
-            st.text_area("🎨 自定義風格 Prompt", key="v12_style_editor_prompt", height=180, placeholder="在這裡輸入完整的風格 Prompt…")
-            _ea, _eb = st.columns(2)
-            with _ea:
-                if st.button("💾 儲存此風格", key="v12_save_single_style", use_container_width=True):
-                    _v12_save_style_editor()
-                    st.success("✅ 此風格已儲存")
-                    st.rerun()
-            with _eb:
-                if st.button("🧹 清空此風格", key="v12_clear_single_style", use_container_width=True):
-                    try:
-                        _slot = int(st.session_state.get("v12_style_editor_slot", 1))
-                    except Exception:
-                        _slot = 1
-                    _bank = _public02a_get_style_bank()
-                    _bank[str(_slot)] = {"name": f"使用者自定{_slot}", "prompt": ""}
-                    _public02a_set_style_bank(_bank)
-                    _save_v10_presets()
-                    _v12_load_style_editor_from_slot()
-                    st.success("🧹 此風格已清空")
-                    st.rerun()
+            with st.form("v12_style_editor_form", border=False):
+                st.text_input("🏷️ 風格名稱", key="v12_style_editor_name", placeholder="例如：童趣手繪漫畫")
+                st.text_area("🎨 自定義風格 Prompt", key="v12_style_editor_prompt", height=180, placeholder="在這裡輸入完整的風格 Prompt…")
+                _ea, _eb = st.columns(2)
+                with _ea:
+                    _save_style_editor = st.form_submit_button("💾 儲存此風格", use_container_width=True)
+                with _eb:
+                    _clear_style_editor = st.form_submit_button("🧹 清空此風格", use_container_width=True)
+            if _save_style_editor:
+                _v12_save_style_editor()
+                st.success("✅ 此風格已儲存")
+            if _clear_style_editor:
+                try:
+                    _slot = int(st.session_state.get("v12_style_editor_slot", 1))
+                except Exception:
+                    _slot = 1
+                _bank = _public02a_get_style_bank()
+                _bank[str(_slot)] = {"name": f"使用者自定{_slot}", "prompt": ""}
+                _public02a_set_style_bank(_bank)
+                _save_v10_presets()
+                st.session_state["v12_style_editor_clear_pending"] = True
+                st.rerun()
         st.warning("ℹ️ 目前只使用「自定義風格」，不會同時套用其他預設風格。")
     else:
         style = style_mode
@@ -5405,40 +5409,49 @@ else:
                 width=240,
             )
         st.success("✅ 已啟用畫風參考：本次生成會優先參考這張圖，不會套用貼圖風格快選。")
-        st.radio(
-            "畫風融入程度",
-            ["柔和融入", "明顯融入", "強烈融入"],
-            horizontal=True,
-            key="v12_style_reference_strength",
-            help="只改變新作品的線條、比例、配色、陰影與表情語言；不會複製參考圖中的角色、文字或單張貼圖。",
-        )
-        st.text_area(
-            "自訂代表性元素（選填）",
-            key="v12_style_reference_custom_elements",
-            placeholder="例如：漫畫名稱風格、強調圖片上的某些特徵、保留圖片人物的神情",
-            max_chars=1200,
-        )
+        st.caption("調整下列設定時不會重新讀取頁面；完成後再按「套用畫風設定」。")
+        with st.form("v12_style_reference_details_form", border=False):
+            st.radio(
+                "畫風融入程度",
+                ["柔和融入", "明顯融入", "強烈融入"],
+                horizontal=True,
+                key="v12_style_reference_strength",
+                help="只改變新作品的線條、比例、配色、陰影與表情語言；不會複製參考圖中的角色、文字或單張貼圖。",
+            )
+            st.text_area(
+                "自訂代表性元素（選填）",
+                key="v12_style_reference_custom_elements",
+                placeholder="例如：漫畫名稱風格、強調圖片上的某些特徵、保留圖片人物的神情",
+                max_chars=1200,
+            )
+            _apply_style_reference_details = st.form_submit_button(
+                "💾 套用畫風設定", use_container_width=True
+            )
+        if _apply_style_reference_details:
+            st.success("✅ 畫風參考設定已套用")
         st.caption("💡 這段說明會直接補充給 AI，協助它把你指定的特色融入新人物；不會複製參考圖中的角色、文字或版面。")
         st.caption("若打包時同步保存並勾選「保存私人創作素材」，這張參考圖會一併保存，供日後載回續作。")
 
 v10_section("👤 ③ 人物與畫面特色", "#2ecc71")
-st.caption("可複選；自定義人物／場景需求只有打勾才會啟用。")
-selected_character=st.multiselect("🎯 人物／畫面特色（可複選）",CHARACTER_OPTIONS,key="v10_character_options")
-_c1,_c2=st.columns([1,8])
-with _c1:
-    st.checkbox("啟用", key="v10_character_enabled_1")
-with _c2:
-    st.text_area(
-        "自定義人物／場景需求",
-        key="v10_character_custom_1",
-        height=70,
-    )
+st.caption("可複選；自定義人物／場景需求只有打勾才會啟用。調整欄位時不會重新讀取頁面，完成後再儲存。")
+with st.form("v12_character_settings_form", border=False):
+    selected_character=st.multiselect("🎯 人物／畫面特色（可複選）",CHARACTER_OPTIONS,key="v10_character_options")
+    _c1,_c2=st.columns([1,8])
+    with _c1:
+        st.checkbox("啟用", key="v10_character_enabled_1")
+    with _c2:
+        st.text_area(
+            "自定義人物／場景需求",
+            key="v10_character_custom_1",
+            height=70,
+        )
+    _save_character_settings = st.form_submit_button("💾 儲存人物／場景設定", use_container_width=True)
 custom_character = (
     str(st.session_state.get("v10_character_custom_1", "") or "").strip()
     if st.session_state.get("v10_character_enabled_1", False)
     else ""
 )
-if st.button("💾 儲存人物／場景設定",key="v10_save_character",use_container_width=True):
+if _save_character_settings:
     if _save_v10_presets():
         st.success("✅ 人物／場景設定已儲存")
     else:
@@ -5965,12 +5978,19 @@ if _sticker_mode == "text":
     st.divider()
     v10_section("🔤 貼圖字型＋125 種帶圖字型", "#8e67d8")
     v10_subsection("✏️ 一般貼圖字型效果", "#8e67d8")
-    text_style = st.selectbox(
-        "文字貼圖效果",
-        V8_TEXT_STYLE_OPTIONS,
-        index=0,
-        key="v8_text_style"
-    )
+    st.caption("選擇時不會重新讀取頁面；完成後按下套用即可。")
+    with st.form("v12_text_style_form", border=False):
+        text_style = st.selectbox(
+            "文字貼圖效果",
+            V8_TEXT_STYLE_OPTIONS,
+            index=0,
+            key="v8_text_style"
+        )
+        _apply_text_style = st.form_submit_button(
+            "💾 套用一般貼圖字型效果", use_container_width=True
+        )
+    if _apply_text_style:
+        st.success("✅ 一般貼圖字型效果已套用")
 else:
     text_style = ""
 
@@ -6027,21 +6047,36 @@ _font_labels = [
 if "v12_font_quick_pick" not in st.session_state:
     st.session_state["v12_font_quick_pick"] = "— 快速選擇字型｜可直接輸入數字 —"
 
-_quick_font_choice = "— 快速選擇字型｜可直接輸入數字 —"
-if _sticker_mode == "text":
-    _quick_font_choice = st.selectbox(
-        "⚡ 快速選擇 125 種字型",
-        ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
-        key="v12_font_quick_pick",
-    )
-
-if _sticker_mode == "text" and _quick_font_choice != "— 快速選擇字型｜可直接輸入數字 —":
-    _quick_font_no = int(_quick_font_choice.split("｜", 1)[0])
-    if st.session_state.get("v8_selected_font") != _quick_font_no:
-        st.session_state["v8_selected_font"] = _quick_font_no
+def _v12_apply_quick_font_pick():
+    """Commit the staged quick-font choice only when its form is submitted."""
+    choice = str(st.session_state.get("v12_font_quick_pick", "") or "")
+    placeholder = "— 快速選擇字型｜可直接輸入數字 —"
+    if choice == placeholder:
+        return
+    try:
+        font_no = int(choice.split("｜", 1)[0])
+    except (TypeError, ValueError):
+        return
+    if st.session_state.get("v8_selected_font") != font_no:
+        st.session_state["v8_selected_font"] = font_no
         st.session_state["v10_font_gallery_open"] = False
         st.session_state["v10_scroll_to_font_result"] = True
-        st.rerun()
+
+
+_quick_font_choice = "— 快速選擇字型｜可直接輸入數字 —"
+if _sticker_mode == "text":
+    st.caption("先選擇字型；只有按下套用時才會更新下方預覽與重新讀取。")
+    with st.form("v12_font_quick_pick_form", border=False):
+        _quick_font_choice = st.selectbox(
+            "⚡ 快速選擇 125 種字型",
+            ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
+            key="v12_font_quick_pick",
+        )
+        st.form_submit_button(
+            "💾 套用帶圖字型",
+            use_container_width=True,
+            on_click=_v12_apply_quick_font_pick,
+        )
 
 if "v10_font_gallery_open" not in st.session_state:
     st.session_state.v10_font_gallery_open = False
