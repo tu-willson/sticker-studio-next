@@ -845,6 +845,18 @@ div[data-testid="stCheckbox"] label{
   font-weight:800;
   text-align:left;
 }
+.v12-mode-panel-heading{
+  width:min(900px,100%);
+  margin:1rem auto .5rem;
+  padding:.5rem 1rem;
+  border:2px solid var(--accent);
+  border-radius:10px;
+  background:color-mix(in srgb,var(--accent) 10%, transparent);
+  font-size:1.22rem;
+  line-height:1.35;
+  font-weight:800;
+  text-align:center;
+}
 .v10-note{
   width:min(900px,100%);
   margin:.5rem auto 1rem;
@@ -1372,6 +1384,12 @@ def v10_section(title, accent="#7c4dff"):
 def v10_subsection(title, accent="#4f8cff"):
     st.markdown(
         f'<div class="v10-subsection" style="--accent:{accent}">{title}</div>',
+        unsafe_allow_html=True,
+    )
+
+def v12_mode_panel_heading(title, accent="#3498db"):
+    st.markdown(
+        f'<div class="v12-mode-panel-heading" style="--accent:{accent}">{title}</div>',
         unsafe_allow_html=True,
     )
 
@@ -5290,10 +5308,10 @@ with _mode_expression_col:
     )
 _sticker_mode = _v12_sticker_mode_value(_sticker_content_choice)
 if _sticker_mode == "text":
-    v10_subsection('使用「✨ 主題 AI 幫想」或「🎲 隨機用語」', '#3498db')
+    v12_mode_panel_heading('使用「✨ 主題 AI 幫想」或「🎲 隨機用語」', '#3498db')
     st.caption("先選擇你想使用的文字來源；01～08 文字格會一直保留顯示。")
 else:
-    v10_section("😶 使用表情貼圖（無文字）", "#3498db")
+    v12_mode_panel_heading("😶 使用表情貼圖（無文字）", "#3498db")
     st.caption("每格都不會出現文字；AI 會優先呈現臉部與上半身特寫，讓情緒一眼可辨。")
 
 # V12｜文字來源面板：只有使用者主動點選後，才展開對應功能，
