@@ -1227,27 +1227,6 @@ html{scroll-behavior:smooth;}
   font-weight:700;
   line-height:1.55;
 }
-.v12-google-login-link,
-.v12-google-login-link:visited{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  width:100%;
-  min-height:52px;
-  border:1px solid #ff4f67;
-  border-radius:10px;
-  background:#ff4f67;
-  color:#fff !important;
-  font-size:18px;
-  font-weight:850;
-  text-decoration:none !important;
-  box-shadow:0 6px 14px rgba(255,79,103,.22);
-}
-.v12-google-login-link:hover{
-  background:#e53e57;
-  border-color:#e53e57;
-  color:#fff !important;
-}
 .v12-pricing-hero{
   width:min(1000px,100%);
   margin:1rem auto 1.35rem;
@@ -2804,10 +2783,12 @@ def _beta_render_account_panel():
     if login_url:
         _login_left, _login_center, _login_right = st.columns([1, 1.35, 1])
         with _login_center:
-            st.markdown(
-                '<a class="v12-google-login-link" href="'
-                f'{html.escape(login_url, quote=True)}" target="_top">Google帳號登入</a>',
-                unsafe_allow_html=True,
+            st.link_button(
+                "Google帳號登入",
+                login_url,
+                type="primary",
+                key="beta_google_login_link",
+                use_container_width=True,
             )
         st.markdown(
             '<div class="v12-beta-login-copy">登入連結有效 10 分鐘，完成後會自動回到本站。</div>',
