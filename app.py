@@ -3280,7 +3280,8 @@ def _v12_render_sticker_basket_workspace():
     selected = _v12_selected_sticker_basket_items()
     st.info(
         f"🧺 暫存作品籃共有 {len(basket)} 張；目前已勾選 {len(selected)} 張要打包。"
-        f"可不限張數累積；但每一份打包並保存的作品集最多 {V12_PROJECT_STICKER_LIMIT} 張。"
+        f"可不限張數累積；但每一份打包並保存的作品集最多 {V12_PROJECT_STICKER_LIMIT} 張貼圖"
+        "（MAIN／TAB 另計，不占上限）。"
     )
 
     control_left, control_right = st.columns(2)
@@ -3324,7 +3325,7 @@ def _v12_render_sticker_basket_workspace():
         excess = len(selected) - V12_PROJECT_STICKER_LIMIT
         st.warning(
             f"單一作品集最多可保存 {V12_PROJECT_STICKER_LIMIT} 張貼圖；目前已勾選 "
-            f"{len(selected)} 張。請先取消至少 {excess} 張後，再建立 ZIP 或同步保存。"
+            f"{len(selected)} 張（MAIN／TAB 另計）。請先取消至少 {excess} 張後，再建立 ZIP 或同步保存。"
         )
         return
 
@@ -3353,7 +3354,7 @@ def _v12_render_sticker_basket_workspace():
         st.caption("只勾選 1 張時，MAIN 與 TAB 會使用同一張圖片；勾選更多張後可分別指定。")
     st.info(
         f"目前會打包 {len(selected)}／{V12_PROJECT_STICKER_LIMIT} 張貼圖｜"
-        f"MAIN：{main_label}｜TAB：{tab_label}"
+        f"MAIN：{main_label}｜TAB：{tab_label}（兩者另計）"
     )
 
     st.markdown("### 🏷️ 作品名稱")
