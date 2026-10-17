@@ -1102,11 +1102,17 @@ div[data-testid="stCheckbox"] label{
   margin-left:auto !important;
   margin-right:auto !important;
 }
-.v12-back-to-top{
+.v12-quick-nav{
   position:fixed;
   right:22px;
   bottom:22px;
   z-index:9999;
+  width:52px;
+  height:52px;
+}
+.v12-quick-nav details{position:relative;}
+.v12-quick-nav summary{
+  list-style:none;
   width:52px;
   height:52px;
   border-radius:50%;
@@ -1120,12 +1126,53 @@ div[data-testid="stCheckbox"] label{
   background:#ff4f67;
   border:2px solid rgba(255,255,255,.78);
   box-shadow:0 8px 24px rgba(0,0,0,.35);
-  transition:transform .18s ease, opacity .18s ease;
+  transition:transform .18s ease, background .18s ease;
+  cursor:pointer;
+  user-select:none;
 }
-.v12-back-to-top:hover{
-  transform:translateY(-3px) scale(1.05);
+.v12-quick-nav summary::-webkit-details-marker{display:none;}
+.v12-quick-nav summary::marker{content:"";}
+.v12-quick-nav summary:hover{transform:translateY(-3px) scale(1.05);}
+.v12-quick-nav details[open] summary{transform:rotate(45deg);background:#7c5cff;}
+.v12-quick-nav-menu{
+  position:absolute;
+  right:-2px;
+  bottom:62px;
+  width:248px;
+  height:282px;
+  margin:0;
+  padding:0;
+  pointer-events:none;
+}
+.v12-quick-nav-link{
+  position:absolute;
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
   color:#fff !important;
+  text-decoration:none !important;
+  font-size:.76rem;
+  font-weight:950;
+  letter-spacing:.02em;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--nav-accent) 72%,#fff),var(--nav-accent));
+  border:1px solid rgba(255,255,255,.72);
+  box-shadow:0 7px 16px rgba(2,7,18,.34);
+  pointer-events:auto;
+  transition:transform .18s ease,filter .18s ease;
 }
+.v12-quick-nav-link:hover{color:#fff !important;transform:scale(1.12);filter:brightness(1.12);}
+.v12-quick-nav-link.p1{right:2px;bottom:5px;}
+.v12-quick-nav-link.p2{right:48px;bottom:14px;}
+.v12-quick-nav-link.p3{right:91px;bottom:37px;}
+.v12-quick-nav-link.p4{right:128px;bottom:69px;}
+.v12-quick-nav-link.p5{right:157px;bottom:108px;}
+.v12-quick-nav-link.p6{right:176px;bottom:151px;}
+.v12-quick-nav-link.p7{right:181px;bottom:198px;}
+.v12-quick-nav-link.p8{right:169px;bottom:241px;}
+html{scroll-behavior:smooth;}
+[id^="v12-step-"]{scroll-margin-top:1rem;}
 .v12-font-gallery-note{
   text-align:center;
   opacity:.9;
@@ -1207,13 +1254,23 @@ div[data-testid="stCheckbox"] label{
   }
 }
 @media (max-width:800px){
-  /* 手機瀏覽器底部工具列較高，置頂鍵往上避開系統導覽列 */
-  .v12-back-to-top{
+  /* 手機瀏覽器底部工具列較高，快捷鍵往上避開系統導覽列。 */
+  .v12-quick-nav{
     width:46px;
     height:46px;
     right:14px;
     bottom:88px;
+  }
+  .v12-quick-nav summary{
+    width:46px;
+    height:46px;
     font-size:23px;
+  }
+  .v12-quick-nav-menu{
+    right:-1px;
+    bottom:55px;
+    transform:scale(.92);
+    transform-origin:bottom right;
   }
 }
 
@@ -1591,7 +1648,23 @@ div[class*="st-key-v12_color_selected_white_"] button::after{
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<a class="v12-back-to-top" href="#v12-page-top" title="快速回到頁面頂端" aria-label="快速回到頁面頂端">⬆️</a>', unsafe_allow_html=True)
+st.markdown("""
+<div class="v12-quick-nav" aria-label="創作步驟快捷鍵">
+  <details>
+    <summary title="開啟創作步驟快捷鍵" aria-label="開啟創作步驟快捷鍵">✦</summary>
+    <nav class="v12-quick-nav-menu" aria-label="移動到創作步驟">
+      <a class="v12-quick-nav-link p1" style="--nav-accent:#ff5c7a" href="#v12-step-01" title="01 人物照片">01</a>
+      <a class="v12-quick-nav-link p2" style="--nav-accent:#ff9f43" href="#v12-step-02" title="02 貼圖風格">02</a>
+      <a class="v12-quick-nav-link p3" style="--nav-accent:#2ecc71" href="#v12-step-03" title="03 人物特色">03</a>
+      <a class="v12-quick-nav-link p4" style="--nav-accent:#3498db" href="#v12-step-04" title="04 貼圖內容">04</a>
+      <a class="v12-quick-nav-link p5" style="--nav-accent:#8e67d8" href="#v12-step-05" title="05 背景設定">05</a>
+      <a class="v12-quick-nav-link p6" style="--nav-accent:#e67e22" href="#v12-step-06" title="06 開始生成">06</a>
+      <a class="v12-quick-nav-link p7" style="--nav-accent:#32c6c0" href="#v12-step-07" title="07 檢視成果">07</a>
+      <a class="v12-quick-nav-link p8" style="--nav-accent:#e74c3c" href="#v12-step-08" title="08 裁切下載">08</a>
+    </nav>
+  </details>
+</div>
+""", unsafe_allow_html=True)
 
 def v10_section(title, accent="#7c4dff"):
     """Render every major area as one consistent, compact creation-step card."""
@@ -1605,13 +1678,15 @@ def v10_section(title, accent="#7c4dff"):
         icon, circled_step, label = matched.groups()
         step_number = "①②③④⑤⑥⑦⑧".index(circled_step) + 1
         eyebrow = f"STEP {step_number:02d} · {flow_names[circled_step]}"
+        section_id = f' id="v12-step-{step_number:02d}"'
     else:
         parts = title.split(maxsplit=1)
         icon = parts[0] if parts else "✨"
         label = parts[1] if len(parts) > 1 else title
         eyebrow = "創作工具"
+        section_id = ""
     st.markdown(
-        f'<div class="v10-section" style="--accent:{accent}">'
+        f'<div class="v10-section"{section_id} style="--accent:{accent}">'
         f'<div class="v10-section-icon">{html.escape(icon)}</div>'
         f'<div class="v10-section-copy">'
         f'<div class="v10-section-step">{html.escape(eyebrow)}</div>'
