@@ -2669,90 +2669,50 @@ def _v12_pick_expression_visual_packs(count):
     return random.sample(available, min(count, len(available)))
 
 
-def _v12_prepare_random_expression_specs(specs, transparent=False):
-    """Resolve checked random slots into concrete, varied directions for one job."""
+def _v12_prepare_random_expression_specs(specs):
+    """Keep random expression slots open-ended while enforcing batch contrast.
+
+    Earlier versions injected a fixed 60-recipe catalogue and a visual-effect
+    catalogue.  That made the output easy to label but unintentionally made
+    poses, backgrounds and symbols look manufactured.  Random now means the
+    image model may invent the reaction freely, with only anti-repeat and
+    low-effect guardrails.
+    """
     resolved = _v12_normalize_expression_specs(specs)
     random_indexes = [
         index for index, spec in enumerate(resolved) if spec["emotion_random"]
     ]
-    recipes, new_cycle_start = _v12_pick_random_expression_recipes(len(random_indexes))
-    visual_packs = _v12_pick_expression_visual_packs(len(random_indexes))
     labels = []
-    for index, recipe, visual_pack in zip(random_indexes, recipes, visual_packs):
+    for index in random_indexes:
         original = resolved[index]
-        variation = V12_RANDOM_EXPRESSION_VARIATIONS[recipe["category"]]
-        face = random.choice(variation["face"])
-        motion = random.choice(variation["motion"])
-        framing = random.choice(variation["framing"])
         user_effect = str(original.get("effect", "") or "")
-        effect = (
-            user_effect
-            if user_effect and user_effect != V12_EXPRESSION_EFFECTS[0]
-            else visual_pack["effect"]
-        )
-        action_parts = [recipe["action"], motion, framing]
-        if transparent:
-            action_parts.append(
-                "透明背景；只使用前景的「" + visual_pack["stage"]
-                + "」效果，不要繪製實體背景"
-            )
-        else:
-            action_parts.append("本格獨立畫面舞台：" + visual_pack["stage"])
-        action_parts.append("鏡頭設計：" + visual_pack["camera"])
         user_action = str(original.get("effect_action_prompt", "") or "").strip()
+        directions = [
+            "由 AI 自由設計一個清楚、自然且有辨識度的情緒反應",
+            "此格的臉部表情、手勢、身體方向與鏡頭角度都必須與本批其他隨機格不同",
+            "優先以人物的表情與姿態製造差異，不要依賴大面積背景、漫畫符號或搶眼特效",
+        ]
         if user_action:
-            action_parts.append("仍需加入使用者指定方向：" + user_action)
+            directions.append("加入使用者指定方向：" + user_action)
         resolved[index] = {
-            "emotion": recipe["emotion"] + "；" + face,
+            "emotion": "由 AI 自由安排，且與同批其他格明顯不同",
             "emotion_random": False,
-            "effect": effect,
-            "effect_action_prompt": "；".join(action_parts),
+            "effect": (
+                user_effect
+                if user_effect and user_effect != V12_EXPRESSION_EFFECTS[0]
+                else V12_EXPRESSION_EFFECTS[0]
+            ),
+            "effect_action_prompt": "；".join(directions),
         }
-        labels.append({
-            "slot": index + 1,
-            "id": recipe["id"],
-            "category": recipe["category"],
-            "title": recipe["title"],
-            "visual_pack_id": visual_pack["id"],
-            "visual_title": visual_pack["title"],
-        })
-    return resolved, labels, new_cycle_start
+        labels.append({"slot": index + 1, "title": "自由隨機"})
+    return resolved, labels
 
 
 def _v12_commit_random_expression_recipes():
-    """Remember only recipes that reached a successful image response."""
-    labels = st.session_state.get("v12_expression_generation_recipe_labels", [])
-    if not isinstance(labels, list):
-        return
-    used = [
-        str(value) for value in st.session_state.get(
-            "v12_expression_used_recipe_ids", []
-        )
-    ]
-    new_cycle_start = st.session_state.get("v12_expression_generation_new_cycle_start")
-    labels_for_current_cycle = labels
-    if new_cycle_start is not None:
-        used = []
-        st.session_state["v12_expression_recipe_cycle"] = (
-            int(st.session_state.get("v12_expression_recipe_cycle", 1)) + 1
-        )
-        labels_for_current_cycle = labels[max(0, int(new_cycle_start or 0)):]
-    for item in labels_for_current_cycle:
-        recipe_id = str(item.get("id", "") if isinstance(item, dict) else "")
-        if recipe_id and recipe_id not in used:
-            used.append(recipe_id)
-    st.session_state["v12_expression_used_recipe_ids"] = used[-len(V12_RANDOM_EXPRESSION_RECIPES):]
-    used_visuals = [
-        str(value) for value in st.session_state.get(
-            "v12_expression_used_visual_pack_ids", []
-        )
-    ]
-    for item in labels:
-        visual_id = str(item.get("visual_pack_id", "") if isinstance(item, dict) else "")
-        if visual_id and visual_id not in used_visuals:
-            used_visuals.append(visual_id)
-    st.session_state["v12_expression_used_visual_pack_ids"] = used_visuals[-len(V12_EXPRESSION_VISUAL_PACKS):]
-    st.session_state["v12_expression_last_recipe_labels"] = labels
+    """Clear obsolete catalogue memory after a successful free-random job."""
+    st.session_state["v12_expression_used_recipe_ids"] = []
+    st.session_state["v12_expression_used_visual_pack_ids"] = []
+    st.session_state["v12_expression_last_recipe_labels"] = []
 
 
 def _v12_reset_random_expression_memory():
@@ -5524,26 +5484,9 @@ def _v12_render_expression_sticker_slots():
     """Keep expression-only edits local, like the text editor fragment."""
     st.caption(
         "表情欄位可自由輸入，例如：慌張、驚恐、傻眼、得意、委屈。"
-        "勾選「隨機」時，系統會從 60 組表情／動作骨架，加上獨立的 24 組背景／特效／鏡頭畫面包抽取；"
-        "同一批不重複，並盡量避開本次瀏覽期間已用過的畫面。"
+        "勾選「隨機」時，AI 會自由安排表情、動作與鏡頭；同一批 8 張會刻意避開相同表情、手勢與構圖。"
+        "除非你自行指定，系統不會自動塞入大面積背景或搶眼特效。"
     )
-    _used_recipe_count = len(set(st.session_state.get("v12_expression_used_recipe_ids", [])))
-    _used_visual_count = len(set(st.session_state.get("v12_expression_used_visual_pack_ids", [])))
-    _recipe_cycle = int(st.session_state.get("v12_expression_recipe_cycle", 1))
-    st.caption(
-        f"🎲 隨機記憶：第 {_recipe_cycle} 輪，已使用表情動作 {_used_recipe_count}／60 組，"
-        f"畫面包 {_used_visual_count}／{len(V12_EXPRESSION_VISUAL_PACKS)} 組。"
-    )
-    _last_recipes = st.session_state.get("v12_expression_last_recipe_labels", [])
-    if isinstance(_last_recipes, list) and _last_recipes:
-        _last_recipe_text = "、".join(
-            f"{int(item.get('slot', 0)):02d} {item.get('title', '')}"
-            + (f"／{item.get('visual_title', '')}" if item.get("visual_title") else "")
-            for item in _last_recipes
-            if isinstance(item, dict)
-        )
-        if _last_recipe_text:
-            st.info("最近一次隨機抽到：" + _last_recipe_text)
     for row_start in (0, 4):
         cols = st.columns(4)
         for offset, col in enumerate(cols):
@@ -5948,10 +5891,17 @@ v10_subsection("🌈 貼圖設定查看", "#ff9f43")
 style_mode = st.session_state.get("v10_style_mode", "↓ 請選擇風格")
 
 _prompt_color_segments = _v12_valid_color_segments(texts)
+_prompt_character_features = list(selected_character)
+if _style_reference_active:
+    # 「五官比例保留」這類照片導向提示會和畫風轉譯互相拉扯。
+    # 仍保留人物身份，但把比例、材質與筆觸交由畫風參考主導。
+    _prompt_character_features = [
+        item for item in _prompt_character_features if item != "五官比例保留"
+    ]
 prompt = build_prompt(
     style,
     custom_style,
-    selected_character,
+    _prompt_character_features,
     custom_character,
     texts,
     transparent,
@@ -5968,16 +5918,16 @@ if _style_reference_active:
         st.session_state.get("v12_style_reference_strength", "明顯融入")
     )
     _style_reference_strength_instruction = {
-        "柔和融入": "以參考圖的整體配色與少量筆觸感輕度融入，人物外觀仍保留較多原始照片特徵。",
-        "明顯融入": "第二張圖是本次的主要視覺語言：明確轉換成它所呈現的線條、造型簡化、色塊、陰影、比例與誇張表情節奏；第一張圖只提供人物身份辨識。",
-        "強烈融入": "第二張圖的高階視覺語言優先於第一張圖的寫實材質：大幅轉換成其線條、筆觸、比例、平面色塊、陰影與荒謬表情節奏，避免保留寫實、3D 或照片質感（除非參考圖本身具有那些特徵）。",
+        "柔和融入": "將人物畫成插畫角色，輕度採用參考圖的配色與筆觸；不保留照片或原物的真實材質。",
+        "明顯融入": "第二張圖是本次的主要美術指導：人物必須明確轉換成它的線條、造型簡化、色塊、陰影、比例與誇張表情節奏；第一張圖只提供人物身份辨識，不可保留照片、石材、3D 渲染或寫實材質。",
+        "強烈融入": "第二張圖的高階視覺語言完全優先於第一張圖的寫實材質：將人物重新繪製成參考圖的插畫世界，強烈採用其線條、筆觸、比例、平面色塊、留白與荒謬表情節奏；禁止照片感、石材感、立體雕塑感、3D 渲染與通用 LINE 貼圖畫風（除非第二張圖本身具有那些特徵）。",
     }.get(_style_reference_strength, "第二張圖是本次的主要視覺語言。")
     prompt += (
         "\n【畫風參考模式】本次輸入的第二張圖片是畫風參考圖。"
         + _style_reference_strength_instruction
         + "請先辨識參考圖的高階視覺特徵，包括線條與筆觸、角色比例、配色、"
         "陰影方式、畫面留白、表情誇張程度與整體喜劇／情緒節奏，並把這些特徵套用到全新貼圖。"
-        "第一張人物照片只用於保留人物身份辨識特徵，請將人物完整轉譯進參考圖的視覺語言，而不是把參考圖僅當成背景配色。"
+        "第一張人物照片只用於保留人物身份辨識特徵，請將人物完整重新繪製並轉譯進參考圖的視覺語言，而不是把參考圖僅當成背景配色或裝飾。"
         "請創作全新的八格貼圖；"
         "不要直接複製參考圖中的既有角色、文字、標誌、版面或任何單一貼圖內容。"
         "不要套用其他預設或自定義貼圖風格。"
@@ -6252,14 +6202,12 @@ if st.button(
         st.session_state["beta_generation_job_id"] = _reservation["job_id"]
 
     if _sticker_mode == "expression":
-        _resolved_specs, _recipe_labels, _new_recipe_cycle_start = (
-            _v12_prepare_random_expression_specs(expression_specs, transparent=transparent)
+        _resolved_specs, _recipe_labels = _v12_prepare_random_expression_specs(
+            expression_specs
         )
         st.session_state["v12_expression_generation_specs"] = _resolved_specs
         st.session_state["v12_expression_generation_recipe_labels"] = _recipe_labels
-        st.session_state["v12_expression_generation_new_cycle_start"] = (
-            _new_recipe_cycle_start
-        )
+        st.session_state.pop("v12_expression_generation_new_cycle_start", None)
     else:
         for _expression_job_key in (
             "v12_expression_generation_specs",
