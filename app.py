@@ -4188,7 +4188,7 @@ def _v12_render_sticker_basket_workspace():
     )
     name_preview = _v12_project_snapshot().get("project_name", "")
     if not name_preview:
-        st.caption(f"未填寫時，會自動使用：{_v12_default_project_name()}")
+        st.caption(t("project_default", name=_v12_default_project_name()))
 
     cloud_session = _beta_current_user() if _beta_config() else None
     save_to_cloud = st.checkbox(
@@ -4198,9 +4198,9 @@ def _v12_render_sticker_basket_workspace():
         disabled=not bool(cloud_session),
     )
     if cloud_session:
-        st.caption("勾選後會同步保存到雲端，需要等候較久時間，請勿重新整理網頁。")
+        st.caption(t("cloud_sync_wait"))
     else:
-        st.caption("登入會員後可選擇同步保存到雲端「我的作品」。未勾選時，作品僅暫存於本次瀏覽。")
+        st.caption(t("cloud_login_notice"))
 
     _active_style_reference_for_save = (
         st.session_state.get("v12_style_source_mode") == V12_STYLE_REFERENCE_MODE
@@ -4219,7 +4219,7 @@ def _v12_render_sticker_basket_workspace():
         disabled=not bool(cloud_session) or not has_creation_materials,
     )
     if has_creation_materials:
-        st.caption("創作素材僅自己可讀；取消勾選後，雲端作品只會保存已選成品與設定。")
+        st.caption(t("materials_private"))
 
     if st.button(
         t("package_selected", count=len(selected)),
@@ -4278,9 +4278,7 @@ def _v12_render_sticker_basket_workspace():
             )
             st.session_state["v12_basket_last_zip_bytes"] = zip_bytes
             st.session_state["v12_basket_last_zip_name"] = download_name
-            st.success(
-                f"🎉 完成！已將 {len(selected)} 張貼圖＋main.png＋tab.png 打包，並加入「我的作品」。"
-            )
+            st.success(t("package_complete", count=len(selected)))
 
             active_cloud_session = _beta_current_user() if save_to_cloud and _beta_config() else None
             if save_to_cloud and active_cloud_session:
@@ -4291,42 +4289,36 @@ def _v12_render_sticker_basket_workspace():
                         cloud_record["style_reference_bytes"] = b""
                     cloud_progress = st.progress(
                         0,
-                        text="正在準備同步保存到雲端，請勿重新整理網頁…",
+                        text=t("cloud_prepare"),
                     )
                     cloud_save = _beta_save_library_project(
                         active_cloud_session,
                         cloud_record,
                         progress_callback=lambda progress, message: cloud_progress.progress(
-                            progress, text=message + " 請勿重新整理網頁。"
+                            progress, text=message + " " + t("do_not_refresh")
                         ),
                     )
                     if cloud_save.get("saved"):
-                        cloud_progress.progress(100, text="雲端作品保存完成！")
-                        st.success(
-                            f"☁️ 已同步保存至雲端作品庫（{cloud_save['saved_count']}／"
-                            f"{cloud_save['library_capacity']} 組）。"
-                        )
+                        cloud_progress.progress(100, text=t("cloud_saved", count=cloud_save["saved_count"], limit=cloud_save["library_capacity"]))
+                        st.success(t("cloud_saved", count=cloud_save["saved_count"], limit=cloud_save["library_capacity"]))
                     else:
                         cloud_progress.empty()
-                        st.warning(
-                            f"雲端作品庫已達 {cloud_save['saved_count']}／"
-                            f"{cloud_save['library_capacity']} 組；請到「我的作品」下載並刪除一組後再保存。"
-                        )
+                        st.warning(t("cloud_full", count=cloud_save["saved_count"], limit=cloud_save["library_capacity"]))
                 except Exception:
-                    st.warning("本次作品已保留在本機暫存，但雲端保存暫時未完成。請稍後重新打包再試。")
+                    st.warning(t("cloud_failed"))
             elif save_to_cloud:
-                st.warning("雲端保存尚未執行：請重新登入會員後再試。")
+                st.warning(t("cloud_relogin"))
             else:
-                st.caption("本次未同步保存到雲端；作品仍可在本次瀏覽的「我的作品」中下載。")
+                st.caption(t("local_only"))
         except Exception as error:
-            st.error(f"打包失敗：{error}")
+            st.error(t("package_failed", error=error))
 
     last_zip = st.session_state.get("v12_basket_last_zip_bytes")
     if last_zip:
         st.download_button(
             t("download_zip"),
             data=last_zip,
-            file_name=st.session_state.get("v12_basket_last_zip_name") or "LINE貼圖.zip",
+            file_name=st.session_state.get("v12_basket_last_zip_name") or t("zip_default_name"),
             mime="application/zip",
             use_container_width=True,
             key="v12_basket_download_latest",
