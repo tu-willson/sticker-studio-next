@@ -31,6 +31,60 @@ def t(key, **kwargs):
     return tr(_v12_ui_locale(), key, **kwargs)
 
 
+def _v12_localized_option(value, translations):
+    """Display a localized label while retaining the stable internal option value."""
+    return translations.get(str(value), {}).get(_v12_ui_locale(), str(value))
+
+
+V12_AI_TONE_LABELS = {
+    "😂 搞笑自然": {"en": "😂 Playful and natural", "ja": "😂 自然でおもしろい"},
+    "😤 憤憤不平": {"en": "😤 Frustrated", "ja": "😤 不満たっぷり"},
+    "😈 嘲諷吐槽": {"en": "😈 Sarcastic", "ja": "😈 皮肉・ツッコミ"},
+    "☁️ 委屈可愛": {"en": "☁️ Cute and pouty", "ja": "☁️ しょんぼり可愛い"},
+    "👑 霸氣有梗": {"en": "👑 Bold and witty", "ja": "👑 強気でウィットに富む"},
+    "💬 台灣口語": {"en": "💬 Taiwanese casual", "ja": "💬 台湾カジュアル"},
+    "✨ 溫暖療癒": {"en": "✨ Warm and comforting", "ja": "✨ あたたかく癒やし系"},
+}
+
+V12_TEXT_OUTLINE_LABELS = {
+    "不使用外框": {"en": "No outline", "ja": "外枠なし"},
+    "厚白貼紙描邊": {"en": "Thick white sticker outline", "ja": "太い白ステッカー縁"},
+    "雙層撞色描邊": {"en": "Two-tone double outline", "ja": "ツートン二重縁"},
+    "漫畫爆炸對話框": {"en": "Comic burst speech bubble", "ja": "漫画の爆発吹き出し"},
+    "雲朵對話泡泡框": {"en": "Cloud speech bubble", "ja": "雲の吹き出し"},
+    "圓角膠囊標籤框": {"en": "Rounded capsule label", "ja": "角丸カプセルラベル"},
+    "鋸齒票券外框": {"en": "Perforated ticket frame", "ja": "ギザギザチケット枠"},
+    "火焰爆裂外框": {"en": "Flame burst outline", "ja": "炎の爆裂枠"},
+    "愛心泡泡外框": {"en": "Heart bubble outline", "ja": "ハート泡枠"},
+    "速度線聚焦外框": {"en": "Speed-line focus outline", "ja": "集中線フォーカス枠"},
+    "金屬徽章外框": {"en": "Metal badge outline", "ja": "メタルバッジ枠"},
+    "彩虹波浪外框": {"en": "Rainbow wave outline", "ja": "虹の波形枠"},
+    "塗鴉手繪外框": {"en": "Hand-drawn doodle outline", "ja": "手描き落書き枠"},
+}
+
+V12_RANDOM_POOL_LABELS = {
+    "日常對話": {"en": "Everyday chat", "ja": "日常会話"}, "生活應用": {"en": "Everyday use", "ja": "生活シーン"},
+    "時間問候": {"en": "Time greetings", "ja": "時間のあいさつ"}, "溫暖關愛": {"en": "Warm care", "ja": "やさしい気づかい"},
+    "歡樂笑聲": {"en": "Laughter & fun", "ja": "笑い・楽しさ"}, "表現難過": {"en": "Feeling sad", "ja": "悲しい気持ち"},
+    "祝賀對方": {"en": "Congratulations", "ja": "お祝い"}, "帶點懷疑": {"en": "A little doubtful", "ja": "ちょっと疑問"},
+    "尷尬反應": {"en": "Awkward reactions", "ja": "気まずい反応"}, "驚訝震驚": {"en": "Surprise & shock", "ja": "驚き・衝撃"},
+    "無言傻眼": {"en": "Speechless", "ja": "あきれ・無言"}, "誇張荒謬": {"en": "Ridiculous", "ja": "大げさ・ありえない"},
+    "調皮搗蛋": {"en": "Playful teasing", "ja": "いたずら・からかい"}, "衷心感謝": {"en": "Heartfelt thanks", "ja": "心からの感謝"},
+    "誠摯道歉": {"en": "Sincere apology", "ja": "心からの謝罪"}, "不必客氣": {"en": "You're welcome", "ja": "どういたしまして"},
+    "時間行程": {"en": "Time & plans", "ja": "時間・予定"}, "交通出門": {"en": "On the way", "ja": "移動・外出"},
+    "地點詢問": {"en": "Location questions", "ja": "場所の質問"}, "忙碌相關": {"en": "Busy life", "ja": "忙しいとき"},
+    "用餐相關": {"en": "Food & dining", "ja": "食事"}, "休息睡覺": {"en": "Rest & sleep", "ja": "休憩・睡眠"},
+    "天氣感受": {"en": "Weather feelings", "ja": "天気の感想"}, "注意提醒": {"en": "Reminders", "ja": "注意・リマインド"},
+    "意見表達": {"en": "Opinions", "ja": "意見表明"}, "參與話題": {"en": "Joining in", "ja": "話題に参加"},
+    "表態行動": {"en": "Taking action", "ja": "行動の表明"}, "約定承諾": {"en": "Promises", "ja": "約束・承諾"},
+    "思考回應": {"en": "Thinking it over", "ja": "考え中の返事"}, "請求拜託": {"en": "Requests", "ja": "お願い"},
+    "正向情緒": {"en": "Positive feelings", "ja": "前向きな気持ち"}, "負面情緒": {"en": "Negative feelings", "ja": "ネガティブな気持ち"},
+    "緊張憤怒": {"en": "Nervous & angry", "ja": "緊張・怒り"}, "逃避現實": {"en": "Avoiding reality", "ja": "現実逃避"},
+    "職場學習": {"en": "Work & study", "ja": "仕事・学習"}, "幽默趣味": {"en": "Humour & fun", "ja": "ユーモア"},
+    "戀愛表達": {"en": "Love & affection", "ja": "恋愛表現"},
+}
+
+
 def _v12_generation_suffix():
     """Keep compact generation-plan wording natural in each public language."""
     return {"zh-TW": "／月", "en": " / month", "ja": "／月"}[_v12_ui_locale()]
@@ -5157,6 +5211,7 @@ def _v12_render_ai_copy_assistant():
         t("ai_tone"),
         V12_AI_COPY_TONES,
         key="v12_ai_copy_tone",
+        format_func=lambda value: _v12_localized_option(value, V12_AI_TONE_LABELS),
     )
 
     # 在點選生成前就先讓會員看見今日剩餘額度。
@@ -5388,10 +5443,10 @@ def _v12_render_ai_copy_assistant():
     # ④ 主題用語池：只有真正儲存過文案的主題才會出現在這裡。
     #    每個主題可勾選「加入本次創作」，最多同時 3 個主題。
     # ------------------------------------------------------------
-    st.markdown("#### 📚 主題用語池")
+    st.markdown(f"#### {t('ai_theme_pool')}")
     _pool_themes = list(st.session_state["v12_theme_pools"].keys())
     if not _pool_themes:
-        st.info("目前尚未建立主題用語池。先輸入主題、生成 16 句，再勾選想保存的文案即可。")
+        st.info(t("ai_theme_pool_empty"))
     else:
         # 清掉已不存在的選擇，並限制最多 3 個。
         st.session_state["v12_selected_themes"] = [
@@ -5399,10 +5454,7 @@ def _v12_render_ai_copy_assistant():
             if x in _pool_themes
         ][:3]
 
-        st.caption(
-            f"選擇本次創作要參考的主題（最多 3 個）。目前已選："
-            f"{len(st.session_state['v12_selected_themes'])} / 3"
-        )
+        st.caption(t("ai_theme_pick_caption", count=len(st.session_state["v12_selected_themes"])))
 
         for _theme_i, _theme in enumerate(_pool_themes):
             _pool = list(st.session_state["v12_theme_pools"].get(_theme, []))[:30]
@@ -5413,7 +5465,7 @@ def _v12_render_ai_copy_assistant():
             _currently_selected = _theme in st.session_state["v12_selected_themes"]
             _can_select = _currently_selected or len(st.session_state["v12_selected_themes"]) < 3
             _use_theme = st.checkbox(
-                f"🎯 加入本次創作：{_theme}（{len(_pool)}/30）",
+                t("ai_add_theme", theme=_theme, count=len(_pool)),
                 key=_theme_key,
                 disabled=not _can_select,
             )
@@ -5428,9 +5480,9 @@ def _v12_render_ai_copy_assistant():
 
             with st.expander(f"📚 {_theme}｜{len(_pool)}/30 句", expanded=False):
                 if not _pool:
-                    st.caption("目前沒有保存的文案。")
+                    st.caption(t("ai_theme_empty"))
                 else:
-                    st.caption("勾選要刪除的句子；刪除前會再次確認。")
+                    st.caption(t("ai_theme_delete_help"))
                     _delete_refs = []
                     _pcols = st.columns(2)
                     for _pi, _phrase in enumerate(_pool):
@@ -5441,9 +5493,9 @@ def _v12_render_ai_copy_assistant():
                             ):
                                 _delete_refs.append(_pi)
                     if _delete_refs:
-                        st.warning(f"已選擇刪除 {len(_delete_refs)} 句。")
+                        st.warning(t("ai_theme_delete_count", count=len(_delete_refs)))
                         if st.button(
-                            f"🗑️ 刪除勾選的 {len(_delete_refs)} 句",
+                            t("ai_theme_delete_button", count=len(_delete_refs)),
                             key=f"v12_theme_pool_delete_{_theme_i}",
                             use_container_width=True,
                         ):
@@ -5454,20 +5506,18 @@ def _v12_render_ai_copy_assistant():
                             st.success(f"✅ 已刪除 {len(_delete_refs)} 句。")
                             st.rerun()
 
-        st.caption(
-            f"🎯 本次創作已選擇：{len(st.session_state['v12_selected_themes'])} / 3 個主題"
-        )
+        st.caption(t("ai_themes_selected", count=len(st.session_state["v12_selected_themes"])))
 
     # ------------------------------------------------------------
     # ⑤ 從本次已選的最多 3 個主題中挑最終 8 句。
     # ------------------------------------------------------------
-    st.markdown("#### 🎯 從已選主題用語池選擇 8 句")
+    st.markdown(f"#### {t('ai_select_eight')}")
     _active_selected_themes = [
         x for x in st.session_state.get("v12_selected_themes", [])
         if x in st.session_state["v12_theme_pools"]
     ][:3]
     if not _active_selected_themes:
-        st.info("請先在上面的主題用語池勾選本次創作要使用的主題。")
+        st.info(t("ai_select_theme_first"))
     else:
         _final_refs = st.session_state.get("v12_theme_final_selected", [])
         if not isinstance(_final_refs, list):
@@ -5488,16 +5538,16 @@ def _v12_render_ai_copy_assistant():
                     ):
                         _final_new.append(_ref)
         st.session_state["v12_theme_final_selected"] = _final_new
-        st.caption(f"目前已選 {_final_new.__len__()} / 8 句")
+        st.caption(t("ai_selected_eight", count=len(_final_new)))
         if len(_final_new) > 8:
-            st.warning("⚠️ 最多只能選 8 句，請取消多出的選項。")
+            st.warning(t("ai_max_eight"))
         if st.button(
-            "🎯 套用所選 8 句到 01～08",
+            t("ai_apply_eight"),
             key="v12_ai_copy_apply_pool",
             use_container_width=True,
         ):
             if len(_final_new) != 8:
-                st.warning("請從已選主題用語池中剛好選擇 8 句，再套用到 01～08。")
+                st.warning(t("ai_apply_eight_warning"))
             else:
                 _phrase_map = {}
                 for _theme in _active_selected_themes:
@@ -5515,7 +5565,7 @@ def _v12_render_ai_copy_assistant():
                     st.rerun()
 
     if st.session_state.get("v12_ai_copy_last_applied", False):
-        st.caption("💡 已套用完成；你仍然可以手動修改 01～08 的任何一句。")
+        st.caption(t("ai_applied_edit"))
         st.session_state["v12_ai_copy_last_applied"] = False
 
 def build_prompt(style, custom_style, selected_character, custom_character,
@@ -5891,24 +5941,21 @@ if st.session_state["v12_view"] == "pricing":
 
 if st.session_state["v12_view"] == "library":
     st.markdown(f'<div class="v10-main-title">{t("nav_library")}</div>', unsafe_allow_html=True)
-    st.caption("打包時勾選雲端保存的會員作品會保存在私人雲端作品庫；本機暫存只在這次瀏覽期間保留。")
+    st.caption(t("library_intro"))
 
     _cloud_session = _beta_current_user() if _beta_config() else None
     if _cloud_session:
         try:
             _cloud_status = _beta_library_status(_cloud_session)
-            st.info(
-                f"☁️ 雲端作品庫：已保存 {_cloud_status['saved_count']}／"
-                f"{_cloud_status['library_capacity']} 組作品"
-            )
-            st.caption("作品集上限會依目前會員權益套用；訂閱與單次生成包容量不會累計。")
+            st.info(t("cloud_library_status", count=_cloud_status["saved_count"], limit=_cloud_status["library_capacity"]))
+            st.caption(t("cloud_capacity_note"))
             _cloud_projects = _beta_list_library_projects(_cloud_session)
         except Exception:
             _cloud_projects = []
-            st.warning("雲端作品庫暫時無法讀取；本機暫存不受影響。")
+            st.warning(t("cloud_unavailable"))
 
         if _cloud_projects:
-            st.markdown("### ☁️ 雲端作品")
+            st.markdown(f"### {t('cloud_projects')}")
             for _cloud_project in _cloud_projects:
                 if not isinstance(_cloud_project, dict) or not _cloud_project.get("id"):
                     continue
@@ -5916,24 +5963,24 @@ if st.session_state["v12_view"] == "library":
                 _cloud_meta = _cloud_project.get("metadata")
                 if not isinstance(_cloud_meta, dict):
                     _cloud_meta = {}
-                _cloud_title = str(_cloud_project.get("title") or _cloud_meta.get("project_name") or "未命名作品")
+                _cloud_title = str(_cloud_project.get("title") or _cloud_meta.get("project_name") or t("untitled_project"))
                 _cloud_left, _cloud_right = st.columns([1, 2.4], vertical_alignment="top")
                 with _cloud_left:
                     try:
                         st.image(
                             _beta_storage_download(_cloud_session, _cloud_project.get("preview_path", "")),
-                            caption="雲端預覽圖",
+                            caption=t("cloud_preview"),
                             use_container_width=True,
                         )
                     except Exception:
-                        st.info("🖼️ 預覽圖暫時無法載入")
+                        st.info(t("preview_unavailable"))
                 with _cloud_right:
                     st.markdown(f"### 🏷️ {html.escape(_cloud_title)}")
-                    st.caption(f"雲端保存：{_v12_format_display_time(_cloud_project.get('created_at', ''))}")
-                    st.caption("雲端只保存已選成品與設定，不保存 ZIP 或 4×2 原圖；如需下載，請先載回創作頁後重新打包。")
+                    st.caption(t("cloud_saved_at", time=_v12_format_display_time(_cloud_project.get("created_at", ""))))
+                    st.caption(t("cloud_assets_note"))
                     _cloud_act1, _cloud_act2 = st.columns(2)
                     with _cloud_act1:
-                        if st.button("↩️ 載回創作頁", key=f"cloud_load_{_cloud_id}", use_container_width=True):
+                        if st.button(t("return_create"), key=f"cloud_load_{_cloud_id}", use_container_width=True):
                             try:
                                 _cloud_record = _beta_load_library_project_record(
                                     _cloud_session, _cloud_project
@@ -5945,23 +5992,23 @@ if st.session_state["v12_view"] == "library":
                                 st.error("作品暫時無法載回，請稍後再試。")
                     with _cloud_act2:
                         _delete_ack = st.checkbox(
-                            "確認永久刪除",
+                            t("confirm_delete"),
                             key=f"cloud_delete_ack_{_cloud_id}",
                         )
-                        if st.button("🗑️ 刪除雲端作品", key=f"cloud_delete_{_cloud_id}", use_container_width=True):
+                        if st.button(t("delete_cloud"), key=f"cloud_delete_{_cloud_id}", use_container_width=True):
                             if not _delete_ack:
-                                st.warning("請先勾選確認永久刪除。")
+                                st.warning(t("delete_confirm_first"))
                             else:
                                 try:
                                     _beta_delete_library_project(_cloud_session, _cloud_id)
                                     st.rerun()
                                 except Exception:
-                                    st.error("作品尚未刪除，請稍後再試。")
+                                    st.error(t("delete_failed"))
                 st.divider()
         else:
-            st.caption("☁️ 雲端作品庫尚未有作品。打包時勾選「同步保存」即可保存；空間滿時請先下載並刪除一組。")
+            st.caption(t("cloud_empty"))
     else:
-        st.info("登入會員後，打包時可選擇保存到私人雲端作品庫。")
+        st.info(t("cloud_login"))
 
     _projects_all = list(st.session_state.get("v12_projects_local_index", []))
     _top_a, _top_b = st.columns([4, 1])
@@ -6346,7 +6393,7 @@ else:
                 width=240,
             )
         st.success(t("style_reference_enabled"))
-        st.caption("調整下列設定時不會重新讀取頁面；完成後再按「套用畫風設定」。")
+        st.caption(t("style_settings_caption"))
         with st.form("v12_style_reference_details_form", border=False):
             st.radio(
                 t("style_strength"),
@@ -6358,7 +6405,7 @@ else:
                     "明顯融入": t("style_strength_clear"),
                     "強烈融入": t("style_strength_strong"),
                 }[value],
-                help="只改變新作品的線條、比例、配色、陰影與表情語言；不會複製參考圖中的角色、文字或單張貼圖。",
+                help=t("style_strength_help"),
             )
             st.text_area(
                 t("style_elements"),
@@ -6374,8 +6421,8 @@ else:
                 )
         if _apply_style_reference_details:
             st.success(t("style_applied"))
-        st.caption("💡 這段說明會直接補充給 AI，協助它把你指定的特色融入新人物；不會複製參考圖中的角色、文字或版面。")
-        st.caption("若打包時同步保存並勾選「保存私人創作素材」，這張參考圖會一併保存，供日後載回續作。")
+        st.caption(t("style_elements_help"))
+        st.caption(t("style_materials_caption"))
 
 v10_section(t("section_features"), "#2ecc71")
 st.caption(t("features_intro"))
@@ -6775,32 +6822,40 @@ if _sticker_mode == "text" and st.session_state.get("v12_text_source_panel") == 
 @st.fragment
 def _v12_render_random_phrase_panel():
     _pool_names=list(V8_RANDOM_POOLS.keys())
+    _pool_placeholder = "↓ 請選擇語詞池"
+    _custom_pool = "⭐ 我的自定義語詞池"
+    _all_builtin_pool = "全部內建語詞"
     _pool_choice=st.selectbox(
-        "🎲 隨機用語池",
-        ["↓ 請選擇語詞池", "⭐ 我的自定義語詞池", "全部內建語詞"] + _pool_names,
+        t("random_pool"),
+        [_pool_placeholder, _custom_pool, _all_builtin_pool] + _pool_names,
         key="v10_phrase_pool_choice",
+        format_func=lambda value: {
+            _pool_placeholder: t("choose_pool"),
+            _custom_pool: t("custom_pool"),
+            _all_builtin_pool: t("all_builtin_pools"),
+        }.get(value, _v12_localized_option(value, V12_RANDOM_POOL_LABELS)),
     )
 
-    if _pool_choice=="⭐ 我的自定義語詞池":
-        with st.expander("💾 我的自定義語詞池",expanded=True):
+    if _pool_choice == _custom_pool:
+        with st.expander(t("custom_pool"),expanded=True):
             _new_phrase=st.text_input(
-                "➕ 新增一句語詞",
+                t("random_add_phrase"),
                 key="v10_new_phrase",
-                placeholder="例如：今天也要加油！",
+                placeholder=t("random_phrase_placeholder"),
             )
             _pa,_pb,_pc=st.columns(3)
             with _pa:
-                if st.button("➕ 加入語詞池",key="v10_add_phrase",use_container_width=True):
+                if st.button(t("random_add_to_pool"),key="v10_add_phrase",use_container_width=True):
                     if _new_phrase.strip():
                         V10_CUSTOM_PHRASE_POOL.append(_new_phrase.strip())
                         V10_CUSTOM_PHRASE_POOL[:]=list(dict.fromkeys(V10_CUSTOM_PHRASE_POOL))
                         if _save_v10_phrase_pool(V10_CUSTOM_PHRASE_POOL):
-                            st.success("✅ 已加入並儲存")
+                            st.success(t("random_saved"))
                             st.rerun()
                         else:
-                            st.error("❌ 儲存失敗")
+                            st.error(t("random_save_failed"))
             with _pb:
-                if st.button("🎲 從我的池子抽 8 句",key="v10_random_my_pool",use_container_width=True):
+                if st.button(t("random_draw_eight"),key="v10_random_my_pool",use_container_width=True):
                     if V10_CUSTOM_PHRASE_POOL:
                         vals=random.sample(V10_CUSTOM_PHRASE_POOL,min(8,len(V10_CUSTOM_PHRASE_POOL)))
                         while len(vals)<8:
@@ -6809,33 +6864,33 @@ def _v12_render_random_phrase_panel():
                         set_texts(vals)
                         st.rerun()
                     else:
-                        st.warning("目前自定義語詞池是空的。")
+                        st.warning(t("random_custom_empty"))
             with _pc:
-                if st.button("🗑️ 清空我的池子",key="v10_clear_my_pool",use_container_width=True):
+                if st.button(t("random_clear"),key="v10_clear_my_pool",use_container_width=True):
                     V10_CUSTOM_PHRASE_POOL.clear()
                     if _save_v10_phrase_pool(V10_CUSTOM_PHRASE_POOL):
-                        st.success("✅ 已清空")
+                        st.success(t("random_cleared"))
                         st.rerun()
 
             if V10_CUSTOM_PHRASE_POOL:
-                st.caption(f"目前共有 {len(V10_CUSTOM_PHRASE_POOL)} 句")
+                st.caption(t("random_total", count=len(V10_CUSTOM_PHRASE_POOL)))
                 st.write("、".join(V10_CUSTOM_PHRASE_POOL))
             else:
-                st.info("尚未建立自定義語詞。")
+                st.info(t("random_none"))
 
         _active_pool=V10_CUSTOM_PHRASE_POOL
     else:
-        if _pool_choice=="↓ 請選擇語詞池":
+        if _pool_choice == _pool_placeholder:
             _active_pool=[]
-            st.info("👆 請先選擇一個語詞池。")
-        elif _pool_choice=="全部內建語詞":
+            st.info(t("random_select_first"))
+        elif _pool_choice == _all_builtin_pool:
             _active_pool=[x for vals in V8_RANDOM_POOLS.values() for x in vals]
         else:
             _active_pool=V8_RANDOM_POOLS.get(_pool_choice,[])
 
         a,b,c=st.columns(3)
         with a:
-            if st.button("🎲 隨機填入 8 格",use_container_width=True,key="v10_random_v8"):
+            if st.button(t("random_fill_eight"),use_container_width=True,key="v10_random_v8"):
                 if _active_pool:
                     vals=random.sample(_active_pool,min(8,len(_active_pool)))
                     while len(vals)<8:
@@ -6844,20 +6899,20 @@ def _v12_render_random_phrase_panel():
                     set_texts(vals)
                     st.rerun()
         with b:
-            st.write(f"目前語詞池：{len(_active_pool)} 句")
+            st.write(t("random_current_pool", count=len(_active_pool)))
         with c:
-            st.write("內建語詞分類")
+            st.write(t("all_builtin_pools"))
 
     # 內建的「分類→語句→指定格」功能保留。
-    if _pool_choice not in ("⭐ 我的自定義語詞池", "↓ 請選擇語詞池"):
+    if _pool_choice not in (_custom_pool, _pool_placeholder):
         p1,p2,p3=st.columns([1.2,2.4,0.8])
         with p1:
-            _common_cat=st.selectbox("常用語分類",_pool_names,key="v8_common_cat")
+            _common_cat=st.selectbox(t("phrase_category"),_pool_names,key="v8_common_cat", format_func=lambda value: _v12_localized_option(value, V12_RANDOM_POOL_LABELS))
         with p2:
-            _common_phrase=st.selectbox("常用語參考",V8_RANDOM_POOLS.get(_common_cat,[]),key="v8_common_phrase")
+            _common_phrase=st.selectbox(t("phrase_reference"),V8_RANDOM_POOLS.get(_common_cat,[]),key="v8_common_phrase")
         with p3:
-            _target_slot=st.selectbox("放入第",[f"{i:02d}" for i in range(1,9)],key="v8_target_slot")
-        if st.button("➕ 放入選定格",key="v8_insert_phrase"):
+            _target_slot=st.selectbox(t("target_slot"),[f"{i:02d}" for i in range(1,9)],key="v8_target_slot")
+        if st.button(t("insert_selected_slot"),key="v8_insert_phrase"):
             set_texts([
                 _common_phrase if i==int(_target_slot)-1 else st.session_state.get(f"sticker_text_{i}","")
                 for i in range(8)
@@ -6882,9 +6937,9 @@ _prompt_expression_specs = (
 )
 
 if _sticker_mode == "text":
-    with st.expander("📚 查看全部語詞分類與內容",expanded=False):
+    with st.expander(t("view_all_phrases"),expanded=False):
         for cat,vals in V8_RANDOM_POOLS.items():
-            st.markdown(f"**{cat}**")
+            st.markdown(f"**{_v12_localized_option(cat, V12_RANDOM_POOL_LABELS)}**")
             st.write("、".join(vals))
 
 if _sticker_mode == "text":
@@ -6902,6 +6957,7 @@ if _sticker_mode == "text":
         V8_TEXT_STYLE_OPTIONS,
         index=0,
         key="v8_text_style",
+        format_func=lambda value: _v12_localized_option(value, V12_TEXT_OUTLINE_LABELS),
     )
 else:
     text_style = ""
@@ -6929,6 +6985,7 @@ if _sticker_mode == "text":
         t("font_quick_pick"),
         ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
         key="v12_font_quick_pick",
+        format_func=lambda value: t("font_quick_placeholder") if value == "— 快速選擇字型｜可直接輸入數字 —" else value,
     )
     if _quick_font_choice != "— 快速選擇字型｜可直接輸入數字 —":
         _quick_font_no = int(_quick_font_choice.split("｜", 1)[0])
@@ -6937,7 +6994,7 @@ if _sticker_mode == "text":
             st.session_state["v10_font_gallery_open"] = False
         _selected_font = _quick_font_no
     if _selected_font:
-        st.success(f"🎨 已選擇 125 字型：{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}")
+        st.success(t("font_selected", number=_selected_font, name=V8_TEXT_EFFECT_CATALOG[_selected_font]))
     else:
         st.info(t("font_none"))
 
@@ -6968,8 +7025,8 @@ if "v12_font_gallery_page" not in st.session_state:
     st.session_state.v12_font_gallery_page = 1
 
 if _sticker_mode == "text" and st.button(
-    "📚 開啟 125 種帶圖字型總覽" if not st.session_state.v10_font_gallery_open
-    else "📖 關閉 125 種帶圖字型總覽",
+    t("font_open_gallery") if not st.session_state.v10_font_gallery_open
+    else t("font_close_gallery"),
     key="v10_font_gallery_toggle",
     use_container_width=True,
 ):
@@ -8096,11 +8153,11 @@ def _public02a_settings_panel():
     # 區塊標題
     # ------------------------------------------------------------
     st.markdown(
-        """
+        f"""
         <div class="v12-settings-shell">
-            <div class="v12-settings-title">🔐 我的個人設定</div>
+            <div class="v12-settings-title">{t("settings_title")}</div>
             <div class="v12-settings-subtitle">
-                自定義風格、詞語與人物／場景需求只屬於目前使用者。
+                {t("settings_subtitle")}
             </div>
         </div>
         """,
@@ -8235,12 +8292,12 @@ def _public02a_settings_panel():
     # ============================================================
     with st.container(key="v12_settings_export_card"):
         st.markdown(
-            '<div class="v12-settings-card-heading">📤 匯出自定義</div>',
+            f'<div class="v12-settings-card-heading">{t("export_custom")}</div>',
             unsafe_allow_html=True,
         )
 
         st.download_button(
-            label="匯出自定義",
+            label=t("export_custom"),
             data=export_data,
             file_name="LINE貼圖工具_自定義設定.json",
             mime="application/json",
@@ -8253,16 +8310,16 @@ def _public02a_settings_panel():
     # ============================================================
     with st.container(key="v12_settings_import_card"):
         st.markdown(
-            '<div class="v12-settings-card-heading">📥 匯入自定義</div>',
+            f'<div class="v12-settings-card-heading">{t("import_custom")}</div>',
             unsafe_allow_html=True,
         )
 
         # 使用原生 uploader，不再對它的內部 button 做文字或定位覆蓋。
         imported = st.file_uploader(
-            "匯入自定義",
+            t("import_custom"),
             type=["json"],
             key="public02a_import_settings",
-            help="選擇之前匯出的 LINE貼圖工具_自定義設定.json",
+            help=t("import_help"),
         )
 
     # ============================================================
@@ -8284,10 +8341,10 @@ def _public02a_settings_panel():
                 st.rerun()
 
             elif st.session_state.get("public02a_import_success"):
-                st.success("✅ 自定義設定已匯入")
+                st.success(t("import_success"))
 
         except Exception as exc:
-            st.error(f"❌ 匯入失敗：{exc}")
+            st.error(t("import_failed", error=exc))
 
 
 # PUBLIC STEP 02A｜顯示個人設定匯出／匯入
