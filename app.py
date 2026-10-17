@@ -6583,7 +6583,7 @@ def _v12_render_text_slot(i):
                 st.text_input(
                     t("color_segment", number=j + 1),
                     key=f"v12_text_color_segment_{i}_{j}",
-                    placeholder="例如：你還有",
+                    placeholder=t("color_segment_placeholder"),
                     label_visibility="collapsed",
                 )
                 segs[j]["text"] = str(
