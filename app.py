@@ -1105,7 +1105,7 @@ div[data-testid="stCheckbox"] label{
 .v12-quick-nav{
   position:fixed;
   right:22px;
-  bottom:22px;
+  bottom:calc(108px + env(safe-area-inset-bottom, 0px));
   z-index:9999;
   width:52px;
   height:52px;
@@ -1136,24 +1136,29 @@ div[data-testid="stCheckbox"] label{
 .v12-quick-nav details[open] summary{transform:rotate(45deg);background:#7c5cff;}
 .v12-quick-nav-menu{
   position:absolute;
-  right:-2px;
+  right:2px;
   bottom:62px;
-  width:248px;
-  height:282px;
+  width:48px;
+  height:auto;
   margin:0;
   padding:0;
-  pointer-events:none;
+  display:flex;
+  flex-direction:column-reverse;
+  align-items:center;
+  gap:6px;
 }
 .v12-quick-nav-link{
-  position:absolute;
-  width:42px;
-  height:42px;
-  display:grid;
-  place-items:center;
+  position:relative;
+  width:48px;
+  height:48px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
   border-radius:50%;
   color:#fff !important;
   text-decoration:none !important;
-  font-size:.76rem;
+  font-size:.72rem;
   font-weight:950;
   letter-spacing:.02em;
   background:linear-gradient(145deg,color-mix(in srgb,var(--nav-accent) 72%,#fff),var(--nav-accent));
@@ -1163,14 +1168,10 @@ div[data-testid="stCheckbox"] label{
   transition:transform .18s ease,filter .18s ease;
 }
 .v12-quick-nav-link:hover{color:#fff !important;transform:scale(1.12);filter:brightness(1.12);}
-.v12-quick-nav-link.p1{right:2px;bottom:5px;}
-.v12-quick-nav-link.p2{right:48px;bottom:14px;}
-.v12-quick-nav-link.p3{right:91px;bottom:37px;}
-.v12-quick-nav-link.p4{right:128px;bottom:69px;}
-.v12-quick-nav-link.p5{right:157px;bottom:108px;}
-.v12-quick-nav-link.p6{right:176px;bottom:151px;}
-.v12-quick-nav-link.p7{right:181px;bottom:198px;}
-.v12-quick-nav-link.p8{right:169px;bottom:241px;}
+.v12-quick-nav-label,
+.v12-quick-nav-number{display:block;line-height:1.02;text-align:center;}
+.v12-quick-nav-label{font-size:.65rem;font-weight:950;}
+.v12-quick-nav-number{margin-top:2px;font-size:.72rem;opacity:.94;}
 html{scroll-behavior:smooth;}
 [id^="v12-step-"]{scroll-margin-top:1rem;}
 .v12-font-gallery-note{
@@ -1259,7 +1260,7 @@ html{scroll-behavior:smooth;}
     width:46px;
     height:46px;
     right:14px;
-    bottom:88px;
+    bottom:calc(116px + env(safe-area-inset-bottom, 0px));
   }
   .v12-quick-nav summary{
     width:46px;
@@ -1267,9 +1268,9 @@ html{scroll-behavior:smooth;}
     font-size:23px;
   }
   .v12-quick-nav-menu{
-    right:-1px;
+    right:0;
     bottom:55px;
-    transform:scale(.92);
+    transform:scale(.9);
     transform-origin:bottom right;
   }
 }
@@ -1653,14 +1654,14 @@ st.markdown("""
   <details>
     <summary title="開啟創作步驟快捷鍵" aria-label="開啟創作步驟快捷鍵">✦</summary>
     <nav class="v12-quick-nav-menu" aria-label="移動到創作步驟">
-      <a class="v12-quick-nav-link p1" style="--nav-accent:#ff5c7a" href="#v12-step-01" title="01 人物照片">01</a>
-      <a class="v12-quick-nav-link p2" style="--nav-accent:#ff9f43" href="#v12-step-02" title="02 貼圖風格">02</a>
-      <a class="v12-quick-nav-link p3" style="--nav-accent:#2ecc71" href="#v12-step-03" title="03 人物特色">03</a>
-      <a class="v12-quick-nav-link p4" style="--nav-accent:#3498db" href="#v12-step-04" title="04 貼圖內容">04</a>
-      <a class="v12-quick-nav-link p5" style="--nav-accent:#8e67d8" href="#v12-step-05" title="05 背景設定">05</a>
-      <a class="v12-quick-nav-link p6" style="--nav-accent:#e67e22" href="#v12-step-06" title="06 開始生成">06</a>
-      <a class="v12-quick-nav-link p7" style="--nav-accent:#32c6c0" href="#v12-step-07" title="07 檢視成果">07</a>
-      <a class="v12-quick-nav-link p8" style="--nav-accent:#e74c3c" href="#v12-step-08" title="08 裁切下載">08</a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#ff5c7a" href="#v12-step-01" title="01 人物照片"><span class="v12-quick-nav-label">人物</span><span class="v12-quick-nav-number">01</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#ff9f43" href="#v12-step-02" title="02 貼圖風格"><span class="v12-quick-nav-label">風格</span><span class="v12-quick-nav-number">02</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#2ecc71" href="#v12-step-03" title="03 人物特色"><span class="v12-quick-nav-label">特色</span><span class="v12-quick-nav-number">03</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#3498db" href="#v12-step-04" title="04 貼圖內容"><span class="v12-quick-nav-label">文字</span><span class="v12-quick-nav-number">04</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#8e67d8" href="#v12-step-05" title="05 背景設定"><span class="v12-quick-nav-label">背景</span><span class="v12-quick-nav-number">05</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#e67e22" href="#v12-step-06" title="06 開始生成"><span class="v12-quick-nav-label">生成</span><span class="v12-quick-nav-number">06</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#32c6c0" href="#v12-step-07" title="07 檢視成果"><span class="v12-quick-nav-label">成果</span><span class="v12-quick-nav-number">07</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#e74c3c" href="#v12-step-08" title="08 裁切下載"><span class="v12-quick-nav-label">裁切</span><span class="v12-quick-nav-number">08</span></a>
     </nav>
   </details>
 </div>
