@@ -1569,7 +1569,7 @@ def _beta_library_metadata(record):
         "style_mode", "custom_style_snapshot", "character_features",
         "custom_character", "custom_character_enabled",
         "sticker_mode", "expression_specs",
-        "sticker_texts", "sticker_color_segments", "schema_version", "identity",
+        "sticker_texts", "sticker_action_prompts", "sticker_color_segments", "schema_version", "identity",
         "timestamps", "creative_settings", "package_settings", "main_no", "tab_no",
     )
     result = {key: metadata[key] for key in keep if key in metadata}
@@ -2743,6 +2743,16 @@ def _v12_normalize_expression_specs(value):
     return normalized
 
 
+def _v12_default_sticker_action_prompts():
+    return [""] * 8
+
+
+def _v12_normalize_sticker_action_prompts(value):
+    raw = value if isinstance(value, list) else []
+    prompts = [str(item or "").strip()[:500] for item in raw[:8]]
+    return prompts + [""] * (8 - len(prompts))
+
+
 def _v12_sticker_mode_value(value=None):
     value = str(value if value is not None else st.session_state.get(
         "v12_sticker_content_mode", V12_STICKER_TEXT_MODE
@@ -2844,6 +2854,7 @@ def _v12_new_project_metadata():
         "sticker_mode": "text",
         "expression_specs": _v12_default_expression_specs(),
         "sticker_texts": [""] * 8,
+        "sticker_action_prompts": _v12_default_sticker_action_prompts(),
         "sticker_color_segments": [],
         "source_image": None,
         "generated_grid": None,
@@ -2877,6 +2888,7 @@ def _v12_new_project_metadata():
             "sticker_mode": "text",
             "expression_specs": _v12_default_expression_specs(),
             "sticker_texts": [""] * 8,
+            "sticker_action_prompts": _v12_default_sticker_action_prompts(),
             "sticker_color_segments": [],
         },
         "package_settings": {
@@ -2961,6 +2973,12 @@ def _v12_normalize_project_metadata(metadata):
         sticker_texts = list(sticker_texts or [])
     sticker_texts = [str(x) for x in sticker_texts[:8]]
     sticker_texts += [""] * (8 - len(sticker_texts))
+    sticker_action_prompts = _v12_normalize_sticker_action_prompts(
+        data.get(
+            "sticker_action_prompts",
+            creative.get("sticker_action_prompts", []),
+        )
+    )
 
     sticker_color_segments = data.get(
         "sticker_color_segments",
@@ -3012,6 +3030,7 @@ def _v12_normalize_project_metadata(metadata):
         "sticker_mode": sticker_mode,
         "expression_specs": expression_specs,
         "sticker_texts": sticker_texts,
+        "sticker_action_prompts": sticker_action_prompts,
         "sticker_color_segments": normalized_color_segments,
         "schema_version": "v12.project.1",
     })
@@ -3044,6 +3063,7 @@ def _v12_normalize_project_metadata(metadata):
         "sticker_mode": normalized["sticker_mode"],
         "expression_specs": list(normalized["expression_specs"]),
         "sticker_texts": list(normalized["sticker_texts"]),
+        "sticker_action_prompts": list(normalized["sticker_action_prompts"]),
         "sticker_color_segments": list(normalized["sticker_color_segments"]),
     }
     normalized["package_settings"] = {
@@ -3653,6 +3673,13 @@ def _v12_load_history_record(record):
         value = str(texts[i] if i < len(texts) else "")
         st.session_state[f"sticker_text_{i}"] = value
         st.session_state[f"v12_sticker_text_widget_{i}"] = value
+    for i, action_prompt in enumerate(_v12_normalize_sticker_action_prompts(
+        metadata.get("sticker_action_prompts", [])
+    )):
+        st.session_state[f"v12_sticker_action_prompt_{i}"] = action_prompt
+        st.session_state[f"v12_sticker_action_prompt_widget_{i}"] = action_prompt
+        st.session_state[f"v12_sticker_action_enabled_{i}"] = bool(action_prompt)
+        st.session_state[f"v12_sticker_action_enabled_widget_{i}"] = bool(action_prompt)
 
     _v12_clear_text_color_segments()
     for item in metadata.get("sticker_color_segments", []) or []:
@@ -3726,6 +3753,7 @@ def _v12_project_snapshot():
     project["sticker_color_segments"] = _v12_valid_color_segments(
         project["sticker_texts"]
     )
+    project["sticker_action_prompts"] = _v12_get_sticker_action_prompts()
     project["sticker_mode"] = _v12_sticker_mode_value()
     project["expression_specs"] = _v12_get_expression_specs()
     project["transparent_background"] = bool(
@@ -3938,7 +3966,50 @@ def _v12_clear_text_color_segments():
         for j in range(3):
             st.session_state.pop(f"v12_text_color_segment_{i}_{j}", None)
 
+
+def _v12_sync_sticker_action_enabled(i):
+    st.session_state[f"v12_sticker_action_enabled_{i}"] = bool(
+        st.session_state.get(f"v12_sticker_action_enabled_widget_{i}", False)
+    )
+
+
+def _v12_sync_sticker_action_prompt(i):
+    st.session_state[f"v12_sticker_action_prompt_{i}"] = str(
+        st.session_state.get(f"v12_sticker_action_prompt_widget_{i}", "") or ""
+    ).strip()[:500]
+
+
+def _v12_init_sticker_action_state():
+    for i in range(8):
+        canonical_enabled = f"v12_sticker_action_enabled_{i}"
+        widget_enabled = f"v12_sticker_action_enabled_widget_{i}"
+        canonical_prompt = f"v12_sticker_action_prompt_{i}"
+        widget_prompt = f"v12_sticker_action_prompt_widget_{i}"
+        st.session_state.setdefault(canonical_enabled, False)
+        st.session_state.setdefault(widget_enabled, bool(st.session_state[canonical_enabled]))
+        st.session_state.setdefault(canonical_prompt, "")
+        st.session_state.setdefault(widget_prompt, st.session_state[canonical_prompt])
+
+
+def _v12_get_sticker_action_prompts():
+    return [
+        str(st.session_state.get(f"v12_sticker_action_prompt_{i}", "") or "").strip()[:500]
+        if st.session_state.get(f"v12_sticker_action_enabled_{i}", False)
+        else ""
+        for i in range(8)
+    ]
+
+
+def _v12_clear_sticker_action_prompts():
+    for i in range(8):
+        st.session_state[f"v12_sticker_action_enabled_{i}"] = False
+        st.session_state[f"v12_sticker_action_enabled_widget_{i}"] = False
+        st.session_state[f"v12_sticker_action_prompt_{i}"] = ""
+        st.session_state[f"v12_sticker_action_prompt_widget_{i}"] = ""
+
+
 _v12_init_color_segment_state()
+_v12_init_sticker_action_state()
 
 def _v12_sync_sticker_text(i):
     """把文字輸入 widget 的值同步到不受條件式 rerun 影響的 canonical state。"""
@@ -3958,6 +4029,8 @@ def set_texts(values):
         st.session_state[f"v12_sticker_text_widget_{i}"] = value
     # 批次換字後清除舊的局部上色，避免顏色片段與新文字不一致。
     _v12_clear_text_color_segments()
+    # 新的一批文字不沿用舊的動作描述，避免指令與文字語意不一致。
+    _v12_clear_sticker_action_prompts()
 
 def base_boxes(w, h):
     boxes = []
@@ -4550,7 +4623,7 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
 
 def build_prompt(style, custom_style, selected_character, custom_character,
                  texts, transparent, color_segments=None, ai_copy_topic="", ai_copy_tone="", ai_copy_topics=None,
-                 sticker_mode="text", expression_specs=None):
+                 sticker_mode="text", expression_specs=None, action_prompts=None):
     p = [
         "請以我提供的人物照片作為主要人物參考。",
         "保留人物身份辨識特徵，不任意改變人物核心外觀。",
@@ -4615,6 +4688,12 @@ def build_prompt(style, custom_style, selected_character, custom_character,
     else:
         for i, t in enumerate(texts):
             p.append(f"第{i+1}格的指定貼圖文字為：「{t.strip() or '（此格未指定文字）'}」。")
+        for i, action_prompt in enumerate(_v12_normalize_sticker_action_prompts(action_prompts)):
+            if action_prompt:
+                p.append(
+                    f"第{i+1}格需搭配文字情境呈現以下人物動作／互動：「{action_prompt}」。"
+                    "請讓動作清楚、有張力，且完整保留在該格可裁切範圍內。"
+                )
 
     color_segments = [] if sticker_mode == "expression" else (color_segments or [])
     for item in color_segments:
@@ -5394,6 +5473,32 @@ def _v12_render_text_slot(i):
         st.session_state.get(_widget_key, "") or ""
     )
 
+    _action_enabled_widget_key = f"v12_sticker_action_enabled_widget_{i}"
+    _action_enabled = st.checkbox(
+        "🎬 啟用動作指令",
+        key=_action_enabled_widget_key,
+        on_change=_v12_sync_sticker_action_enabled,
+        args=(i,),
+    )
+    st.session_state[f"v12_sticker_action_enabled_{i}"] = bool(_action_enabled)
+    if _action_enabled:
+        _action_prompt_widget_key = f"v12_sticker_action_prompt_widget_{i}"
+        st.session_state.setdefault(
+            _action_prompt_widget_key,
+            str(st.session_state.get(f"v12_sticker_action_prompt_{i}", "") or ""),
+        )
+        st.text_input(
+            "輸入希望動作指令",
+            key=_action_prompt_widget_key,
+            on_change=_v12_sync_sticker_action_prompt,
+            args=(i,),
+            placeholder="例如：雙手抱頭後退、指著文字大笑、比出勝利手勢",
+            max_chars=500,
+        )
+        st.session_state[f"v12_sticker_action_prompt_{i}"] = str(
+            st.session_state.get(_action_prompt_widget_key, "") or ""
+        ).strip()[:500]
+
     _color_enabled_widget_key = f"v12_text_color_enabled_widget_{i}"
     _color_enabled = st.checkbox(
         "🎨 啟用局部文字上色",
@@ -5984,6 +6089,7 @@ v10_subsection("🌈 貼圖設定查看", "#ff9f43")
 style_mode = st.session_state.get("v10_style_mode", "↓ 請選擇風格")
 
 _prompt_color_segments = _v12_valid_color_segments(texts)
+_prompt_sticker_action_prompts = _v12_get_sticker_action_prompts()
 _prompt_character_features = list(selected_character)
 if _style_reference_active:
     # 「五官比例保留」這類照片導向提示會和畫風轉譯互相拉扯。
@@ -6004,6 +6110,7 @@ prompt = build_prompt(
     ai_copy_topics=st.session_state.get("v12_selected_themes", []),
     sticker_mode=_sticker_mode,
     expression_specs=_prompt_expression_specs,
+    action_prompts=_prompt_sticker_action_prompts,
 )
 
 if _style_reference_active:
