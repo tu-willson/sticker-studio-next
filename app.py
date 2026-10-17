@@ -2649,11 +2649,11 @@ def _beta_render_account_panel():
         try:
             copy_status = _beta_copy_usage_status_cached(session)
             st.markdown(
-                "**AI 文案今日額度（台灣時間）："
+                "**AI幫想 今日額度（台灣時間）："
                 f"剩 {copy_status['remaining_count']} / {copy_status['daily_limit']} 次**"
             )
         except Exception:
-            st.caption("AI 文案今日額度暫時無法讀取。")
+            st.caption("AI幫想 今日額度暫時無法讀取。")
         if st.button("登出會員 Beta", type="primary", key="beta_logout"):
             st.session_state.pop("beta_auth_session", None)
             st.session_state.pop("beta_pending_login_url", None)
