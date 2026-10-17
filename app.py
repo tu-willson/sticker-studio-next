@@ -1184,6 +1184,19 @@ html{scroll-behavior:smooth;}
   font-weight:800;
   margin:0 0 .55rem;
 }
+.v12-beta-login-title{
+  margin:.65rem 0 .45rem;
+  text-align:center;
+  font-size:clamp(1.35rem,2.8vw,1.75rem);
+  font-weight:900;
+}
+.v12-beta-login-copy{
+  margin:.35rem auto .65rem;
+  text-align:center;
+  font-size:1.08rem;
+  font-weight:700;
+  line-height:1.55;
+}
 
 /* V12｜STEP 01B③｜125 種帶圖字型響應式圖卡牆 */
 .v12-font-grid{
@@ -2493,8 +2506,8 @@ def _beta_render_account_panel():
 
     _beta_complete_oauth_callback()
     session = _beta_current_user()
-    st.markdown("#### ✨ 會員 Beta")
     if session:
+        st.markdown("#### ✨ 會員 Beta")
         user = session.get("user", {})
         email = html.escape(str(user.get("email", "已登入會員") or "已登入會員"))
         try:
@@ -2532,18 +2545,34 @@ def _beta_render_account_panel():
 
     login_error = st.session_state.pop("beta_login_error", "")
     if login_error:
+        # 失效或未完成的 OAuth state 不可重用；下次畫面直接準備新的單次登入連結。
+        st.session_state.pop("beta_pending_login_url", None)
         st.warning(login_error)
-    st.caption("新登入會員有 2 次體驗額度。")
-    if st.button("準備 Google 登入", type="primary", key="beta_start_google_login"):
+    st.markdown('<div class="v12-beta-login-title">✨ 會員 Beta</div>', unsafe_allow_html=True)
+    st.markdown('<div class="v12-beta-login-copy">初次登入會員有 2 次體驗額度。</div>', unsafe_allow_html=True)
+
+    login_url = str(st.session_state.get("beta_pending_login_url", "") or "")
+    if not login_url:
         try:
-            st.session_state["beta_pending_login_url"] = _beta_new_login_url()
+            login_url = _beta_new_login_url()
+            st.session_state["beta_pending_login_url"] = login_url
         except Exception:
             st.error("登入服務暫時無法啟動，請稍後再試。")
 
-    login_url = str(st.session_state.get("beta_pending_login_url", "") or "")
     if login_url:
-        st.link_button("前往 Google 登入", login_url, type="primary", key="beta_google_login_link")
-        st.caption("登入連結有效 10 分鐘，完成後會自動回到本站。")
+        _login_left, _login_center, _login_right = st.columns([1, 1.35, 1])
+        with _login_center:
+            st.link_button(
+                "Google帳號登入",
+                login_url,
+                type="primary",
+                key="beta_google_login_link",
+                use_container_width=True,
+            )
+        st.markdown(
+            '<div class="v12-beta-login-copy">登入連結有效 10 分鐘，完成後會自動回到本站。</div>',
+            unsafe_allow_html=True,
+        )
     return None
 
 
@@ -5459,7 +5488,6 @@ if st.session_state["v12_view"] == "library":
 
 st.markdown('<div id="v12-page-top"></div>', unsafe_allow_html=True)
 st.markdown('<div class="v10-main-title">🎨 LINE 貼圖創作室</div>', unsafe_allow_html=True)
-st.caption("V11｜公開版｜快速完成 LINE 貼圖創作")
 
 # OAuth redirects arrive with a short-lived code in the URL.  Handle it before
 # creating the rest of the widgets so a successful login returns to a clean app.
@@ -5493,8 +5521,6 @@ for _deprecated_key_state in (
 
 _beta_session = _beta_render_account_panel()
 _beta_render_admin_console(_beta_session)
-
-st.caption("💡 會員 Beta 只連線至新的 Sticker Studio Next Supabase；不會讀取或變更舊版網站的資料。")
 
 if not _beta_session:
     st.warning("⚠️ 請先使用 Google 登入，才能使用會員 Beta 額度。")
