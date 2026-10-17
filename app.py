@@ -84,6 +84,46 @@ V12_RANDOM_POOL_LABELS = {
     "戀愛表達": {"en": "Love & affection", "ja": "恋愛表現"},
 }
 
+V12_FONT_NAME_TRANSLATIONS = {
+    "en": {
+        1:"Chubby sticker lettering",2:"Marshmallow round lettering",3:"Jelly bouncy lettering",4:"Butter cookie lettering",5:"Frosted dessert lettering",6:"Playful crayon lettering",7:"Soft cute handwriting",8:"Japanese planner round lettering",9:"Korean cute lettering",10:"Comic impact lettering",11:"Speech-bubble lettering",12:"White-edged sticker lettering",13:"Foam toy lettering",14:"Rubber pad lettering",15:"Glossy resin lettering",16:"Clear acrylic lettering",17:"Enamel badge lettering",18:"Embroidered patch lettering",19:"Wool-felt lettering",20:"Embossed leather lettering",21:"Layered paper-cut lettering",22:"3D origami lettering",23:"Crackle-glaze ceramic lettering",24:"Jade relief lettering",25:"Marble-carved lettering",26:"Silver-steel relief lettering",27:"3D gold lettering",28:"Vintage bronze lettering",29:"Clear ice-crystal lettering",30:"Crystal glass lettering",31:"Neon glow lettering",32:"Hong Kong neon lettering",33:"Bulb-sign lettering",34:"Wood-carved lettering",35:"Heavy stone-carved lettering",36:"Brush-calligraphy lettering",37:"Seal-carving lettering",38:"Paper-cut art lettering",39:"Vintage poster lettering",40:"Vintage typewriter lettering",41:"Trendy graffiti lettering",42:"Street graffiti lettering",43:"Comic explosion lettering",44:"Hot-blooded manga lettering",45:"Hand-drawn doodle lettering",46:"Minimal handwriting",47:"Romantic handwriting",48:"Chalkboard lettering",49:"Sacred radiant lettering",50:"Dark Gothic lettering",51:"Handmade clay lettering",52:"Patchwork-stitch lettering",53:"Pearl-shell lettering",54:"Flowing feather lettering",55:"Bamboo-weave lettering",56:"Straw-weave lettering",57:"Moss-forest lettering",58:"Vine-garden lettering",59:"Petal-collage lettering",60:"Watercolour bloom lettering",61:"Ink-wash lettering",62:"Colour-pencil texture lettering",63:"Batik-fabric lettering",64:"Mosaic-tile lettering",65:"Flocked-velvet lettering",66:"Steampunk gear lettering",67:"Pixel-game lettering",68:"8-bit block lettering",69:"Glitch digital lettering",70:"Holographic laser lettering",71:"Fluffy cloud lettering",72:"Sea-salt grain lettering",73:"Coral-ocean lettering",74:"Dreamy star-sand lettering",75:"Cosmic nebula lettering",76:"Chocolate-syrup lettering",77:"Popcorn-snack lettering",78:"Cotton-linen weave lettering",79:"Denim-patch lettering",80:"Lace-trim lettering",81:"Button-collage lettering",82:"Crochet lettering",83:"Stained-glass cathedral lettering",84:"Iron-rivet lettering",85:"Rusted industrial lettering",86:"Circuit-chip lettering",87:"LCD-screen lettering",88:"Radar-scan lettering",89:"Rubber-print lettering",90:"Oil-paint brushstroke lettering",91:"Film-reel lettering",92:"Newspaper-collage lettering",93:"Kraft-paper packaging lettering",94:"Dewdrop leaf-vein lettering",95:"Firefly-forest lettering",96:"Constellation fortune-telling lettering",97:"Herbal-apothecary lettering",98:"Bubble-tea bouncy lettering",99:"Sushi toy-food lettering",100:"Donut-sprinkle lettering",101:"Ink-brush lettering",102:"Running-script lettering",103:"Expressive splash-ink lettering",104:"Seal-stamp lettering",105:"Fountain-pen flow lettering",106:"Vintage typewriter lettering",107:"Hand-drawn chalk lettering",108:"Rainbow hand-drawn lettering",109:"Graffiti hand-drawn lettering",110:"3D sticker lettering",111:"3D balloon lettering",112:"Fabric-collage lettering",113:"Grass-and-foliage lettering",114:"Beach-sand lettering",115:"Cloud-cotton lettering",116:"Frost-crack lettering",117:"Lava cracked-rock lettering",118:"Corroded-metal lettering",119:"Cracked dry-earth lettering",120:"Diamond-cut lettering",121:"Laser-iridescent lettering",122:"Liquid-metal lettering",123:"Neon-tube lettering",124:"Vintage-lightbulb lettering",125:"Pixel-dot lettering",
+    },
+    "ja": {
+        1:"ぽってりステッカー文字",2:"マシュマロ丸文字",3:"ぷるぷるゼリー文字",4:"バタークッキー文字",5:"アイシングデザート文字",6:"クレヨンポップ文字",7:"やわらか手書き文字",8:"日本手帳風丸文字",9:"韓国キュート文字",10:"漫画インパクト文字",11:"吹き出し文字",12:"白ふちステッカー文字",13:"スポンジ玩具文字",14:"ラバーパッド文字",15:"つやつやレジン文字",16:"透明アクリル文字",17:"エナメルバッジ文字",18:"刺繍ワッペン文字",19:"羊毛フェルト文字",20:"レザー型押し文字",21:"重ね紙切り絵文字",22:"立体折り紙文字",23:"貫入陶器文字",24:"翡翠レリーフ文字",25:"大理石彫刻文字",26:"銀鋼レリーフ文字",27:"立体ゴールド文字",28:"ヴィンテージブロンズ文字",29:"氷晶クリア文字",30:"クリスタルガラス文字",31:"ネオン発光文字",32:"香港ネオン文字",33:"電球看板文字",34:"木彫り質感文字",35:"重厚な石彫り文字",36:"筆文字書道",37:"篆刻文字",38:"切り絵アート文字",39:"ヴィンテージポスター文字",40:"レトロタイプライター文字",41:"トレンド落書き文字",42:"ストリートグラフィティ文字",43:"漫画爆発文字",44:"熱血漫画文字",45:"手描き落書き文字",46:"ミニマル手書き文字",47:"ロマンティック手書き文字",48:"チョーク黒板文字",49:"神聖な光彩文字",50:"ダークゴシック文字",51:"ハンドメイド粘土文字",52:"パッチワーク縫い目文字",53:"真珠貝文字",54:"羽根の流麗文字",55:"竹編み工芸文字",56:"わら編み文字",57:"苔の森文字",58:"つる草庭園文字",59:"花びらコラージュ文字",60:"水彩にじみ文字",61:"墨彩にじみ文字",62:"色鉛筆テクスチャ文字",63:"ろうけつ染め布文字",64:"モザイクタイル文字",65:"フロッキー起毛文字",66:"スチームパンク歯車文字",67:"ピクセルゲーム文字",68:"8ビットブロック文字",69:"グリッチデジタル文字",70:"ホログラムレーザー文字",71:"ふわふわ雲文字",72:"海塩粒子文字",73:"サンゴ海洋文字",74:"夢幻星砂文字",75:"宇宙星雲文字",76:"チョコレートシロップ文字",77:"ポップコーン文字",78:"綿麻織り文字",79:"デニムパッチ文字",80:"レース縁取り文字",81:"ボタンコラージュ文字",82:"かぎ針編み文字",83:"ステンドグラス教会文字",84:"鉄リベット文字",85:"さびた工業文字",86:"回路チップ文字",87:"液晶画面文字",88:"レーダースキャン文字",89:"ゴム印刷文字",90:"油彩筆致文字",91:"フィルム映画文字",92:"新聞コラージュ文字",93:"クラフト紙包装文字",94:"露の葉脈文字",95:"ホタルの森文字",96:"星座占い文字",97:"ハーブ薬店文字",98:"タピオカもちもち文字",99:"寿司食品サンプル文字",100:"ドーナツシュガー文字",101:"水墨筆文字",102:"行書連筆文字",103:"潑墨写意文字",104:"篆刻印章文字",105:"万年筆流線文字",106:"レトロタイプライター文字",107:"手描きチョーク文字",108:"虹色手描き文字",109:"落書き手描き文字",110:"立体ステッカー文字",111:"立体風船文字",112:"布コラージュ文字",113:"芝生と植物文字",114:"砂浜の砂文字",115:"雲わた文字",116:"霜のひび割れ文字",117:"溶岩ひび岩文字",118:"腐食メタル文字",119:"乾いた土のひび文字",120:"ダイヤカット文字",121:"レーザー虹彩文字",122:"液体金属文字",123:"ネオン管文字",124:"レトロ電球文字",125:"ピクセルドット文字",
+    },
+}
+
+
+def _v12_font_display_name(font_number):
+    """Use translated font names in the UI but preserve original names for generation."""
+    font_number = int(font_number)
+    return V12_FONT_NAME_TRANSLATIONS.get(_v12_ui_locale(), {}).get(
+        font_number, V8_TEXT_EFFECT_CATALOG[font_number]
+    )
+
+
+def _v12_basket_batch_display(batch_label):
+    """Translate app-owned batch labels without changing custom project names."""
+    raw_label = str(batch_label or "")
+    if raw_label == "作品集":
+        return t("basket_project")
+    match = re.fullmatch(r"批次\s*(\d+)", raw_label)
+    if match:
+        return t("basket_batch", number=int(match.group(1)))
+    return raw_label
+
+
+def _v12_font_choice_display(option):
+    """Render a translated 125-font option while leaving its session value stable."""
+    raw_option = str(option)
+    if raw_option == "— 快速選擇字型｜可直接輸入數字 —":
+        return t("font_quick_placeholder")
+    try:
+        font_number = int(raw_option.split("｜", 1)[0])
+        return f"{font_number:03d}｜{_v12_font_display_name(font_number)}"
+    except (ValueError, KeyError):
+        return raw_option
+
 
 def _v12_generation_suffix():
     """Keep compact generation-plan wording natural in each public language."""
@@ -4175,7 +4215,7 @@ def _v12_render_sticker_basket_workspace():
             with column:
                 st.image(
                     item["image_bytes"],
-                    caption=t("basket_source", batch=item["batch_label"], slot=item["source_slot"]),
+                    caption=t("basket_source", batch=_v12_basket_batch_display(item["batch_label"]), slot=item["source_slot"]),
                     use_container_width=True,
                 )
                 st.session_state.setdefault(f"v12_basket_select_{item_id}", True)
@@ -4207,7 +4247,7 @@ def _v12_render_sticker_basket_workspace():
         return
 
     options = {
-        t("basket_source", batch=item["batch_label"], slot=item["source_slot"]): item
+        t("basket_source", batch=_v12_basket_batch_display(item["batch_label"]), slot=item["source_slot"]): item
         for item in selected
     }
     option_labels = list(options.keys())
@@ -6014,12 +6054,12 @@ if st.session_state["v12_view"] == "library":
     _top_a, _top_b = st.columns([4, 1])
     with _top_a:
         _search_name = st.text_input(
-            "🔎 搜尋作品名稱",
-            placeholder="輸入作品名稱搜尋…",
+            t("project_search"),
+            placeholder=t("project_search_placeholder"),
             key="v12_project_search",
         )
     with _top_b:
-        st.metric("暫存作品", len(_projects_all))
+        st.metric(t("session_projects"), len(_projects_all))
 
     _projects = list(_projects_all)
     if _search_name.strip():
@@ -6027,7 +6067,7 @@ if st.session_state["v12_view"] == "library":
         _projects = [p for p in _projects if needle in str(p.get("project_name", "")).lower()]
 
     if not _projects:
-        st.info("📭 目前還沒有保存的作品")
+        st.info(t("no_projects"))
     else:
         for _idx, _project in enumerate(_projects):
             _pid = str(_project.get("project_id", _idx))
@@ -6598,7 +6638,7 @@ def _v12_render_text_slot(i):
             count = 1
             st.session_state[f"v12_text_color_count_{i}"] = 1
 
-        st.caption("💡 輸入要變色的文字片段，再點選色卡；每格最多 3 段。")
+        st.caption(t("color_segment_hint"))
 
         for j in range(count):
             segs = _v12_get_color_segments(i)
@@ -6983,7 +7023,7 @@ if _sticker_mode == "text":
         t("font_quick_pick"),
         ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
         key="v12_font_quick_pick",
-        format_func=lambda value: t("font_quick_placeholder") if value == "— 快速選擇字型｜可直接輸入數字 —" else value,
+        format_func=_v12_font_choice_display,
     )
     if _quick_font_choice != "— 快速選擇字型｜可直接輸入數字 —":
         _quick_font_no = int(_quick_font_choice.split("｜", 1)[0])
@@ -6992,7 +7032,7 @@ if _sticker_mode == "text":
             st.session_state["v10_font_gallery_open"] = False
         _selected_font = _quick_font_no
     if _selected_font:
-        st.success(t("font_selected", number=_selected_font, name=V8_TEXT_EFFECT_CATALOG[_selected_font]))
+        st.success(t("font_selected", number=_selected_font, name=_v12_font_display_name(_selected_font)))
     else:
         st.info(t("font_none"))
 
@@ -7103,7 +7143,7 @@ if _sticker_mode == "text" and st.session_state.v10_font_gallery_open:
                     on_click=_v12_pick_font_from_card,
                 )
 
-                st.caption(V8_TEXT_EFFECT_CATALOG[_i])
+                st.caption(_v12_font_display_name(_i))
     # callback 會在 Streamlit 下一次完整執行前更新頁數，
     # 不會在 widget 已實例化後直接修改其 key。
     def _v12_font_change_page(delta):
@@ -7148,7 +7188,7 @@ if _sticker_mode == "text":
                 with _font_preview_center:
                     st.image(
                         str(_p),
-                        caption=f"{_selected_font:03d}｜{V8_TEXT_EFFECT_CATALOG[_selected_font]}",
+                        caption=f"{_selected_font:03d}｜{_v12_font_display_name(_selected_font)}",
                         use_container_width=True,
                     )
                 st.caption("以上為參考效果；實際生成會由 AI 依人物、文字與整體風格重新詮釋。")
@@ -8107,7 +8147,7 @@ st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
 _link_col = st.columns([1, 2, 1])[1]
 with _link_col:
     if st.button(
-        "📚 我的作品",
+        t("nav_library"),
         key="v12_footer_library",
         use_container_width=True,
     ):
@@ -8119,7 +8159,7 @@ with _link_col:
     st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
 
     st.link_button(
-        "🔗 連結 LINE 貼圖網頁",
+        t("line_creator_link"),
         "https://creator.line.me/zh-hant/",
         use_container_width=True,
     )
