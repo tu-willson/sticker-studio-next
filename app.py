@@ -6066,7 +6066,7 @@ if st.session_state.get("v12_view") == "library":
         start=1,
     ):
         if st.button(
-            f"{t(_v12_step_key)}\\n{_v12_step_number:02d}",
+            f"{t(_v12_step_key)}\n{_v12_step_number:02d}",
             key=f"v12_quick_step_{_v12_step_number:02d}",
             help=f"{_v12_step_number:02d} {t(_v12_step_key)}",
         ):
