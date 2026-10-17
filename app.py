@@ -2433,6 +2433,19 @@ V12_EXPRESSION_EFFECTS = [
     "幽靈半透明",
 ]
 
+# 畫風圖通常只能讓模型辨識整體氣氛；這組可選項把使用者想要的
+# 「代表性元素」轉成明確、可套用到人物本身的生成指令。
+V12_STYLE_REFERENCE_ELEMENT_PROMPTS = {
+    "重複圓點／幾何紋樣": "將參考圖的重複圓點或幾何紋樣，明確套用在人物服裝、配件或身體局部；不要只放在背景。",
+    "粗黑輪廓線": "以明顯、手繪感的粗黑輪廓線勾勒人物、表情與手勢，讓線條成為角色設計的一部分。",
+    "半色調網點": "在人物的陰影、腮紅或局部色塊採用可見但不遮臉的半色調網點質感。",
+    "水彩暈染": "將水彩般的顏色暈染、邊緣滲色與手繪筆觸融入人物本身，而不是另外畫成背景。",
+    "金屬／箔面質感": "在服裝、飾品或局部色塊融入參考圖的金屬、箔面或反光質感；保持插畫感，不要變成寫實照片。",
+    "蠟筆／粉蠟筆筆觸": "在人物的上色與輪廓中使用明顯蠟筆或粉蠟筆的顆粒筆觸。",
+    "拼貼紙材質": "讓人物服裝、髮飾或局部色塊呈現手作剪貼紙張的邊緣與層次，不要只把拼貼放在背景。",
+}
+V12_STYLE_REFERENCE_ELEMENT_OPTIONS = list(V12_STYLE_REFERENCE_ELEMENT_PROMPTS)
+
 # 「隨機」不是交由模型任意猜測，而是先在網站端抽出具體配方。
 # 每個配方另有臉部、動作與鏡頭的變化池；即使新一輪再次抽到同一配方，
 # 實際送出的方向仍會不同。
@@ -2843,6 +2856,10 @@ def _v12_new_project_metadata():
         "updated_at": now,
         "generation_method": "",
         "transparent_background": False,
+        "style_reference_strength": "明顯融入",
+        "style_reference_elements_enabled": False,
+        "style_reference_elements": [],
+        "style_reference_custom_elements": "",
         "style_mode": "",
         "custom_style_snapshot": {},
         "character_features": [],
@@ -2874,6 +2891,10 @@ def _v12_new_project_metadata():
             "text_style": "",
             "generation_method": "",
             "transparent_background": False,
+            "style_reference_strength": "明顯融入",
+            "style_reference_elements_enabled": False,
+            "style_reference_elements": [],
+            "style_reference_custom_elements": "",
             "character_features": [],
             "custom_character": "",
             "custom_character_enabled": False,
@@ -2938,6 +2959,29 @@ def _v12_normalize_project_metadata(metadata):
     expression_specs = _v12_normalize_expression_specs(
         data.get("expression_specs", creative.get("expression_specs", []))
     )
+    style_reference_strength = str(
+        data.get("style_reference_strength", creative.get("style_reference_strength", "明顯融入"))
+        or "明顯融入"
+    )
+    if style_reference_strength not in {"柔和融入", "明顯融入", "強烈融入"}:
+        style_reference_strength = "明顯融入"
+    raw_style_reference_elements = data.get(
+        "style_reference_elements", creative.get("style_reference_elements", [])
+    )
+    if not isinstance(raw_style_reference_elements, list):
+        raw_style_reference_elements = []
+    style_reference_elements = [
+        item for item in V12_STYLE_REFERENCE_ELEMENT_OPTIONS
+        if item in {str(value).strip() for value in raw_style_reference_elements}
+    ]
+    style_reference_elements_enabled = bool(data.get(
+        "style_reference_elements_enabled",
+        creative.get("style_reference_elements_enabled", bool(style_reference_elements)),
+    ))
+    style_reference_custom_elements = str(data.get(
+        "style_reference_custom_elements",
+        creative.get("style_reference_custom_elements", ""),
+    ) or "")[:1200]
 
     project_id = str(data.get("project_id") or identity.get("project_id") or base["project_id"])
     project_name = _v12_normalize_project_name(
@@ -2990,6 +3034,10 @@ def _v12_normalize_project_metadata(metadata):
         "text_style": str(data.get("text_style", creative.get("text_style", "")) or ""),
         "generation_method": str(data.get("generation_method", creative.get("generation_method", "")) or ""),
         "transparent_background": bool(data.get("transparent_background", creative.get("transparent_background", False))),
+        "style_reference_strength": style_reference_strength,
+        "style_reference_elements_enabled": style_reference_elements_enabled,
+        "style_reference_elements": style_reference_elements,
+        "style_reference_custom_elements": style_reference_custom_elements,
         "style_mode": style_mode,
         "custom_style_snapshot": custom_style_snapshot,
         "character_features": character_features,
@@ -3020,6 +3068,10 @@ def _v12_normalize_project_metadata(metadata):
         "text_style": normalized["text_style"],
         "generation_method": normalized["generation_method"],
         "transparent_background": normalized["transparent_background"],
+        "style_reference_strength": normalized["style_reference_strength"],
+        "style_reference_elements_enabled": normalized["style_reference_elements_enabled"],
+        "style_reference_elements": list(normalized["style_reference_elements"]),
+        "style_reference_custom_elements": normalized["style_reference_custom_elements"],
         "character_features": list(normalized["character_features"]),
         "custom_character": normalized["custom_character"],
         "custom_character_enabled": normalized["custom_character_enabled"],
@@ -3473,6 +3525,20 @@ def _v12_load_history_record(record):
         st.session_state["v12_style_reference_filename"] = ""
         st.session_state["v12_style_reference_fingerprint"] = ""
 
+    st.session_state["v12_style_reference_strength"] = str(
+        metadata.get("style_reference_strength", "明顯融入") or "明顯融入"
+    )
+    st.session_state["v12_style_reference_elements_enabled"] = bool(
+        metadata.get("style_reference_elements_enabled", False)
+    )
+    st.session_state["v12_style_reference_elements"] = [
+        item for item in V12_STYLE_REFERENCE_ELEMENT_OPTIONS
+        if item in set(metadata.get("style_reference_elements", []) or [])
+    ]
+    st.session_state["v12_style_reference_custom_elements"] = str(
+        metadata.get("style_reference_custom_elements", "") or ""
+    )
+
     # 已保存的精選成品可直接重新打包，不需重新生成 AI 圖片。
     stored_stickers = record.get("sticker_bytes")
     if isinstance(stored_stickers, dict) and stored_stickers:
@@ -3647,6 +3713,19 @@ def _v12_project_snapshot():
     project["transparent_background"] = bool(
         st.session_state.get("transparent_png_option", False)
     )
+    project["style_reference_strength"] = str(
+        st.session_state.get("v12_style_reference_strength", "明顯融入")
+    )
+    project["style_reference_elements_enabled"] = bool(
+        st.session_state.get("v12_style_reference_elements_enabled", False)
+    )
+    project["style_reference_elements"] = [
+        item for item in V12_STYLE_REFERENCE_ELEMENT_OPTIONS
+        if item in set(st.session_state.get("v12_style_reference_elements", []) or [])
+    ]
+    project["style_reference_custom_elements"] = str(
+        st.session_state.get("v12_style_reference_custom_elements", "") or ""
+    ).strip()[:1200]
     project["character_features"] = _v12_clean_character_features(
         st.session_state.get("v10_character_options", [])
     )
@@ -3716,6 +3795,9 @@ st.session_state.setdefault("v12_expression_used_visual_pack_ids", [])
 st.session_state.setdefault("v12_expression_last_recipe_labels", [])
 st.session_state.setdefault("v12_expression_recipe_cycle", 1)
 st.session_state.setdefault("v12_style_reference_strength", "明顯融入")
+st.session_state.setdefault("v12_style_reference_elements_enabled", False)
+st.session_state.setdefault("v12_style_reference_elements", [])
+st.session_state.setdefault("v12_style_reference_custom_elements", "")
 st.session_state.setdefault("generated_4x2_bytes", None)
 st.session_state.setdefault("last_prompt", "")
 st.session_state.setdefault("crop_boxes", None)
@@ -5153,6 +5235,26 @@ if _style_reference_active:
         help="只改變新作品的線條、比例、配色、陰影與表情語言；不會複製參考圖中的角色、文字或單張貼圖。",
     )
     st.caption("建議先用「明顯融入」；若成品仍太像原照片或太寫實，再選「強烈融入」。")
+    st.markdown("#### 🎯 代表性元素套用")
+    st.caption("把畫風圖中最有辨識度的圖樣或筆觸，直接融入人物服裝、配件、輪廓或局部上色；未啟用時只做一般畫風轉譯。")
+    _style_elements_enabled = st.checkbox(
+        "將代表性元素直接套用到人物設計",
+        key="v12_style_reference_elements_enabled",
+    )
+    if _style_elements_enabled:
+        st.multiselect(
+            "選擇要套用的代表性元素（可複選）",
+            V12_STYLE_REFERENCE_ELEMENT_OPTIONS,
+            key="v12_style_reference_elements",
+            help="例如圓點要出現在人物服裝或身體局部，不能只作為背景裝飾。",
+        )
+        st.text_area(
+            "自訂代表性元素（選填）",
+            key="v12_style_reference_custom_elements",
+            placeholder="例如：衣服與身體局部佈滿大小不一的彩色圓點，臉部保留乾淨表情。",
+            max_chars=1200,
+        )
+        st.caption("💡 元素會套用在人物本身；AI 仍會創作全新角色與貼圖，不會複製參考圖中的角色、文字或版面。")
     st.caption("若打包時同步保存並勾選「保存私人創作素材」，這張參考圖會一併保存，供日後載回續作。")
 
 with st.expander("📚 查看全部預設風格",expanded=False):
@@ -5932,6 +6034,27 @@ if _style_reference_active:
         "不要直接複製參考圖中的既有角色、文字、標誌、版面或任何單一貼圖內容。"
         "不要套用其他預設或自定義貼圖風格。"
     )
+    if bool(st.session_state.get("v12_style_reference_elements_enabled", False)):
+        _style_reference_elements = [
+            item for item in V12_STYLE_REFERENCE_ELEMENT_OPTIONS
+            if item in set(st.session_state.get("v12_style_reference_elements", []) or [])
+        ]
+        _style_reference_custom_elements = str(
+            st.session_state.get("v12_style_reference_custom_elements", "") or ""
+        ).strip()
+        if _style_reference_elements or _style_reference_custom_elements:
+            prompt += (
+                "\n【代表性元素套用】除了整體畫風外，以下元素必須明確融入人物設計，"
+                "優先放在服裝、配件、輪廓、局部上色或身體表面，而不是只作為背景裝飾。"
+            )
+            for _style_element in _style_reference_elements:
+                prompt += "\n- " + V12_STYLE_REFERENCE_ELEMENT_PROMPTS[_style_element]
+            if _style_reference_custom_elements:
+                prompt += (
+                    "\n- 使用者指定的代表性元素：「"
+                    + _style_reference_custom_elements
+                    + "」。請將其轉譯為全新人物的設計語言。"
+                )
 elif style_mode == V8_STYLE_CUSTOM_OPTION:
     prompt += (
         "\n【V10 風格模式】目前使用「自定義風格」模式。"
