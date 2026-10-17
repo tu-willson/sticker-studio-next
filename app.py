@@ -1409,11 +1409,10 @@ def v12_mode_panel_heading(title, accent="#3498db"):
 # Sticker Studio Next｜獨立預覽版／會員 Beta
 #
 # 這個專案不讀取、不呼叫舊版 LINE Sticker Web 的 Supabase 或網站
-# OpenAI Key。自備 Key 仍可隨時使用；會員 Beta 則只使用本專案新的
-# Supabase、Google 登入與點數帳本。
+# OpenAI Key。本專案只使用新的 Supabase、Google 登入與點數帳本，
+# 由站方 API 服務已登入的會員。
 # ============================================================
 BETA_API_MODE = "✨ 會員 Beta（登入享 2 次）"
-OWN_API_MODE = "🔑 使用自己的 OpenAI API"
 BETA_SITE_URL = "https://sticker-studio-next.streamlit.app"
 
 
@@ -2185,7 +2184,7 @@ def _beta_render_admin_console(session):
 
 
 def _beta_render_account_panel():
-    """Render the separate member login without touching the always-available BYOK path."""
+    """Render the member login and current member usage."""
     if not _beta_config():
         return None
 
@@ -2214,7 +2213,7 @@ def _beta_render_account_panel():
             _beta_clear_cached_copy_usage_status()
             st.rerun()
         if not _beta_site_openai_key():
-            st.info("會員登入與點數帳本已啟用；站方生成 API 正在進行最後設定，自備 Key 模式不受影響。")
+            st.info("會員登入與點數帳本已啟用；站方生成 API 正在進行最後設定。")
         with st.expander("📜 點數與雲端作品庫規則", expanded=False):
             st.markdown(
                 """
@@ -4202,9 +4201,8 @@ def base_boxes(w, h):
 # - 保留「主題＋文案語氣」介面
 # - 強化「文字構成畫面 → 找生活瞬間 → 真人反應 → 台灣語感／經典梗 → 短句化」流程
 # - 與 gpt-image-2 圖片生成分開，不改動原本圖片生成流程
-# - AI 文案助手測試階段：暫時不扣網站每日 AI 額度，開放不限次數
-# - 自有 API 模式：使用使用者自己的 OpenAI API，不扣網站額度
-# - 後續可再獨立加入「5 分鐘冷卻」限制，不與圖片生成額度綁定
+# - AI 文案助手使用會員每日額度，不扣除圖片生成點數
+# - 文案額度與圖片點數分開計算
 # ============================================================
 V12_AI_COPY_MODEL = "gpt-5.6-luna"
 V12_AI_COPY_TONES = [
@@ -4358,7 +4356,7 @@ def _v12_ai_copy_generate(topic, tone, api_key):
     return phrases
 
 @st.fragment
-def _v12_render_ai_copy_assistant(api_mode, user_api_key):
+def _v12_render_ai_copy_assistant():
     """V12｜AI 文案助手＋多主題暫存池（Session-only）。
     規則：主題只在使用者完成 AI 生成並選擇儲存文案後建立；
     每次 AI 產生 16 句，使用者可只勾選想保存的句子；
@@ -4401,21 +4399,20 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
         key="v12_ai_copy_tone",
     )
 
-    # 在點選生成前就先讓會員看見今日剩餘額度；自備 Key 不受此帳本限制。
-    if api_mode != OWN_API_MODE:
-        # 勾選候選文案時只需要顯示既有額度；避免每次局部互動都重新驗證登入。
-        _copy_status_session = st.session_state.get("beta_auth_session")
-        if _copy_status_session:
-            try:
-                _copy_status = _beta_copy_usage_status_cached(_copy_status_session)
-                st.info(
-                    "✨ 今日 AI 文案額度（台灣時間）："
-                    f"剩 {_copy_status['remaining_count']} / {_copy_status['daily_limit']} 次"
-                )
-            except Exception:
-                st.warning("今日文案額度暫時無法確認，請稍後再試。")
-        else:
-            st.info("完成 Google 登入後，即可查看並使用每日 AI 文案額度。")
+    # 在點選生成前就先讓會員看見今日剩餘額度。
+    # 勾選候選文案時只顯示既有額度，避免每次局部互動都重新驗證登入。
+    _copy_status_session = st.session_state.get("beta_auth_session")
+    if _copy_status_session:
+        try:
+            _copy_status = _beta_copy_usage_status_cached(_copy_status_session)
+            st.info(
+                "✨ 今日 AI 文案額度（台灣時間）："
+                f"剩 {_copy_status['remaining_count']} / {_copy_status['daily_limit']} 次"
+            )
+        except Exception:
+            st.warning("今日文案額度暫時無法確認，請稍後再試。")
+    else:
+        st.info("完成 Google 登入後，即可查看並使用每日 AI 文案額度。")
 
     _generate = st.button(
         "✨ AI 幫我想 16 句",
@@ -4427,58 +4424,47 @@ def _v12_render_ai_copy_assistant(api_mode, user_api_key):
         if not _topic:
             st.warning("請先輸入一個主題，例如「職場的憤憤不平」。")
         else:
-            _live_api_mode = st.session_state.get("v12_saved_api_mode", api_mode)
             _copy_session = None
             _copy_reservation = None
             _copy_api_key = ""
-            if _live_api_mode == OWN_API_MODE:
-                _copy_api_key = str(
-                    st.session_state.get("v11_user_api_key")
-                    or st.session_state.get("v12_saved_user_api_key")
-                    or user_api_key
-                    or ""
-                ).strip()
-                if not _copy_api_key:
-                    st.error("❌ 請先輸入自己的 OpenAI API Key。")
+            _copy_session = _beta_current_user()
+            if not _copy_session:
+                st.warning("請先完成 Google 登入，才能使用會員 AI 文案額度。")
             else:
-                _copy_session = _beta_current_user()
-                if not _copy_session:
-                    st.warning("請先完成 Google 登入，才能使用會員 AI 文案額度。")
+                _copy_api_key = _beta_site_openai_key()
+                if not _copy_api_key:
+                    st.error("❌ 站方 AI 文案服務尚未完成設定，請稍後再試。")
                 else:
-                    _copy_api_key = _beta_site_openai_key()
-                    if not _copy_api_key:
-                        st.error("❌ 站方 AI 文案服務尚未完成設定，請先使用自備 Key 測試。")
+                    try:
+                        _copy_reservation = _beta_reserve_copy_generation(_copy_session)
+                    except Exception:
+                        st.error("❌ 今日文案額度暫時無法確認，請稍後再試。")
                     else:
-                        try:
-                            _copy_reservation = _beta_reserve_copy_generation(_copy_session)
-                        except Exception:
-                            st.error("❌ 今日文案額度暫時無法確認，請稍後再試。")
-                        else:
-                            if not _copy_reservation["granted"]:
-                                st.warning(
-                                    "今日 AI 文案額度已用完"
-                                    f"（每日 {_copy_reservation['daily_limit']} 次），"
-                                    "將在台灣時間午夜重置。"
-                                )
-                                _copy_api_key = ""
-
-                            _beta_set_cached_copy_usage_status(
-                                _copy_session,
-                                {
-                                    "usage_date": _copy_reservation["usage_date"],
-                                    "daily_limit": _copy_reservation["daily_limit"],
-                                    "used_count": max(
-                                        0,
-                                        _copy_reservation["daily_limit"]
-                                        - _copy_reservation["remaining_count"],
-                                    ),
-                                    "remaining_count": _copy_reservation["remaining_count"],
-                                    "entitlement_kind": _copy_reservation["entitlement_kind"],
-                                    "entitlement_expires_at": _copy_reservation[
-                                        "entitlement_expires_at"
-                                    ],
-                                },
+                        if not _copy_reservation["granted"]:
+                            st.warning(
+                                "今日 AI 文案額度已用完"
+                                f"（每日 {_copy_reservation['daily_limit']} 次），"
+                                "將在台灣時間午夜重置。"
                             )
+                            _copy_api_key = ""
+
+                        _beta_set_cached_copy_usage_status(
+                            _copy_session,
+                            {
+                                "usage_date": _copy_reservation["usage_date"],
+                                "daily_limit": _copy_reservation["daily_limit"],
+                                "used_count": max(
+                                    0,
+                                    _copy_reservation["daily_limit"]
+                                    - _copy_reservation["remaining_count"],
+                                ),
+                                "remaining_count": _copy_reservation["remaining_count"],
+                                "entitlement_kind": _copy_reservation["entitlement_kind"],
+                                "entitlement_expires_at": _copy_reservation[
+                                    "entitlement_expires_at"
+                                ],
+                            },
+                        )
 
             if _copy_api_key:
                 try:
@@ -5168,95 +5154,34 @@ if _beta_config():
 
 # API 使用模式常數必須在所有 callback / widget 使用前先建立。
 # Streamlit 會由上而下執行整個 script，因此不可放在 AI 文案區之後。
-_ALLOWED_API_MODES = [OWN_API_MODE]
-if _beta_config():
-    _ALLOWED_API_MODES.append(BETA_API_MODE)
+_ALLOWED_API_MODES = [BETA_API_MODE]
 
 def _v12_sync_api_mode():
-    """把 API 使用模式同步到獨立 canonical Session state。"""
-    value = str(st.session_state.get("v12_api_mode_widget", "") or "")
-    if value not in _ALLOWED_API_MODES:
-        value = OWN_API_MODE
-    st.session_state["v12_saved_api_mode"] = value
-    st.session_state["v11_api_mode"] = value
-
-def _v12_sync_user_api_key():
-    """把 API Key 同步到兩個 Session 狀態，避免 widget rerun 後遺失。"""
-    value = str(st.session_state.get("v11_user_api_key", "") or "").strip()
-    st.session_state["v11_user_api_key"] = value
-    st.session_state["v12_saved_user_api_key"] = value
+    """維持會員模式的 canonical Session state。"""
+    st.session_state["v12_saved_api_mode"] = BETA_API_MODE
+    st.session_state["v11_api_mode"] = BETA_API_MODE
 
 
-# ============================================================
-# V11 STEP 02B-3A｜使用者自有 OpenAI API
-#
-# 安全原則：
-# 1. 獨立預覽版只使用使用者自己的 OpenAI API。
-# 2. API Key 僅放在目前 Streamlit Session。
-# 3. 不寫入 Supabase / JSON / GitHub / Streamlit Secrets。
-# 4. 預設隱碼；可由使用者自行切換顯示。
-# ============================================================
-v10_section("🤖 AI 生成方式", "#6366f1")
-st.caption("📌 自備 Key 模式持續可用；新登入會員有 2 次體驗額度。")
+# 會員生成統一透過站方 API 與點數帳本；不提供使用者 API Key 輸入。
+_api_mode = BETA_API_MODE
+st.session_state["v12_saved_api_mode"] = BETA_API_MODE
+st.session_state["v11_api_mode"] = BETA_API_MODE
 
-# 重要：不要再直接把 radio 綁在 v11_api_mode。
-# 字型快速選擇／開關 125 種總覽都會觸發 Streamlit rerun，
-# 因此先由 canonical Session state 恢復 widget，再由 callback 寫回 canonical state。
-_saved_api_mode = str(st.session_state.get("v12_saved_api_mode", "") or "")
-if _saved_api_mode not in _ALLOWED_API_MODES:
-    _saved_api_mode = OWN_API_MODE
-st.session_state["v12_api_mode_widget"] = _saved_api_mode
-_api_mode = st.radio(
-    "請選擇生成方式",
-    _ALLOWED_API_MODES,
-    key="v12_api_mode_widget",
-    on_change=_v12_sync_api_mode,
-)
-# 兼容原本其他程式區塊仍讀取 v11_api_mode。
-st.session_state["v11_api_mode"] = _api_mode
-st.session_state["v12_saved_api_mode"] = _api_mode
+# 清除舊版瀏覽器 Session 欄位，確保後續流程只使用會員模式。
+for _deprecated_key_state in (
+    "v11_user_api_key",
+    "v12_saved_user_api_key",
+    "v11_show_api_key",
+    "v12_api_mode_widget",
+):
+    st.session_state.pop(_deprecated_key_state, None)
 
 _beta_session = _beta_render_account_panel()
 _beta_render_admin_console(_beta_session)
 
 st.caption("💡 會員 Beta 只連線至新的 Sticker Studio Next Supabase；不會讀取或變更舊版網站的資料。")
 
-# 若 API Key widget 曾因 rerun 被 Streamlit 暫時清除，從 Session backup 還原。
-if not str(st.session_state.get("v11_user_api_key", "") or "").strip():
-    _saved_key = str(st.session_state.get("v12_saved_user_api_key", "") or "").strip()
-    if _saved_key:
-        st.session_state["v11_user_api_key"] = _saved_key
-
-if _api_mode == OWN_API_MODE:
-    st.info(
-        "🔐 **隱私提醒**\n\n"
-        "本網站只將這組 Key 用於目前這個瀏覽器 Session；不會儲存至 GitHub、Supabase 或 Streamlit Secrets。"
-    )
-
-    _show_v11_key = st.checkbox(
-        "👁️ 顯示 API Key（再次點擊即可隱藏）",
-        value=False,
-        key="v11_show_api_key",
-    )
-
-    _v11_user_api_key = st.text_input(
-        "OpenAI API Key",
-        type="default" if _show_v11_key else "password",
-        placeholder="sk-••••••••••••••••••••",
-        key="v11_user_api_key",
-        help="請輸入你自己的 OpenAI API Key。",
-        on_change=_v12_sync_user_api_key,
-    ).strip()
-
-# 以 Session 中的值作為後續圖片生成與 AI 文案助手的唯一來源。
-_v11_user_api_key = str(st.session_state.get("v11_user_api_key", "") or "").strip()
-
-if _api_mode == OWN_API_MODE:
-    if _v11_user_api_key:
-        st.success("🔒 已取得本次 Session 的 API Key。")
-    else:
-        st.warning("⚠️ 請先輸入自己的 OpenAI API Key。")
-elif not _beta_session:
+if not _beta_session:
     st.warning("⚠️ 請先使用 Google 登入，才能使用會員 Beta 額度。")
 
 
@@ -5269,8 +5194,8 @@ st.markdown("""
       <div class="v11-onboarding-text">依序選擇風格、人物特色、貼圖文字、字型與背景。</div>
     </div>
     <div class="v11-onboarding-card">
-      <div class="v11-onboarding-step">② 選擇 AI 生成方式</div>
-      <div class="v11-onboarding-text">可選自備 OpenAI API Key，或登入會員 Beta 使用帳號點數。</div>
+      <div class="v11-onboarding-step">② 登入會員並確認額度</div>
+      <div class="v11-onboarding-text">使用 Google 登入會員 Beta，以帳號點數使用站方 AI 服務。</div>
     </div>
     <div class="v11-onboarding-card">
       <div class="v11-onboarding-step">③ 生成 → 裁切 → 下載</div>
@@ -5639,32 +5564,10 @@ if _sticker_mode == "text":
 
 # V12｜AI 貼圖文案助手 V1：只負責文字，不碰原本圖片生成流程。
 #
-# API 狀態穩定化：
-# Streamlit 每次互動都會 rerun 整個 script。除了 API Key 之外，
-# 生成方式必須有獨立 canonical Session state，避免點選字型、
-# 開關字型總覽等 widget 造成 rerun 後回到預設值。
-st.session_state.setdefault("v11_api_mode", "🔑 使用自己的 OpenAI API")
-st.session_state.setdefault("v12_saved_api_mode", "")
-# 第一次建立 canonical state 時，沿用目前既有的 v11_api_mode。
-if st.session_state.get("v12_saved_api_mode") not in _ALLOWED_API_MODES:
-    _legacy_api_mode = str(st.session_state.get("v11_api_mode", "") or "")
-    st.session_state["v12_saved_api_mode"] = (
-        _legacy_api_mode if _legacy_api_mode in _ALLOWED_API_MODES
-        else "🔑 使用自己的 OpenAI API"
-    )
-st.session_state.setdefault("v11_user_api_key", "")
-# 額外保留一份 Session-level backup，避免 API Key widget 因 rerun /
-# 條件式顯示暫時未渲染而被 Streamlit 清除。
-st.session_state.setdefault("v12_saved_user_api_key", "")
-if st.session_state.get("v11_user_api_key"):
-    st.session_state["v12_saved_user_api_key"] = str(st.session_state.get("v11_user_api_key") or "").strip()
-_v12_current_api_mode = st.session_state.get("v12_saved_api_mode", "🔑 使用自己的 OpenAI API")
-st.session_state["v11_api_mode"] = _v12_current_api_mode
-_v12_current_user_api_key = str(
-    st.session_state.get("v11_user_api_key")
-    or st.session_state.get("v12_saved_user_api_key")
-    or ""
-).strip()
+# AI 圖片與文案皆統一使用已登入會員的站方 API 與用量帳本。
+_v12_current_api_mode = BETA_API_MODE
+st.session_state["v12_saved_api_mode"] = BETA_API_MODE
+st.session_state["v11_api_mode"] = BETA_API_MODE
 
 def _v12_render_text_slot(i):
     _widget_key = f"v12_sticker_text_widget_{i}"
@@ -5953,14 +5856,8 @@ def _v12_render_expression_sticker_slots():
 
 
 if _sticker_mode == "text" and st.session_state.get("v12_text_source_panel") == "ai":
-    if _v12_current_api_mode == OWN_API_MODE:
-        st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；自備 Key 模式不使用會員每日文案額度。")
-    else:
-        st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；會員模式會使用每日 AI 文案額度，不會扣除圖片生成點數。")
-    _v12_render_ai_copy_assistant(
-        _v12_current_api_mode,
-        _v12_current_user_api_key,
-    )
+    st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；會員模式會使用每日 AI 文案額度，不會扣除圖片生成點數。")
+    _v12_render_ai_copy_assistant()
 
 
 @st.fragment
@@ -6599,35 +6496,30 @@ if st.button(
         st.warning("請至少輸入一格貼圖文字。")
         st.stop()
 
-    if _api_mode == OWN_API_MODE:
-        if not _v11_user_api_key:
-            st.error("❌ 請先輸入自己的 OpenAI API Key。")
-            st.stop()
-    else:
-        _click_beta_session = _beta_current_user()
-        if not _click_beta_session:
-            st.error("❌ 請先使用 Google 登入會員 Beta。")
-            st.stop()
-        if not _beta_site_openai_key():
-            st.error("❌ 會員 Beta 的站方生成服務尚未開放；目前仍可使用自備 Key 模式。")
-            st.stop()
-        try:
-            _reservation = _beta_reserve_generation(_click_beta_session)
-        except Exception:
-            st.error("❌ 目前無法確認會員點數，請稍後再試。")
-            st.stop()
-        if not _reservation["granted"]:
-            if _reservation["job_id"]:
-                st.warning("此帳號已有一份圖片正在生成，請等完成後再試。")
-            elif _reservation["balance"] > 0:
-                st.warning("剛完成生成，請等候 60 秒後再使用下一次體驗額度。")
-            else:
-                st.warning("體驗額度已使用完畢。")
-            st.stop()
-        if not _reservation["job_id"]:
-            st.error("❌ 無法建立本次生成作業，請稍後再試。")
-            st.stop()
-        st.session_state["beta_generation_job_id"] = _reservation["job_id"]
+    _click_beta_session = _beta_current_user()
+    if not _click_beta_session:
+        st.error("❌ 請先使用 Google 登入會員 Beta。")
+        st.stop()
+    if not _beta_site_openai_key():
+        st.error("❌ 會員 Beta 的站方生成服務尚未完成設定，請稍後再試。")
+        st.stop()
+    try:
+        _reservation = _beta_reserve_generation(_click_beta_session)
+    except Exception:
+        st.error("❌ 目前無法確認會員點數，請稍後再試。")
+        st.stop()
+    if not _reservation["granted"]:
+        if _reservation["job_id"]:
+            st.warning("此帳號已有一份圖片正在生成，請等完成後再試。")
+        elif _reservation["balance"] > 0:
+            st.warning("剛完成生成，請等候 60 秒後再使用下一次體驗額度。")
+        else:
+            st.warning("體驗額度已使用完畢。")
+        st.stop()
+    if not _reservation["job_id"]:
+        st.error("❌ 無法建立本次生成作業，請稍後再試。")
+        st.stop()
+    st.session_state["beta_generation_job_id"] = _reservation["job_id"]
 
     if _sticker_mode == "expression":
         _resolved_specs, _recipe_labels = _v12_prepare_random_expression_specs(
@@ -6661,25 +6553,19 @@ if st.session_state.get("v11_generation_pending", False):
 
     st.info("🔒 AI 生成進行中，本次操作已鎖定，請稍候……")
 
-    _using_beta_credit = _api_mode == BETA_API_MODE
+    _using_beta_credit = True
     _beta_job_id = str(st.session_state.get("beta_generation_job_id", "") or "")
     _beta_generation_returned = False
     _beta_live_session = None
 
     try:
-        if _using_beta_credit:
-            _beta_live_session = _beta_current_user()
-            if not _beta_live_session or not _beta_job_id:
-                raise RuntimeError("missing_beta_reservation")
-            _server_openai_key = _beta_site_openai_key()
-            if not _server_openai_key:
-                raise RuntimeError("beta_generation_not_enabled")
-            _generation_client = OpenAI(api_key=_server_openai_key)
-        else:
-            if not _v11_user_api_key:
-                st.error("❌ 請先輸入自己的 OpenAI API Key。")
-                raise RuntimeError("missing_user_api_key")
-            _generation_client = OpenAI(api_key=_v11_user_api_key)
+        _beta_live_session = _beta_current_user()
+        if not _beta_live_session or not _beta_job_id:
+            raise RuntimeError("missing_beta_reservation")
+        _server_openai_key = _beta_site_openai_key()
+        if not _server_openai_key:
+            raise RuntimeError("beta_generation_not_enabled")
+        _generation_client = OpenAI(api_key=_server_openai_key)
 
         with st.spinner("AI 正在生成 4×2 原始總圖……"):
             ib = BytesIO(st.session_state.uploaded_image_bytes)
@@ -6815,15 +6701,8 @@ if st.session_state.get("v11_generation_pending", False):
             except Exception:
                 st.warning("生成失敗，退點紀錄正在同步；請先不要重複嘗試。")
 
-        if not _using_beta_credit and str(e) != "missing_user_api_key":
-            st.info(
-                "ℹ️ 這次使用的是你自己的 OpenAI API；"
-                "不涉及舊版網站的每日額度或 Supabase。"
-            )
-
-        if str(e) != "missing_user_api_key":
-            st.error("❌ 生成失敗")
-            st.caption(f"錯誤類型：{type(e).__name__}")
+        st.error("❌ 生成失敗")
+        st.caption(f"錯誤類型：{type(e).__name__}")
 
     finally:
         # 成功、失敗、額度不足、例外都解除鎖定。
