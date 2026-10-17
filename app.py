@@ -2368,7 +2368,7 @@ def _beta_entitlement_label(entitlement):
         "basic_monthly": "基本方案",
         "standard_monthly": "標準方案",
         "advanced_monthly": "進階方案",
-        "credit_pack_7": "7 點點數包",
+        "credit_pack_7": "7 次生成包",
     }
     kind = str(entitlement.get("entitlement_kind", "free") or "free")
     product_name = product_names.get(
@@ -2569,7 +2569,7 @@ def _beta_render_admin_console(session):
 
     st.markdown("---")
     with st.expander("🛠️ Beta 管理後台（僅管理者）", expanded=False):
-        st.caption("可補回或扣除測試點數，也可建立不收款的測試購買。所有操作都會記錄操作者、原因與時間。")
+        st.caption("可補回或扣除測試生成次數，也可建立不收款的測試購買。所有操作都會記錄操作者、原因與時間。")
         search_text = st.text_input(
             "搜尋會員 Email 或名稱（空白會顯示最近 100 位）",
             key="beta_admin_member_search",
@@ -2584,7 +2584,7 @@ def _beta_render_admin_console(session):
 
         members = st.session_state.get("beta_admin_members", [])
         if not isinstance(members, list) or not members:
-            st.info("輸入 Email 後按「查詢會員」，即可進行補點或扣點。")
+            st.info("輸入 Email 後按「查詢會員」，即可進行補次或扣次。")
             return
 
         options = {}
@@ -2605,7 +2605,7 @@ def _beta_render_admin_console(session):
         )
         selected = options[selected_label]
         adjustment = st.number_input(
-            "調整點數（正數補點、負數扣點）",
+            "調整生成次數（正數補次、負數扣次）",
             min_value=-50,
             max_value=50,
             value=2,
@@ -2614,11 +2614,11 @@ def _beta_render_admin_console(session):
         )
         note = st.text_input(
             "調整原因（會寫入管理紀錄）",
-            value="Beta 測試補點",
+            value="Beta 測試補次",
             max_chars=160,
             key="beta_admin_adjustment_note",
         )
-        if st.button("確認調整會員點數", type="primary", key="beta_admin_adjust_credits"):
+        if st.button("確認調整會員生成次數", type="primary", key="beta_admin_adjust_credits"):
             if int(adjustment) == 0 or len(note.strip()) < 3:
                 st.warning("請填寫非 0 的調整次數與至少 3 個字的原因。")
                 return
@@ -2632,15 +2632,15 @@ def _beta_render_admin_console(session):
                     session, search_text
                 )
             except Exception:
-                st.error("調整未完成。請確認點數不會低於 0，或稍後再試。")
+                st.error("調整未完成。請確認生成次數不會低於 0，或稍後再試。")
 
         st.markdown("#### 🧪 管理員測試購買")
         st.info("此操作只用於驗證方案權益：不會收款、不會寄送付款通知，也不會對外顯示為正式訂單。")
         product_options = {
-            "7 點點數包｜7 點／每日文案 7 次／作品集 7 組｜效期 30 天": "credit_pack_7",
-            "基本方案｜20 點／每日文案 15 次／作品集 20 組｜週期 1 個月": "basic_monthly",
-            "標準方案｜30 點／每日文案 20 次／作品集 30 組｜週期 1 個月": "standard_monthly",
-            "進階方案｜40 點／每日文案 25 次／作品集 40 組｜週期 1 個月": "advanced_monthly",
+            "7 次生成包｜圖片生成 7 次／AI幫想每日 7 次／作品集 7 組｜效期 30 天": "credit_pack_7",
+            "基本方案｜圖片生成 20 次／AI幫想每日 15 次／作品集 20 組｜週期 1 個月": "basic_monthly",
+            "標準方案｜圖片生成 30 次／AI幫想每日 20 次／作品集 30 組｜週期 1 個月": "standard_monthly",
+            "進階方案｜圖片生成 40 次／AI幫想每日 25 次／作品集 40 組｜週期 1 個月": "advanced_monthly",
         }
         selected_product_label = st.selectbox(
             "模擬購買方案", list(product_options.keys()), key="beta_admin_test_purchase_product"
@@ -2667,8 +2667,8 @@ def _beta_render_admin_console(session):
                     capacity = int(result.get("library_capacity", 0) or 0)
                     expiry = str(result.get("credit_expires_at", "") or "")[:10]
                     st.success(
-                        f"測試購買已建立：加入 {credits} 點、每日文案 {daily} 次、"
-                        f"作品集上限 {capacity} 組；圖片點數效期至 {expiry}。"
+                        f"測試購買已建立：加入圖片生成 {credits} 次、AI幫想每日 {daily} 次、"
+                        f"作品集上限 {capacity} 組；圖片生成次數效期至 {expiry}。"
                     )
                     st.session_state["beta_admin_members"] = _beta_admin_list_members(
                         session, search_text
@@ -2694,7 +2694,7 @@ def _beta_render_account_panel():
                 balance = _beta_credit_balance(session)
                 st.success(f"已登入：{email}　｜　可用體驗額度：{balance} 次")
             except Exception:
-                st.warning(f"已登入：{email}　｜　點數暫時無法讀取，請稍後再試。")
+                st.warning(f"已登入：{email}　｜　可用生成次數暫時無法讀取，請稍後再試。")
         with refresh_balance_col:
             if st.button("刷新次數", key="beta_refresh_credit_balance", use_container_width=True):
                 _beta_clear_cached_copy_usage_status()
@@ -2716,8 +2716,8 @@ def _beta_render_account_panel():
             _beta_clear_cached_copy_usage_status()
             st.rerun()
         if not _beta_site_openai_key():
-            st.info("會員登入與點數帳本已啟用；站方生成 API 正在進行最後設定。")
-        with st.expander("📜 點數與雲端作品庫規則", expanded=False):
+            st.info("會員登入與生成次數帳本已啟用；站方生成 API 正在進行最後設定。")
+        with st.expander("📜 生成次數與雲端作品庫規則", expanded=False):
             st.markdown(
                 """
                 #### 🎨 服務內容
@@ -2726,32 +2726,32 @@ def _beta_render_account_panel():
 
                 #### 💳 方案與提供額度
 
-                | 方案 | 月費／售價 | 每月圖片點數 | AI 文案每日額度 | 雲端作品庫上限 |
+                | 方案 | 月費／售價 | 每月圖片生成次數 | AI幫想每日額度 | 雲端作品庫上限 |
                 | --- | ---: | ---: | ---: | ---: |
-                | 基本方案 | NT$99／月 | 20 點 | 15 次 | 20 組 |
-                | 標準方案 | NT$149／月 | 30 點 | 20 次 | 30 組 |
-                | 進階方案 | NT$199／月 | 40 點 | 25 次 | 40 組 |
-                | 單次點數包 | NT$49／包 | 7 點 | 7 次 | 7 組 |
+                | 基本方案 | NT$99／月 | 20 次 | 15 次 | 20 組 |
+                | 標準方案 | NT$149／月 | 30 次 | 20 次 | 30 組 |
+                | 進階方案 | NT$199／月 | 40 次 | 25 次 | 40 組 |
+                | 單次生成包 | NT$49／包 | 7 次 | 7 次 | 7 組 |
 
-                #### ✨ 點數與使用方式
+                #### ✨ 圖片生成次數與使用方式
 
-                - 每次成功生成一張 **4×2 原始貼圖總圖**，扣除 **1 點圖片點數**；生成失敗不計入使用。
-                - AI 文案額度以台灣時間每日計算，供「主題 AI 幫想」等文字輔助功能使用；與圖片點數分開計算。
-                - 點數包為一次性購買，不會自動續訂；購買後有效期為 **30 天**。
-                - 訂閱方案每月提供的新點數，未使用部分可保留至 **下一個帳務週期結束**；系統會優先扣除最早到期的點數。
+                - 每次成功生成一張 **4×2 原始貼圖總圖**，扣除 **1 次圖片生成次數**；生成失敗不計入使用。
+                - AI幫想額度以台灣時間每日計算，供「主題 AI 幫想」等文字輔助功能使用；與圖片生成次數分開計算。
+                - 單次生成包為一次性購買，不會自動續訂；購買後有效期為 **30 天**。
+                - 訂閱方案每月提供的新圖片生成次數，未使用部分可保留至 **下一個帳務週期結束**；系統會優先使用最早到期的次數。
 
                 #### 🔁 訂閱規則（正式付款開通後適用）
 
-                - 訂閱自付款成功日起生效，並依所選方案按月提供圖片點數、AI 文案額度與作品庫容量。
+                - 訂閱自付款成功日起生效，並依所選方案按月提供圖片生成次數、AI幫想額度與作品庫容量。
                 - 取消訂閱後，當期已取得的服務權益可使用至該帳務週期結束；下一期不再續扣。
                 - 變更方案或訂閱到期後，雲端作品不會自動刪除；若現有作品數超過新方案上限，需先整理作品庫後才能新增保存。
-                - 單次點數包與訂閱點數可併用；服務會優先使用最早到期的可用點數。
+                - 單次生成包與訂閱生成次數可併用；服務會優先使用最早到期的可用次數。
 
                 #### ☁️ 雲端作品庫與下載
 
                 - 每組作品可保存原始人物照片、已上傳的畫風參考與使用者選取的貼圖成品；單組最多保存 **40 張貼圖**，**MAIN／TAB** 規格圖不計入此上限。
                 - 未勾選保存的裁切貼圖不會寫入作品庫；ZIP 壓縮檔不會另行保存，可在日後將作品載回創作頁後重新下載。
-                - 作品庫容量依目前有效方案計算；免費會員預設可保存 5 組作品，訂閱或點數包則依上表權益提供容量。
+                - 作品庫容量依目前有效方案計算；免費會員預設可保存 5 組作品，訂閱或單次生成包則依上表權益提供容量。
 
                 #### 📌 重要提醒
 
@@ -4967,13 +4967,13 @@ def _v12_render_ai_copy_assistant():
         try:
             _copy_status = _beta_copy_usage_status_cached(_copy_status_session)
             st.info(
-                "✨ 今日 AI 文案額度（台灣時間）："
+                "✨ 今日 AI幫想額度（台灣時間）："
                 f"剩 {_copy_status['remaining_count']} / {_copy_status['daily_limit']} 次"
             )
         except Exception:
             st.warning("今日文案額度暫時無法確認，請稍後再試。")
     else:
-        st.info("完成 Google 登入後，即可查看並使用每日 AI 文案額度。")
+        st.info("完成 Google 登入後，即可查看並使用每日 AI幫想額度。")
 
     _generate = st.button(
         "✨ AI 幫我想 16 句",
@@ -4990,11 +4990,11 @@ def _v12_render_ai_copy_assistant():
             _copy_api_key = ""
             _copy_session = _beta_current_user()
             if not _copy_session:
-                st.warning("請先完成 Google 登入，才能使用會員 AI 文案額度。")
+                st.warning("請先完成 Google 登入，才能使用會員 AI幫想額度。")
             else:
                 _copy_api_key = _beta_site_openai_key()
                 if not _copy_api_key:
-                    st.error("❌ 站方 AI 文案服務尚未完成設定，請稍後再試。")
+                    st.error("❌ 站方 AI幫想服務尚未完成設定，請稍後再試。")
                 else:
                     try:
                         _copy_reservation = _beta_reserve_copy_generation(_copy_session)
@@ -5003,7 +5003,7 @@ def _v12_render_ai_copy_assistant():
                     else:
                         if not _copy_reservation["granted"]:
                             st.warning(
-                                "今日 AI 文案額度已用完"
+                                "今日 AI幫想額度已用完"
                                 f"（每日 {_copy_reservation['daily_limit']} 次），"
                                 "將在台灣時間午夜重置。"
                             )
@@ -5042,7 +5042,7 @@ def _v12_render_ai_copy_assistant():
                         except Exception:
                             pass
                     _beta_clear_cached_copy_usage_status()
-                    st.error("❌ AI 文案服務目前無法使用。")
+                    st.error("❌ AI幫想服務目前無法使用。")
                     st.caption(f"錯誤資訊：{_e}")
                 except Exception:
                     if _copy_session and _copy_reservation and _copy_reservation["job_id"]:
@@ -5055,7 +5055,7 @@ def _v12_render_ai_copy_assistant():
                         except Exception:
                             pass
                     _beta_clear_cached_copy_usage_status()
-                    st.error("❌ AI 文案產生失敗，請稍後再試。")
+                    st.error("❌ AI幫想產生失敗，請稍後再試。")
                 else:
                     if _copy_session and _copy_reservation and _copy_reservation["job_id"]:
                         try:
@@ -5456,7 +5456,7 @@ def _v12_render_pricing_page():
             "name": "基本方案",
             "price": "NT$99",
             "period": "每月訂閱",
-            "credits": "20 點圖片點數／月",
+            "credits": "圖片生成 20 次／月",
             "copy": "AI幫想每日 15 次",
             "library": "雲端作品庫 20 組",
             "button": "選擇基本方案",
@@ -5466,7 +5466,7 @@ def _v12_render_pricing_page():
             "name": "標準方案",
             "price": "NT$149",
             "period": "每月訂閱",
-            "credits": "30 點圖片點數／月",
+            "credits": "圖片生成 30 次／月",
             "copy": "AI幫想每日 20 次",
             "library": "雲端作品庫 30 組",
             "button": "選擇標準方案",
@@ -5477,20 +5477,20 @@ def _v12_render_pricing_page():
             "name": "進階方案",
             "price": "NT$199",
             "period": "每月訂閱",
-            "credits": "40 點圖片點數／月",
+            "credits": "圖片生成 40 次／月",
             "copy": "AI幫想每日 25 次",
             "library": "雲端作品庫 40 組",
             "button": "選擇進階方案",
         },
         {
             "code": "credit_pack_7",
-            "name": "7 點點數包",
+            "name": "7 次生成包",
             "price": "NT$49",
             "period": "單次購買・30 天效期",
-            "credits": "7 點圖片點數",
+            "credits": "圖片生成 7 次",
             "copy": "AI幫想每日 7 次",
             "library": "雲端作品庫 7 組",
-            "button": "選擇點數包",
+            "button": "選擇生成包",
         },
     ]
     selected_code = str(st.session_state.get("v12_pending_purchase_product", "") or "")
@@ -5510,7 +5510,7 @@ def _v12_render_pricing_page():
         <div class="v12-pricing-hero">
           <div class="v12-pricing-kicker">STICKER STUDIO NEXT</div>
           <h1>💳 購買方案</h1>
-          <p>選擇適合你的創作額度。圖片點數、AI幫想額度與雲端作品庫會依方案立即提供。</p>
+          <p>選擇適合你的創作額度。圖片生成次數、AI幫想額度與雲端作品庫會依方案立即提供。</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -5518,7 +5518,7 @@ def _v12_render_pricing_page():
     if current_label:
         st.success(f"📋 {current_label}")
     else:
-        st.info("登入後即可選擇方案；付款完成後會自動更新圖片點數與會員權益。")
+        st.info("登入後即可選擇方案；付款完成後會自動更新圖片生成次數與會員權益。")
 
     plan_cols = st.columns(4, gap="medium")
     for col, product in zip(plan_cols, products):
@@ -5573,13 +5573,13 @@ def _v12_render_pricing_page():
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("### 📌 方案使用說明")
-    with st.expander("查看訂閱、點數與雲端作品庫規則", expanded=True):
+    with st.expander("查看訂閱、生成次數與雲端作品庫規則", expanded=True):
         st.markdown(
             """
-            - 每次成功生成 1 張 **4×2 原始貼圖總圖**，扣除 1 點圖片點數；生成失敗不扣點。
-            - AI幫想額度按台灣時間每日計算，與圖片點數分開計算。
-            - 訂閱方案每月自付款成功日生效；未使用的訂閱點數可保留至下一個帳務週期結束，系統優先使用最早到期的點數。
-            - 點數包為一次性購買，不會自動續訂，購買後有效期為 30 天。
+            - 每次成功生成 1 張 **4×2 原始貼圖總圖**，扣除 1 次圖片生成次數；生成失敗不扣次數。
+            - AI幫想額度按台灣時間每日計算，與圖片生成次數分開計算。
+            - 訂閱方案每月自付款成功日生效；未使用的訂閱生成次數可保留至下一個帳務週期結束，系統優先使用最早到期的次數。
+            - 單次生成包為一次性購買，不會自動續訂，購買後有效期為 30 天。
             - 取消訂閱後，當期權益可使用至帳務週期結束，下一期不再續扣。作品數超過新方案上限時，不會自動刪除，但須整理後才能新增保存。
             - 每組作品最多保存 40 張已選貼圖；MAIN／TAB 規格圖不計入上限。ZIP 檔不會保存，可載回創作頁後重新下載。
             """
@@ -5698,7 +5698,7 @@ if st.session_state["v12_view"] == "library":
                 f"☁️ 雲端作品庫：已保存 {_cloud_status['saved_count']}／"
                 f"{_cloud_status['library_capacity']} 組作品"
             )
-            st.caption("作品集上限會依目前會員權益套用；訂閱與點數包容量不會累計。")
+            st.caption("作品集上限會依目前會員權益套用；訂閱與單次生成包容量不會累計。")
             _cloud_projects = _beta_list_library_projects(_cloud_session)
         except Exception:
             _cloud_projects = []
@@ -6564,7 +6564,7 @@ def _v12_render_expression_sticker_slots():
 
 
 if _sticker_mode == "text" and st.session_state.get("v12_text_source_panel") == "ai":
-    st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；會員模式會使用每日 AI 文案額度，不會扣除圖片生成點數。")
+    st.caption("📌 每次會先產生 16 句候選，再由你挑選、儲存到主題用語池；會員模式會使用每日 AI幫想額度，不會扣除圖片生成次數。")
     _v12_render_ai_copy_assistant()
 
 
@@ -7214,7 +7214,7 @@ if st.button(
     try:
         _reservation = _beta_reserve_generation(_click_beta_session)
     except Exception:
-        st.error("❌ 目前無法確認會員點數，請稍後再試。")
+        st.error("❌ 目前無法確認會員可用生成次數，請稍後再試。")
         st.stop()
     if not _reservation["granted"]:
         if _reservation["job_id"]:
@@ -7392,7 +7392,7 @@ if st.session_state.get("v11_generation_pending", False):
                     _beta_finish_generation(_beta_live_session, _beta_job_id)
                     st.session_state.pop("beta_generation_job_id", None)
                 except Exception:
-                    st.warning("圖片已生成；點數完成紀錄正在同步，請勿重複按下生成。")
+                    st.warning("圖片已生成；生成次數完成紀錄正在同步，請勿重複按下生成。")
             if _grid_crop_room_applied:
                 st.success("🎉 4×2 原始總圖生成成功！已自動保留每格裁切留白。")
             else:
@@ -7435,7 +7435,7 @@ if (
 ):
     st.divider()
     v10_section("🧺 STEP 11B｜已載回的精選作品", "#9b59b6")
-    st.caption("這些是從「我的作品」載回的已選成品；可直接重新指定 MAIN／TAB 並打包，不會重新生成或扣除點數。")
+    st.caption("這些是從「我的作品」載回的已選成品；可直接重新指定 MAIN／TAB 並打包，不會重新生成或扣除生成次數。")
     _v12_render_sticker_basket_workspace()
 
 
