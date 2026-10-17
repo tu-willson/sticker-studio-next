@@ -2806,7 +2806,7 @@ def _beta_render_account_panel():
         with _login_center:
             st.markdown(
                 '<a class="v12-google-login-link" href="'
-                f'{html.escape(login_url, quote=True)}" target="_self">Google帳號登入</a>',
+                f'{html.escape(login_url, quote=True)}" target="_top">Google帳號登入</a>',
                 unsafe_allow_html=True,
             )
         st.markdown(
