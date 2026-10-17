@@ -5290,7 +5290,7 @@ with _mode_expression_col:
     )
 _sticker_mode = _v12_sticker_mode_value(_sticker_content_choice)
 if _sticker_mode == "text":
-    v10_section('使用「✨ 主題 AI 幫想」或「🎲 隨機用語」', '#3498db')
+    v10_subsection('使用「✨ 主題 AI 幫想」或「🎲 隨機用語」', '#3498db')
     st.caption("先選擇你想使用的文字來源；01～08 文字格會一直保留顯示。")
 else:
     v10_section("😶 使用表情貼圖（無文字）", "#3498db")
