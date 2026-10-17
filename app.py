@@ -587,13 +587,17 @@ st.markdown("""
   font-weight:800 !important;
 }
 /* 畫風參考的自訂元素需明確儲存，以紅色按鈕提高辨識度。 */
-.st-key-v12_style_reference_save_button button{
+.st-key-v12_style_reference_save_button button,
+.st-key-v12_text_style_apply_button button,
+.st-key-v12_font_quick_pick_apply_button button{
   background:#ff4f67 !important;
   border-color:#ff4f67 !important;
   color:#fff !important;
   font-weight:800 !important;
 }
-.st-key-v12_style_reference_save_button button:hover{
+.st-key-v12_style_reference_save_button button:hover,
+.st-key-v12_text_style_apply_button button:hover,
+.st-key-v12_font_quick_pick_apply_button button:hover{
   background:#e53e57 !important;
   border-color:#e53e57 !important;
 }
@@ -5437,7 +5441,7 @@ else:
             )
             with st.container(key="v12_style_reference_save_button"):
                 _apply_style_reference_details = st.form_submit_button(
-                    "自訂代表性元素(輸入完請點選儲存)",
+                    "自訂代表性元素(輸入完請點選套用)",
                     type="primary",
                     use_container_width=True,
                 )
@@ -6000,9 +6004,12 @@ if _sticker_mode == "text":
             index=0,
             key="v8_text_style"
         )
-        _apply_text_style = st.form_submit_button(
-            "💾 套用一般貼圖字型效果", use_container_width=True
-        )
+        with st.container(key="v12_text_style_apply_button"):
+            _apply_text_style = st.form_submit_button(
+                "選擇或更改請點選套用",
+                type="primary",
+                use_container_width=True,
+            )
     if _apply_text_style:
         st.success("✅ 一般貼圖字型效果已套用")
 else:
@@ -6086,11 +6093,13 @@ if _sticker_mode == "text":
             ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
             key="v12_font_quick_pick",
         )
-        st.form_submit_button(
-            "💾 套用帶圖字型",
-            use_container_width=True,
-            on_click=_v12_apply_quick_font_pick,
-        )
+        with st.container(key="v12_font_quick_pick_apply_button"):
+            st.form_submit_button(
+                "選擇或更改請點選套用",
+                type="primary",
+                use_container_width=True,
+                on_click=_v12_apply_quick_font_pick,
+            )
 
 if "v10_font_gallery_open" not in st.session_state:
     st.session_state.v10_font_gallery_open = False
