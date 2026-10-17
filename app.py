@@ -585,43 +585,12 @@ st.markdown("""
   font-size:18px !important;
   font-weight:800 !important;
 }
-/* V12｜④ 貼圖類型：以醒目的大按鈕取代小型 radio，手機也容易點選。 */
-.st-key-v12_select_text_sticker_mode button,
-.st-key-v12_select_expression_sticker_mode button{
-  min-height:82px !important;
-  border-radius:16px !important;
-  font-size:22px !important;
-  font-weight:900 !important;
-  letter-spacing:.01em !important;
-  border-width:2px !important;
-  box-shadow:0 5px 14px rgba(30,64,175,.12) !important;
-}
-.st-key-v12_select_text_sticker_mode button p,
-.st-key-v12_select_expression_sticker_mode button p{
-  font-size:22px !important;
-  font-weight:900 !important;
-}
 /* 雲端保存是影響打包等待時間的重要選項，放大以提高可見度。 */
 .st-key-v12_save_to_cloud_on_package [data-testid="stCheckbox"] label p{
   font-size:19px !important;
   font-weight:800 !important;
 }
-.st-key-v12_select_text_sticker_mode button:not(:disabled){
-  border-color:#3498db !important;
-}
-.st-key-v12_select_expression_sticker_mode button:not(:disabled){
-  border-color:#8e67d8 !important;
-}
 @media (max-width:640px){
-  .st-key-v12_select_text_sticker_mode button,
-  .st-key-v12_select_expression_sticker_mode button{
-    min-height:70px !important;
-    font-size:18px !important;
-  }
-  .st-key-v12_select_text_sticker_mode button p,
-  .st-key-v12_select_expression_sticker_mode button p{
-    font-size:18px !important;
-  }
   .st-key-v12_save_to_cloud_on_package [data-testid="stCheckbox"] label p{
     font-size:17px !important;
   }
