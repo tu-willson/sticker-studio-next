@@ -600,6 +600,7 @@ st.markdown("""
 /* 人物照與畫風參考共用醒目的粉紅色原生上傳按鈕。 */
 .st-key-v12_person_photo_upload [data-testid="stFileUploaderDropzone"] button,
 .st-key-v12_style_reference_upload [data-testid="stFileUploaderDropzone"] button{
+  position:relative !important;
   min-height:42px !important;
   padding:0 16px !important;
   color:transparent !important;
@@ -612,6 +613,11 @@ st.markdown("""
 .st-key-v12_person_photo_upload [data-testid="stFileUploaderDropzone"] button::after,
 .st-key-v12_style_reference_upload [data-testid="stFileUploaderDropzone"] button::after{
   content:"上傳";
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
   color:#fff;
   font-size:1rem;
   font-weight:850;
