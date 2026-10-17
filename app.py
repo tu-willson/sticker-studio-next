@@ -1488,7 +1488,8 @@ div[data-testid="stCheckbox"] label{
 .v12-quick-nav-number{display:block;line-height:1.02;text-align:center;}
 .v12-quick-nav-label{font-size:.65rem;font-weight:950;}
 .v12-quick-nav-number{margin-top:2px;font-size:.72rem;opacity:.94;}
-div[class*="st-key-v12_quick_library"]{
+div[class*="st-key-v12_quick_library"],
+div[class*="st-key-v12_quick_step_"]{
   position:fixed !important;
   right:24px;
   bottom:calc(170px + env(safe-area-inset-bottom, 0px));
@@ -1497,8 +1498,10 @@ div[class*="st-key-v12_quick_library"]{
   width:48px !important;
   margin:0 !important;
 }
-body:has(.v12-quick-nav details[open]) div[class*="st-key-v12_quick_library"]{display:block !important;}
-div[class*="st-key-v12_quick_library"] button{
+body:has(.v12-quick-nav details[open]) div[class*="st-key-v12_quick_library"],
+body:has(.v12-quick-nav details[open]) div[class*="st-key-v12_quick_step_"]{display:block !important;}
+div[class*="st-key-v12_quick_library"] button,
+div[class*="st-key-v12_quick_step_"] button{
   width:48px !important;
   min-width:48px !important;
   height:48px !important;
@@ -1514,13 +1517,26 @@ div[class*="st-key-v12_quick_library"] button{
   line-height:1.02 !important;
   white-space:pre-line !important;
 }
-div[class*="st-key-v12_quick_library"] button p{
+div[class*="st-key-v12_quick_library"] button p,
+div[class*="st-key-v12_quick_step_"] button p{
   color:#fff !important;
   font-size:.65rem !important;
   font-weight:950 !important;
   line-height:1.02 !important;
   white-space:pre-line !important;
 }
+.v12-quick-nav-library .v12-quick-nav-menu{
+  visibility:hidden;
+  pointer-events:none;
+}
+div[class*="st-key-v12_quick_step_01"]{bottom:calc(224px + env(safe-area-inset-bottom, 0px));}
+div[class*="st-key-v12_quick_step_02"]{bottom:calc(278px + env(safe-area-inset-bottom, 0px));}
+div[class*="st-key-v12_quick_step_03"]{bottom:calc(332px + env(safe-area-inset-bottom, 0px));}
+div[class*="st-key-v12_quick_step_04"]{bottom:calc(386px + env(safe-area-inset-bottom, 0px));}
+div[class*="st-key-v12_quick_step_05"]{bottom:calc(440px + env(safe-area-inset-bottom, 0px));}
+div[class*="st-key-v12_quick_step_06"]{bottom:calc(494px + env(safe-area-inset-bottom, 0px));}
+div[class*="st-key-v12_quick_step_07"]{bottom:calc(548px + env(safe-area-inset-bottom, 0px));}
+div[class*="st-key-v12_quick_step_08"]{bottom:calc(602px + env(safe-area-inset-bottom, 0px));}
 html{scroll-behavior:smooth;}
 [id^="v12-step-"]{scroll-margin-top:1rem;}
 .v12-font-gallery-note{
@@ -1691,16 +1707,26 @@ html{scroll-behavior:smooth;}
     transform:scale(.9);
     transform-origin:bottom right;
   }
-  div[class*="st-key-v12_quick_library"]{
+  div[class*="st-key-v12_quick_library"],
+  div[class*="st-key-v12_quick_step_"]{
     right:14px;
     bottom:calc(171px + env(safe-area-inset-bottom, 0px));
   }
-  div[class*="st-key-v12_quick_library"] button{
+  div[class*="st-key-v12_quick_library"] button,
+  div[class*="st-key-v12_quick_step_"] button{
     width:46px !important;
     min-width:46px !important;
     height:46px !important;
     min-height:46px !important;
   }
+  div[class*="st-key-v12_quick_step_01"]{bottom:calc(223px + env(safe-area-inset-bottom, 0px));}
+  div[class*="st-key-v12_quick_step_02"]{bottom:calc(272px + env(safe-area-inset-bottom, 0px));}
+  div[class*="st-key-v12_quick_step_03"]{bottom:calc(321px + env(safe-area-inset-bottom, 0px));}
+  div[class*="st-key-v12_quick_step_04"]{bottom:calc(370px + env(safe-area-inset-bottom, 0px));}
+  div[class*="st-key-v12_quick_step_05"]{bottom:calc(419px + env(safe-area-inset-bottom, 0px));}
+  div[class*="st-key-v12_quick_step_06"]{bottom:calc(468px + env(safe-area-inset-bottom, 0px));}
+  div[class*="st-key-v12_quick_step_07"]{bottom:calc(517px + env(safe-area-inset-bottom, 0px));}
+  div[class*="st-key-v12_quick_step_08"]{bottom:calc(566px + env(safe-area-inset-bottom, 0px));}
 }
 
 /* V12｜STEP 01B③-5｜手機字型圖卡強制雙欄
@@ -2077,8 +2103,10 @@ div[class*="st-key-v12_color_selected_white_"] button::after{
 </style>
 """, unsafe_allow_html=True)
 
+_v12_quick_nav_library_mode = st.session_state.get("v12_view", "create") == "library"
+_v12_quick_nav_mode_class = " v12-quick-nav-library" if _v12_quick_nav_library_mode else ""
 st.markdown(f"""
-<div class="v12-quick-nav" aria-label="{t('quick_nav_menu')}">
+<div class="v12-quick-nav{_v12_quick_nav_mode_class}" aria-label="{t('quick_nav_menu')}">
   <details>
     <summary title="{t('quick_nav_open')}" aria-label="{t('quick_nav_open')}">✦</summary>
     <nav class="v12-quick-nav-menu" aria-label="{t('quick_nav_menu')}">
@@ -6024,6 +6052,20 @@ if st.button(t("quick_nav_library_button"), key="v12_quick_library", help=t("qui
     st.session_state["v12_view"] = "library"
     st.rerun()
 
+if st.session_state.get("v12_view") == "library":
+    for _v12_step_number, _v12_step_key in enumerate(
+        ("quick_nav_01", "quick_nav_02", "quick_nav_03", "quick_nav_04", "quick_nav_05", "quick_nav_06", "quick_nav_07", "quick_nav_08"),
+        start=1,
+    ):
+        if st.button(
+            f"{t(_v12_step_key)}\\n{_v12_step_number:02d}",
+            key=f"v12_quick_step_{_v12_step_number:02d}",
+            help=f"{_v12_step_number:02d} {t(_v12_step_key)}",
+        ):
+            st.session_state["v12_view"] = "create"
+            st.session_state["v12_scroll_target"] = f"v12-step-{_v12_step_number:02d}"
+            st.rerun()
+
 st.session_state.setdefault("v12_view", "create")
 
 if st.session_state["v12_view"] == "pricing":
@@ -8438,3 +8480,29 @@ def _public02a_settings_panel():
 
 # PUBLIC STEP 02A｜顯示個人設定匯出／匯入
 _public02a_settings_panel()
+
+
+# A shortcut selected from My Works returns through Streamlit's normal
+# in-page navigation, then scrolls to the requested creation step.
+_v12_scroll_target = str(st.session_state.pop("v12_scroll_target", "") or "")
+if re.fullmatch(r"v12-step-0[1-8]", _v12_scroll_target):
+    components.html(
+        f"""
+        <script>
+        (() => {{
+          const targetId = {json.dumps(_v12_scroll_target)};
+          let attempts = 0;
+          const scrollToTarget = () => {{
+            const target = window.parent.document.getElementById(targetId);
+            if (target) {{
+              target.scrollIntoView({{behavior: "smooth", block: "start"}});
+              return;
+            }}
+            if (attempts++ < 20) window.setTimeout(scrollToTarget, 100);
+          }};
+          window.setTimeout(scrollToTarget, 100);
+        }})();
+        </script>
+        """,
+        height=0,
+    )
