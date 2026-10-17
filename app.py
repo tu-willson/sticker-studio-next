@@ -586,6 +586,17 @@ st.markdown("""
   font-size:18px !important;
   font-weight:800 !important;
 }
+/* 畫風參考的自訂元素需明確儲存，以紅色按鈕提高辨識度。 */
+.st-key-v12_style_reference_save_button button{
+  background:#ff4f67 !important;
+  border-color:#ff4f67 !important;
+  color:#fff !important;
+  font-weight:800 !important;
+}
+.st-key-v12_style_reference_save_button button:hover{
+  background:#e53e57 !important;
+  border-color:#e53e57 !important;
+}
 /* 雲端保存是影響打包等待時間的重要選項，放大以提高可見度。 */
 .st-key-v12_save_to_cloud_on_package [data-testid="stCheckbox"] label p{
   font-size:19px !important;
@@ -5424,9 +5435,12 @@ else:
                 placeholder="例如：漫畫名稱風格、強調圖片上的某些特徵、保留圖片人物的神情",
                 max_chars=1200,
             )
-            _apply_style_reference_details = st.form_submit_button(
-                "💾 套用畫風設定", use_container_width=True
-            )
+            with st.container(key="v12_style_reference_save_button"):
+                _apply_style_reference_details = st.form_submit_button(
+                    "自訂代表性元素(輸入完請點選儲存)",
+                    type="primary",
+                    use_container_width=True,
+                )
         if _apply_style_reference_details:
             st.success("✅ 畫風參考設定已套用")
         st.caption("💡 這段說明會直接補充給 AI，協助它把你指定的特色融入新人物；不會複製參考圖中的角色、文字或版面。")
