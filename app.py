@@ -629,7 +629,7 @@ st.markdown("""
   background-color:#151d2b;
   background-image:
     linear-gradient(180deg, rgba(10,16,28,.30), rgba(13,19,31,.56)),
-    url("/app/static/backgrounds/sakura-fuji-dusk-v1.png");
+    url("https://raw.githubusercontent.com/tu-willson/sticker-studio-next/main/static/backgrounds/sakura-fuji-dusk-v1.png");
   background-position:center center;
   background-size:cover;
   background-attachment:fixed;
@@ -671,7 +671,17 @@ st.markdown("""
     radial-gradient(ellipse 8px 14px at 89% 57%, rgba(255,211,222,.88) 0 58%, transparent 62%);
   animation:v12-sakura-fall-b 49s linear infinite;
 }
-[data-testid="stAppViewContainer"] .main,
+[data-testid="stAppViewContainer"] .main{
+  position:relative;
+  z-index:1;
+  background-color:#151d2b !important;
+  background-image:
+    linear-gradient(180deg, rgba(10,16,28,.26), rgba(13,19,31,.50)),
+    url("https://raw.githubusercontent.com/tu-willson/sticker-studio-next/main/static/backgrounds/sakura-fuji-dusk-v1.png") !important;
+  background-position:center center;
+  background-size:cover;
+  background-attachment:fixed;
+}
 [data-testid="stAppViewContainer"] .block-container,
 [data-testid="stHeader"]{
   position:relative;
@@ -691,6 +701,10 @@ st.markdown("""
 }
 @media (max-width:640px){
   [data-testid="stAppViewContainer"]{
+    background-attachment:scroll;
+    background-position:center top;
+  }
+  [data-testid="stAppViewContainer"] .main{
     background-attachment:scroll;
     background-position:center top;
   }
