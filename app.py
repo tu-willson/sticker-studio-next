@@ -2598,11 +2598,16 @@ def _beta_render_account_panel():
         st.markdown("#### ✨ 會員 Beta")
         user = session.get("user", {})
         email = html.escape(str(user.get("email", "已登入會員") or "已登入會員"))
-        try:
-            balance = _beta_credit_balance(session)
-            st.success(f"已登入：{email}　｜　可用體驗額度：{balance} 次")
-        except Exception:
-            st.warning(f"已登入：{email}　｜　點數暫時無法讀取，請稍後再試。")
+        account_status_col, refresh_balance_col = st.columns([5, 1], vertical_alignment="center")
+        with account_status_col:
+            try:
+                balance = _beta_credit_balance(session)
+                st.success(f"已登入：{email}　｜　可用體驗額度：{balance} 次")
+            except Exception:
+                st.warning(f"已登入：{email}　｜　點數暫時無法讀取，請稍後再試。")
+        with refresh_balance_col:
+            if st.button("刷新次數", key="beta_refresh_credit_balance", use_container_width=True):
+                _beta_clear_cached_copy_usage_status()
         try:
             copy_status = _beta_copy_usage_status_cached(session)
             st.caption(
