@@ -2643,14 +2643,14 @@ def _beta_render_account_panel():
             if st.button("刷新次數", key="beta_refresh_credit_balance", use_container_width=True):
                 _beta_clear_cached_copy_usage_status()
         try:
-            st.caption(f"📋 {_beta_entitlement_label(_beta_effective_entitlement(session))}")
+            st.markdown(f"**📋 {_beta_entitlement_label(_beta_effective_entitlement(session))}**")
         except Exception:
             st.caption("📋 目前方案暫時無法讀取。")
         try:
             copy_status = _beta_copy_usage_status_cached(session)
-            st.caption(
-                "AI 文案今日額度（台灣時間）："
-                f"剩 {copy_status['remaining_count']} / {copy_status['daily_limit']} 次"
+            st.markdown(
+                "**AI 文案今日額度（台灣時間）："
+                f"剩 {copy_status['remaining_count']} / {copy_status['daily_limit']} 次**"
             )
         except Exception:
             st.caption("AI 文案今日額度暫時無法讀取。")
