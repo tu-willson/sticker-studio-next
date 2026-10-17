@@ -3477,6 +3477,18 @@ def _v12_render_sticker_basket_workspace():
                 )
                 st.session_state.setdefault(f"v12_basket_select_{item_id}", True)
                 st.checkbox("保留下載", key=f"v12_basket_select_{item_id}")
+                # 手機／平板通常不方便處理 ZIP；作品籃中的每一張都能直接存成 PNG。
+                st.download_button(
+                    "⬇️ 單張下載 PNG",
+                    data=item["image_bytes"],
+                    file_name=(
+                        f"LINE貼圖_{item['batch_label'].replace(' ', '')}_"
+                        f"{item['source_slot']:02d}.png"
+                    ),
+                    mime="image/png",
+                    use_container_width=True,
+                    key=f"v12_basket_download_{item_id}",
+                )
                 if st.button("🗑️ 移除", key=f"v12_basket_remove_{item_id}", use_container_width=True):
                     _v12_remove_sticker_basket_item(item_id)
                     st.rerun(scope="fragment")
