@@ -1,23 +1,24 @@
 [theme]
-base = "light"
+# Keep the studio controls consistent when visitors choose light, dark, or system mode.
+base = "dark"
 primaryColor = "#ff5c7a"
 backgroundColor = "#151d2b"
-secondaryBackgroundColor = "#f4f1ed"
-textColor = "#34343a"
-borderColor = "#d6d0c9"
+secondaryBackgroundColor = "#242d3d"
+textColor = "#eef2f7"
+borderColor = "#465369"
 showWidgetBorder = true
 
 [theme.light]
 backgroundColor = "#151d2b"
-secondaryBackgroundColor = "#f4f1ed"
-textColor = "#34343a"
-borderColor = "#d6d0c9"
+secondaryBackgroundColor = "#242d3d"
+textColor = "#eef2f7"
+borderColor = "#465369"
 
 [theme.dark]
-backgroundColor = "#17191d"
-secondaryBackgroundColor = "#23262c"
-textColor = "#f1f3f5"
-borderColor = "#3b414a"
+backgroundColor = "#151d2b"
+secondaryBackgroundColor = "#242d3d"
+textColor = "#eef2f7"
+borderColor = "#465369"
 
 [server]
 enableStaticServing = true
