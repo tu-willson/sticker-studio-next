@@ -16,6 +16,157 @@ import urllib.error
 import urllib.parse
 import secrets
 from concurrent.futures import ThreadPoolExecutor
+from i18n import LANGUAGES, tr
+
+
+def _v12_ui_locale():
+    """Return the active public UI locale without changing creation data."""
+    locale = str(st.session_state.get("v12_ui_locale", "zh-TW") or "zh-TW")
+    return locale if locale in LANGUAGES else "zh-TW"
+
+
+def t(key, **kwargs):
+    """Translate an explicit public UI key; unknown keys safely fall back to Chinese."""
+    return tr(_v12_ui_locale(), key, **kwargs)
+
+
+def _v12_generation_suffix():
+    """Keep compact generation-plan wording natural in each public language."""
+    return {"zh-TW": "／月", "en": " / month", "ja": "／月"}[_v12_ui_locale()]
+
+
+def _v12_pricing_rules_markdown():
+    """Public checkout rules, kept separate so they can be fully localized."""
+    locale = _v12_ui_locale()
+    if locale == "en":
+        return """
+        - Each successfully generated **4×2 original sticker grid** uses **1 image generation**. Failed generations do not use a generation.
+        - The AI Ideas allowance resets daily in Taiwan time and is separate from image generations.
+        - A one-time generation pack does not renew automatically and is valid for 30 days.
+        - A subscription starts on its successful-payment date. Unused subscription generations carry over until the end of the following billing cycle; the earliest-expiring generations are used first.
+
+        > **Example:** If you start Basic on May 10 with 20 generations and have 5 left on June 9, 20 more are added on June 10, giving you 25. The carried-over 5 are available until July 9 and are used first.
+
+        - After cancellation, current benefits remain available until the billing cycle ends and there is no charge for the next cycle. If saved projects exceed the new plan's limit, nothing is deleted automatically, but you must remove projects before saving another.
+
+        > **Example:** For a May 10–June 9 cycle, cancelling on May 20 keeps your generation, AI Ideas, and library benefits until June 9. There is no renewal charge or new allowance on June 10.
+
+        - Each project can save up to 40 selected stickers; MAIN/TAB export images do not count. ZIP files are not stored and can be created again after loading the project back into the studio.
+        """
+    if locale == "ja":
+        return """
+        - **4×2 の元ステッカー総画像**を1回正常に生成すると、画像生成回数を **1回** 使用します。生成失敗時は回数を消費しません。
+        - AIアイデアの利用枠は台湾時間で毎日計算され、画像生成回数とは別に管理されます。
+        - 単発の生成パックは自動更新されず、購入後30日間有効です。
+        - サブスクリプションは決済成功日から開始します。未使用の生成回数は次の請求期間の終了まで繰り越せ、期限の早い回数から使用されます。
+
+        > **例：**5月10日にベーシックで20回分を取得し、6月9日に5回残っている場合、6月10日にさらに20回分が追加され合計25回になります。繰り越した5回分は7月9日まで利用でき、先に使用されます。
+
+        - 解約後も当月の特典は請求期間の終了まで使え、次回の請求は行われません。作品数が新しいプラン上限を超えても自動削除はされませんが、新規保存前にご自身で整理が必要です。
+
+        > **例：**5月10日から6月9日までの期間に5月20日に解約した場合、6月9日までは画像生成、AIアイデア、作品庫の特典を利用できます。6月10日に更新請求や新しい利用枠の追加はありません。
+
+        - 1作品につき選択したステッカーを最大40枚保存できます。MAIN／TABの書き出し画像は上限に含まれません。ZIPは保存されず、作品を制作ページへ読み戻して再作成できます。
+        """
+    return """
+    - 每次成功生成 1 張 **4×2 原始貼圖總圖**，扣除 1 次圖片生成次數；生成失敗不扣次數。
+    - AI幫想額度按台灣時間每日計算，與圖片生成次數分開計算。
+    - 訂閱方案每月自付款成功日生效；未使用的訂閱生成次數可保留至下一個帳務週期結束，系統優先使用最早到期的次數。
+
+    > **例子：**你在 5 月 10 日訂閱基本方案，取得 20 次圖片生成次數；到了 6 月 9 日還剩 5 次。6 月 10 日進入新一期後會再加入 20 次，因此共有 25 次可用；原本保留的 5 次最晚可用到 7 月 9 日，系統會優先使用這 5 次。
+
+    - 單次生成包為一次性購買，不會自動續訂，購買後有效期為 30 天。
+    - 取消訂閱後，當期權益可使用至帳務週期結束，下一期不再續扣。作品集保存總數超過新方案上限時，不會自動刪除，須自行刪減後才能新增保存。
+
+    > **例子：**你的訂閱週期是 5 月 10 日至 6 月 9 日；若在 5 月 20 日取消，仍可使用當期的圖片生成次數、AI幫想額度與作品庫權益至 6 月 9 日。6 月 10 日起不會再扣款，也不會發放新一期的方案額度。
+
+    - 每組作品最多保存 40 張已選貼圖；MAIN／TAB 規格圖不計入上限。ZIP 檔不會保存，可載回創作頁後重新下載。
+    """
+
+
+def _v12_member_rules_markdown():
+    """Expanded member-rule content; the checkout version stays compact."""
+    locale = _v12_ui_locale()
+    if locale == "zh-TW":
+        return """#### 🎨 服務內容
+
+Sticker Studio Next 是一項 AI 輔助 LINE 貼圖創作服務。會員可上傳人物照片、選擇貼圖風格或上傳畫風參考，設定貼圖文字與動作後，產生 4×2 貼圖總圖；完成裁切後，可挑選單張貼圖下載或保存至雲端作品庫。
+
+#### 💳 方案與提供額度
+
+| 方案 | 月費／售價 | 每月圖片生成次數 | AI幫想每日額度 | 雲端作品庫上限 |
+| --- | ---: | ---: | ---: | ---: |
+| 基本方案 | NT$99／月 | 20 次 | 15 次 | 20 組 |
+| 標準方案 | NT$149／月 | 30 次 | 20 次 | 30 組 |
+| 進階方案 | NT$199／月 | 40 次 | 25 次 | 40 組 |
+| 單次生成包 | NT$49／包 | 7 次 | 7 次 | 7 組 |
+
+#### ✨ 圖片生成次數與使用方式
+
+""" + _v12_pricing_rules_markdown() + """
+
+#### ☁️ 雲端作品庫與下載
+
+- 每組作品可保存原始人物照片、已上傳的畫風參考與使用者選取的貼圖成品；單組最多保存 **40 張貼圖**，**MAIN／TAB** 規格圖不計入此上限。
+- 未勾選保存的裁切貼圖不會寫入作品庫；ZIP 壓縮檔不會另行保存，可在日後將作品載回創作頁後重新下載。
+- 作品庫容量依目前有效方案計算；免費會員預設可保存 5 組作品，訂閱或單次生成包則依方案權益提供容量。
+
+#### 📌 重要提醒
+
+本服務提供數位化 AI 創作與雲端保存功能。使用者須確認上傳照片、參考圖、文字與生成內容具有合法使用權，且不侵害他人權利。正式付款頁面將同步揭示付款、續訂、取消與退款相關說明。"""
+    if locale == "en":
+        return """#### 🎨 What the service provides
+
+Sticker Studio Next is an AI-assisted LINE sticker creation service. Members can upload a character photo, choose a sticker style or upload a style reference, set text and actions, generate a 4×2 sticker grid, then download selected stickers individually or save them to their cloud library.
+
+#### 💳 Plans and allowances
+
+| Plan | Price | Monthly image generations | Daily AI Ideas | Cloud projects |
+| --- | ---: | ---: | ---: | ---: |
+| Basic | NT$99/month | 20 | 15 | 20 |
+| Standard | NT$149/month | 30 | 20 | 30 |
+| Advanced | NT$199/month | 40 | 25 | 40 |
+| One-time pack | NT$49/pack | 7 | 7 | 7 |
+
+#### ✨ Image generations and use
+
+""" + _v12_pricing_rules_markdown() + """
+
+#### ☁️ Cloud library and downloads
+
+- A project can save the original character photo, any uploaded style reference, and selected sticker results. Each project supports up to **40 stickers**; **MAIN/TAB** export images do not count.
+- Cropped stickers not selected for saving are not written to the library. ZIP files are not stored; load the project back into the studio to create another download.
+- Capacity follows the current active benefit. Free members can save 5 projects; subscriptions and one-time packs provide the capacity shown above.
+
+#### 📌 Important notice
+
+This service provides digital AI creation and cloud storage. You are responsible for having the rights to use every photo, reference, text, and generated result. Payment, renewal, cancellation, and refund details will appear on the checkout page."""
+    return """#### 🎨 サービス内容
+
+Sticker Studio Next は、AI を活用した LINE ステッカー制作サービスです。人物写真のアップロード、スタイル選択または参考画像のアップロード、テキストと動作の設定を行い、4×2 のステッカー総画像を生成できます。切り抜き後は単体ダウンロードまたはクラウド作品庫への保存が可能です。
+
+#### 💳 プランと利用枠
+
+| プラン | 料金 | 月間画像生成 | AIアイデア／日 | クラウド作品 |
+| --- | ---: | ---: | ---: | ---: |
+| ベーシック | NT$99／月 | 20回 | 15回 | 20組 |
+| スタンダード | NT$149／月 | 30回 | 20回 | 30組 |
+| アドバンス | NT$199／月 | 40回 | 25回 | 40組 |
+| 単発パック | NT$49／パック | 7回 | 7回 | 7組 |
+
+#### ✨ 画像生成と利用方法
+
+""" + _v12_pricing_rules_markdown() + """
+
+#### ☁️ クラウド作品庫とダウンロード
+
+- 作品には人物写真、アップロードした画風参考、選択したステッカー成品を保存できます。1作品につき最大 **40枚** 保存でき、**MAIN／TAB** は上限に含まれません。
+- 保存を選択しなかった切り抜きステッカーは作品庫へ保存されません。ZIP は保存されませんが、作品を制作ページに読み戻して再ダウンロードできます。
+- 保存容量は現在有効な特典に応じます。無料会員は5作品、サブスクリプションと単発パックは上表の容量を利用できます。
+
+#### 📌 ご注意
+
+本サービスはデジタル AI 制作とクラウド保存を提供します。アップロードする写真、参考画像、テキスト、生成結果について、必要な利用権をお持ちであることをご確認ください。決済、更新、解約、返金の詳細は決済ページに表示されます。"""
 
 # ------------------------------------------------------------
 # V10 使用者資料本／獨立儲存區
@@ -1771,8 +1922,8 @@ def v10_section(title, accent="#7c4dff"):
     title = str(title or "")
     matched = re.match(r"^(\S+)\s+([①②③④⑤⑥⑦⑧])\s+(.+)$", title)
     flow_names = {
-        "①": "素材準備", "②": "畫風設定", "③": "人物設計", "④": "貼圖內容",
-        "⑤": "畫面設定", "⑥": "開始生成", "⑦": "成果確認", "⑧": "裁切輸出",
+        "①": t("flow_01"), "②": t("flow_02"), "③": t("flow_03"), "④": t("flow_04"),
+        "⑤": t("flow_05"), "⑥": t("flow_06"), "⑦": t("flow_07"), "⑧": t("flow_08"),
     }
     if matched:
         icon, circled_step, label = matched.groups()
@@ -1783,7 +1934,7 @@ def v10_section(title, accent="#7c4dff"):
         parts = title.split(maxsplit=1)
         icon = parts[0] if parts else "✨"
         label = parts[1] if len(parts) > 1 else title
-        eyebrow = "創作工具"
+        eyebrow = "Creative tools" if _v12_ui_locale() == "en" else "制作ツール" if _v12_ui_locale() == "ja" else "創作工具"
         section_id = ""
     st.markdown(
         f'<div class="v10-section"{section_id} style="--accent:{accent}">'
@@ -2365,24 +2516,24 @@ def _beta_effective_entitlement(session):
 
 def _beta_entitlement_label(entitlement):
     product_names = {
-        "basic_monthly": "基本方案",
-        "standard_monthly": "標準方案",
-        "advanced_monthly": "進階方案",
-        "credit_pack_7": "7 次生成包",
+        "basic_monthly": t("plan_basic"),
+        "standard_monthly": t("plan_standard"),
+        "advanced_monthly": t("plan_advanced"),
+        "credit_pack_7": t("plan_pack"),
     }
     kind = str(entitlement.get("entitlement_kind", "free") or "free")
     product_name = product_names.get(
-        str(entitlement.get("product_code", "") or ""), "會員體驗"
+        str(entitlement.get("product_code", "") or ""), t("entitlement_free")
     )
     if kind == "subscription":
-        prefix = "目前訂閱方案"
+        key = "entitlement_subscription"
     elif kind == "credit_pack":
-        prefix = "目前使用"
+        key = "entitlement_pack"
     else:
-        return "目前權益：免費體驗"
+        return t("entitlement_free")
     expires_at = str(entitlement.get("expires_at", "") or "")[:10]
-    expiry_text = f"｜權益至 {expires_at}" if expires_at else ""
-    return f"{prefix}：{product_name}{expiry_text}"
+    expiry_text = f"｜{expires_at}" if expires_at else ""
+    return t(key, name=product_name, expiry=expiry_text)
 
 
 def _beta_reserve_generation(session):
@@ -2685,38 +2836,43 @@ def _beta_render_account_panel():
     _beta_complete_oauth_callback()
     session = _beta_current_user()
     if session:
-        st.markdown("#### ✨ 會員 Beta")
+        st.markdown(f"#### {t('login_title')}")
         user = session.get("user", {})
-        email = html.escape(str(user.get("email", "已登入會員") or "已登入會員"))
+        email = html.escape(str(user.get("email", "Member") or "Member"))
         account_status_col, refresh_balance_col = st.columns([5, 1], vertical_alignment="center")
         with account_status_col:
             try:
                 balance = _beta_credit_balance(session)
-                st.success(f"已登入：{email}　｜　可用體驗額度：{balance} 次")
+                st.success(t("account_balance", email=email, balance=balance))
             except Exception:
-                st.warning(f"已登入：{email}　｜　可用生成次數暫時無法讀取，請稍後再試。")
+                st.warning(t("account_unavailable", email=email))
         with refresh_balance_col:
-            if st.button("刷新次數", key="beta_refresh_credit_balance", use_container_width=True):
+            if st.button(t("refresh"), key="beta_refresh_credit_balance", use_container_width=True):
                 _beta_clear_cached_copy_usage_status()
         try:
             st.markdown(f"**📋 {_beta_entitlement_label(_beta_effective_entitlement(session))}**")
         except Exception:
-            st.caption("📋 目前方案暫時無法讀取。")
+            st.caption(t("plan_unavailable"))
         try:
             copy_status = _beta_copy_usage_status_cached(session)
-            st.markdown(
-                "**AI幫想 今日額度（台灣時間）："
-                f"剩 {copy_status['remaining_count']} / {copy_status['daily_limit']} 次**"
-            )
+            st.markdown("**" + t(
+                "copy_quota",
+                remaining=copy_status["remaining_count"],
+                limit=copy_status["daily_limit"],
+            ) + "**")
         except Exception:
-            st.caption("AI幫想 今日額度暫時無法讀取。")
-        if st.button("登出會員 Beta", type="primary", key="beta_logout"):
+            st.caption(t("copy_quota_unavailable"))
+        if st.button(t("logout"), type="primary", key="beta_logout"):
             st.session_state.pop("beta_auth_session", None)
             st.session_state.pop("beta_pending_login_url", None)
             _beta_clear_cached_copy_usage_status()
             st.rerun()
         if not _beta_site_openai_key():
             st.info("會員登入與生成次數帳本已啟用；站方生成 API 正在進行最後設定。")
+        if _v12_ui_locale() != "zh-TW":
+            with st.expander(t("rules_title"), expanded=False):
+                st.markdown(_v12_member_rules_markdown())
+            return session
         with st.expander("📜 生成次數與雲端作品庫規則", expanded=False):
             st.markdown(
                 """
@@ -2769,8 +2925,8 @@ def _beta_render_account_panel():
         # 失效或未完成的 OAuth state 不可重用；下次畫面直接準備新的單次登入連結。
         st.session_state.pop("beta_pending_login_url", None)
         st.warning(login_error)
-    st.markdown('<div class="v12-beta-login-title">✨ 會員 Beta</div>', unsafe_allow_html=True)
-    st.markdown('<div class="v12-beta-login-copy">初次登入會員有 2 次體驗額度。</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="v12-beta-login-title">{t("login_title")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="v12-beta-login-copy">{t("login_trial")}</div>', unsafe_allow_html=True)
 
     login_url = str(st.session_state.get("beta_pending_login_url", "") or "")
     if not login_url:
@@ -2778,20 +2934,26 @@ def _beta_render_account_panel():
             login_url = _beta_new_login_url()
             st.session_state["beta_pending_login_url"] = login_url
         except Exception:
-            st.error("登入服務暫時無法啟動，請稍後再試。")
+            st.error(
+                "Login service is temporarily unavailable."
+                if _v12_ui_locale() == "en"
+                else "ログインサービスを現在開始できません。"
+                if _v12_ui_locale() == "ja"
+                else "登入服務暫時無法啟動，請稍後再試。"
+            )
 
     if login_url:
         _login_left, _login_center, _login_right = st.columns([1, 1.35, 1])
         with _login_center:
             st.link_button(
-                "Google帳號登入",
+                t("login_google"),
                 login_url,
                 type="primary",
                 key="beta_google_login_link",
                 use_container_width=True,
             )
         st.markdown(
-            '<div class="v12-beta-login-copy">登入連結有效 10 分鐘，完成後會自動回到本站。</div>',
+            f'<div class="v12-beta-login-copy">{t("login_expiry")}</div>',
             unsafe_allow_html=True,
         )
     return None
@@ -2884,7 +3046,7 @@ def _show_daily_ai_quota():
     quota = _get_daily_ai_quota()
 
     st.markdown(
-        """
+        f"""
         <div style="
             max-width:820px;
             margin:10px auto 14px;
@@ -4870,6 +5032,16 @@ def _v12_ai_copy_generate(topic, tone, api_key):
         "只輸出最後 16 句候選文案。不要輸出分析、分類、編號、引號、emoji 或其他說明。"
     )
 
+    # The studio language controls AI Ideas output only; existing sticker text is
+    # always left untouched so changing the interface never rewrites a project.
+    _copy_output_language = {"en": "English", "ja": "Japanese"}.get(_v12_ui_locale())
+    if _copy_output_language:
+        system_prompt += (
+            f"\n\n【輸出語言】本次介面使用 {_copy_output_language}。"
+            f"所有 16 句候選都必須以自然的 {_copy_output_language} 輸出；"
+            "除非使用者在主題中明確指定其他語言，否則不要混入中文。"
+        )
+
     _avoid_text = ""
     if _previous:
         _avoid_text += (
@@ -5457,44 +5629,44 @@ def _v12_render_pricing_page():
     products = [
         {
             "code": "basic_monthly",
-            "name": "基本方案",
+            "name": t("plan_basic"),
             "price": "NT$99",
-            "period": "每月訂閱",
-            "credits": "圖片生成 20 次／月",
-            "copy": "AI幫想每日 15 次",
-            "library": "雲端作品庫 20 組",
-            "button": "選擇基本方案",
+            "period": t("period_monthly"),
+            "credits": t("benefit_credits", count=20, suffix=_v12_generation_suffix()),
+            "copy": t("benefit_copy", count=15),
+            "library": t("benefit_library", count=20),
+            "button": t("pricing_choose_basic"),
         },
         {
             "code": "standard_monthly",
-            "name": "標準方案",
+            "name": t("plan_standard"),
             "price": "NT$149",
-            "period": "每月訂閱",
-            "credits": "圖片生成 30 次／月",
-            "copy": "AI幫想每日 20 次",
-            "library": "雲端作品庫 30 組",
-            "button": "選擇標準方案",
+            "period": t("period_monthly"),
+            "credits": t("benefit_credits", count=30, suffix=_v12_generation_suffix()),
+            "copy": t("benefit_copy", count=20),
+            "library": t("benefit_library", count=30),
+            "button": t("pricing_choose_standard"),
             "recommended": True,
         },
         {
             "code": "advanced_monthly",
-            "name": "進階方案",
+            "name": t("plan_advanced"),
             "price": "NT$199",
-            "period": "每月訂閱",
-            "credits": "圖片生成 40 次／月",
-            "copy": "AI幫想每日 25 次",
-            "library": "雲端作品庫 40 組",
-            "button": "選擇進階方案",
+            "period": t("period_monthly"),
+            "credits": t("benefit_credits", count=40, suffix=_v12_generation_suffix()),
+            "copy": t("benefit_copy", count=25),
+            "library": t("benefit_library", count=40),
+            "button": t("pricing_choose_advanced"),
         },
         {
             "code": "credit_pack_7",
-            "name": "7 次生成包",
+            "name": t("plan_pack"),
             "price": "NT$49",
-            "period": "單次購買・30 天效期",
-            "credits": "圖片生成 7 次",
-            "copy": "AI幫想每日 7 次",
-            "library": "雲端作品庫 7 組",
-            "button": "選擇生成包",
+            "period": t("period_pack"),
+            "credits": t("benefit_credits", count=7, suffix=""),
+            "copy": t("benefit_copy", count=7),
+            "library": t("benefit_library", count=7),
+            "button": t("pricing_choose_pack"),
         },
     ]
     selected_code = str(st.session_state.get("v12_pending_purchase_product", "") or "")
@@ -5510,11 +5682,11 @@ def _v12_render_pricing_page():
             pass
 
     st.markdown(
-        """
+        f"""
         <div class="v12-pricing-hero">
           <div class="v12-pricing-kicker">STICKER STUDIO NEXT</div>
-          <h1>💳 購買方案</h1>
-          <p>選擇適合你的創作額度。圖片生成次數、AI幫想額度與雲端作品庫會依方案立即提供。</p>
+          <h1>{t('pricing_title')}</h1>
+          <p>{t('pricing_intro')}</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -5522,7 +5694,7 @@ def _v12_render_pricing_page():
     if current_label:
         st.success(f"📋 {current_label}")
     else:
-        st.info("登入後即可選擇方案；付款完成後會自動更新圖片生成次數與會員權益。")
+        st.info(t("pricing_login_notice"))
 
     plan_cols = st.columns(4, gap="medium")
     for col, product in zip(plan_cols, products):
@@ -5530,8 +5702,8 @@ def _v12_render_pricing_page():
         is_current = current_code == product["code"]
         card_class = " v12-pricing-card-featured" if product.get("recommended") else ""
         with col:
-            badge = '<div class="v12-pricing-badge">最受歡迎</div>' if product.get("recommended") else ""
-            state = '<div class="v12-pricing-current">目前方案</div>' if is_current else ""
+            badge = f'<div class="v12-pricing-badge">{t("pricing_recommended")}</div>' if product.get("recommended") else ""
+            state = f'<div class="v12-pricing-current">{t("pricing_current")}</div>' if is_current else ""
             st.markdown(
                 f"""
                 <div class="v12-pricing-card{card_class}">
@@ -5547,7 +5719,7 @@ def _v12_render_pricing_page():
                 unsafe_allow_html=True,
             )
             if st.button(
-                "✓ 已選擇" if is_selected else product["button"],
+                "✓ " + t("pricing_current") if is_selected else product["button"],
                 key=f"v12_select_product_{product['code']}",
                 type="primary" if product.get("recommended") else "secondary",
                 use_container_width=True,
@@ -5559,42 +5731,27 @@ def _v12_render_pricing_page():
     chosen = next((item for item in products if item["code"] == selected_code), None)
     if chosen:
         st.markdown("<div class='v12-pricing-selection'>", unsafe_allow_html=True)
-        st.markdown(f"### 已選擇：{chosen['name']}｜{chosen['price']}")
+        st.markdown(f"### {t('pricing_selected', name=chosen['name'], price=chosen['price'])}")
         if session:
-            st.info("綠界付款串接審核中。付款功能開通後，這裡會直接進入安全結帳頁面；目前不會扣款。")
+            st.info(t("pricing_pending"))
             st.button(
-                "⏳ 綠界付款審核中",
+                t("pricing_pending_button"),
                 key="v12_ecpay_checkout_pending",
                 type="primary",
                 use_container_width=True,
                 disabled=True,
             )
         else:
-            st.warning("請先登入 Google 帳號，付款開通後才能將方案權益正確加入你的帳戶。")
-            if st.button("✨ 前往登入", key="v12_pricing_go_login", type="primary", use_container_width=True):
+            st.warning(t("pricing_signin_notice"))
+            if st.button(t("pricing_signin"), key="v12_pricing_go_login", type="primary", use_container_width=True):
                 st.session_state["v12_view"] = "create"
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("### 📌 方案使用說明")
-    with st.expander("查看訂閱、生成次數與雲端作品庫規則", expanded=True):
-        st.markdown(
-            """
-            - 每次成功生成 1 張 **4×2 原始貼圖總圖**，扣除 1 次圖片生成次數；生成失敗不扣次數。
-            - AI幫想額度按台灣時間每日計算，與圖片生成次數分開計算。
-            - 訂閱方案每月自付款成功日生效；未使用的訂閱生成次數可保留至下一個帳務週期結束，系統優先使用最早到期的次數。
-
-            > **例子：**你在 5 月 10 日訂閱基本方案，取得 20 次圖片生成次數；到了 6 月 9 日還剩 5 次。6 月 10 日進入新一期後會再加入 20 次，因此共有 25 次可用；原本保留的 5 次最晚可用到 7 月 9 日，系統會優先使用這 5 次。
-
-            - 單次生成包為一次性購買，不會自動續訂，購買後有效期為 30 天。
-            - 取消訂閱後，當期權益可使用至帳務週期結束，下一期不再續扣。作品集保存總數超過新方案上限時，不會自動刪除，須自行刪減後才能新增保存。
-
-            > **例子：**你的訂閱週期是 5 月 10 日至 6 月 9 日；若在 5 月 20 日取消，仍可使用當期的圖片生成次數、AI幫想額度與作品庫權益至 6 月 9 日。6 月 10 日起不會再扣款，也不會發放新一期的方案額度。
-
-            - 每組作品最多保存 40 張已選貼圖；MAIN／TAB 規格圖不計入上限。ZIP 檔不會保存，可載回創作頁後重新下載。
-            """
-        )
-    st.caption("服務提供 AI 輔助貼圖創作、單張／ZIP 下載與私人雲端作品保存。正式付款頁將揭示付款、續訂、取消與退款說明。")
+    st.markdown(f"### {t('pricing_rules_heading')}")
+    with st.expander(t("pricing_rules_title"), expanded=True):
+        st.markdown(_v12_pricing_rules_markdown())
+    st.caption(t("pricing_footer"))
 
 
 # ------------------------------------------------------------
@@ -5611,6 +5768,22 @@ st.markdown("""<style>
 # V12｜STEP 01A①
 # 主導航：開始製作 / 我的作品
 # ============================================================
+if "v12_ui_locale" not in st.session_state:
+    _requested_locale = str(st.query_params.get("lang", "") or "")
+    st.session_state["v12_ui_locale"] = (
+        _requested_locale if _requested_locale in LANGUAGES else "zh-TW"
+    )
+
+_locale_spacer, _locale_picker = st.columns([4, 1])
+with _locale_picker:
+    st.selectbox(
+        t("language"),
+        list(LANGUAGES.keys()),
+        format_func=lambda value: f"🌐 {LANGUAGES[value]}",
+        key="v12_ui_locale",
+        label_visibility="collapsed",
+    )
+
 st.markdown(
     """
     <style>
@@ -5666,23 +5839,23 @@ with _v12_nav_cols[0]:
     # V12 微調：創作頁上方改為「聯繫作者」；其他頁面保留「開始製作」。
     _v12_current_view = st.session_state.get("v12_view", "create")
     if _v12_current_view in {"library", "pricing"}:
-        if st.button("✨ 開始製作", key="v12_nav_create", use_container_width=True):
+        if st.button(t("nav_create"), key="v12_nav_create", use_container_width=True):
             st.session_state["v12_view"] = "create"
             st.rerun()
     else:
         st.link_button(
-            "💬 聯繫作者",
+            t("nav_contact"),
             "https://www.threads.com/@tuwillson",
             use_container_width=True,
         )
 with _v12_nav_cols[1]:
-    if st.button("💳 購買方案", key="v12_nav_pricing", use_container_width=True):
+    if st.button(t("nav_pricing"), key="v12_nav_pricing", use_container_width=True):
         _public02a_sync_style_bank_from_widgets()
         _save_v10_presets()
         st.session_state["v12_view"] = "pricing"
         st.rerun()
 with _v12_nav_cols[2]:
-    if st.button("📚 我的作品", key="v12_nav_library", use_container_width=True):
+    if st.button(t("nav_library"), key="v12_nav_library", use_container_width=True):
         # FIX11: leave-create navigation explicitly commits the dedicated style bank
         # before conditional editor widgets disappear.
         _public02a_sync_style_bank_from_widgets()
@@ -5697,7 +5870,7 @@ if st.session_state["v12_view"] == "pricing":
     st.stop()
 
 if st.session_state["v12_view"] == "library":
-    st.markdown('<div class="v10-main-title">📚 我的作品</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="v10-main-title">{t("nav_library")}</div>', unsafe_allow_html=True)
     st.caption("打包時勾選雲端保存的會員作品會保存在私人雲端作品庫；本機暫存只在這次瀏覽期間保留。")
 
     _cloud_session = _beta_current_user() if _beta_config() else None
@@ -5867,7 +6040,7 @@ if st.session_state["v12_view"] == "library":
 
 
 st.markdown('<div id="v12-page-top"></div>', unsafe_allow_html=True)
-st.markdown('<div class="v10-main-title">🎨 LINE 貼圖創作室</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="v10-main-title">{t("main_title")}</div>', unsafe_allow_html=True)
 
 # OAuth redirects arrive with a short-lived code in the URL.  Handle it before
 # creating the rest of the widgets so a successful login returns to a clean app.
@@ -5903,31 +6076,31 @@ _beta_session = _beta_render_account_panel()
 _beta_render_admin_console(_beta_session)
 
 if not _beta_session:
-    st.warning("⚠️ 請先使用 Google 登入，才能使用會員 Beta 額度。")
+    st.warning(t("login_required"))
 
 
-st.markdown("""
+st.markdown(f"""
 <div class="v12-journey">
-  <div class="v12-journey-heading"><span class="v12-journey-icon">🎯</span>照著創作路徑完成一組貼圖</div>
+  <div class="v12-journey-heading"><span class="v12-journey-icon">🎯</span>{t('journey_title')}</div>
   <div class="v12-journey-steps">
-    <div class="v12-journey-step" style="--journey-accent:#ff6b86"><span class="v12-journey-number">01</span><span class="v12-journey-label">人物照片</span></div>
-    <div class="v12-journey-step" style="--journey-accent:#ffad54"><span class="v12-journey-number">02</span><span class="v12-journey-label">貼圖風格</span></div>
-    <div class="v12-journey-step" style="--journey-accent:#53d68b"><span class="v12-journey-number">03</span><span class="v12-journey-label">人物特色</span></div>
-    <div class="v12-journey-step" style="--journey-accent:#55b8ff"><span class="v12-journey-number">04</span><span class="v12-journey-label">貼圖內容</span></div>
-    <div class="v12-journey-step" style="--journey-accent:#a78bfa"><span class="v12-journey-number">05</span><span class="v12-journey-label">背景設定</span></div>
-    <div class="v12-journey-step" style="--journey-accent:#ffad54"><span class="v12-journey-number">06</span><span class="v12-journey-label">開始生成</span></div>
-    <div class="v12-journey-step" style="--journey-accent:#5ad7d1"><span class="v12-journey-number">07</span><span class="v12-journey-label">確認成果</span></div>
-    <div class="v12-journey-step" style="--journey-accent:#ff748f"><span class="v12-journey-number">08</span><span class="v12-journey-label">裁切下載</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#ff6b86"><span class="v12-journey-number">01</span><span class="v12-journey-label">{t('step_01')}</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#ffad54"><span class="v12-journey-number">02</span><span class="v12-journey-label">{t('step_02')}</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#53d68b"><span class="v12-journey-number">03</span><span class="v12-journey-label">{t('step_03')}</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#55b8ff"><span class="v12-journey-number">04</span><span class="v12-journey-label">{t('step_04')}</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#a78bfa"><span class="v12-journey-number">05</span><span class="v12-journey-label">{t('step_05')}</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#ffad54"><span class="v12-journey-number">06</span><span class="v12-journey-label">{t('step_06')}</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#5ad7d1"><span class="v12-journey-number">07</span><span class="v12-journey-label">{t('step_07')}</span></div>
+    <div class="v12-journey-step" style="--journey-accent:#ff748f"><span class="v12-journey-number">08</span><span class="v12-journey-label">{t('step_08')}</span></div>
   </div>
 </div>
 """, unsafe_allow_html=True)
-st.markdown('<div class="v11-section-tip">💡 <b>小提醒：</b>依照 01～08 往下設定即可；只有選擇的模式會展開，不需要先閱讀全部功能。</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="v11-section-tip">{t("journey_tip")}</div>', unsafe_allow_html=True)
 st.divider()
 
-v10_section("📷 ① 上傳人物照片", "#ff5c7a")
-st.caption("📌 先上傳一張清楚的人物照片，後續所有貼圖都會以這張照片作為主要參考。")
+v10_section(t("section_person"), "#ff5c7a")
+st.caption(t("photo_intro"))
 with st.container(key="v12_person_photo_upload"):
-    uploaded = st.file_uploader("選擇人物照片", type=["jpg","jpeg","png","webp"])
+    uploaded = st.file_uploader(t("photo_select"), type=["jpg","jpeg","png","webp"])
 if uploaded:
     try:
         uploaded.seek(0)
@@ -5961,8 +6134,8 @@ elif st.session_state.get("uploaded_image_bytes"):
 st.divider()
 V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
 
-v10_section("🎨 ② 貼圖風格", "#ff9f43")
-st.caption("先選擇一種風格設定方式，再展開對應的設定內容；兩種方式不會同時套用。")
+v10_section(t("section_style"), "#ff9f43")
+st.caption(t("style_intro"))
 st.session_state.setdefault("v12_style_source_mode", V12_STYLE_PRESET_MODE)
 
 def _v12_set_style_source_mode(mode):
@@ -6179,8 +6352,8 @@ else:
         st.caption("💡 這段說明會直接補充給 AI，協助它把你指定的特色融入新人物；不會複製參考圖中的角色、文字或版面。")
         st.caption("若打包時同步保存並勾選「保存私人創作素材」，這張參考圖會一併保存，供日後載回續作。")
 
-v10_section("👤 ③ 人物與畫面特色", "#2ecc71")
-st.caption("可複選；自定義人物／場景需求只有打勾才會啟用。調整欄位時不會重新讀取頁面，完成後再儲存。")
+v10_section(t("section_features"), "#2ecc71")
+st.caption(t("features_intro"))
 with st.form("v12_character_settings_form", border=False):
     selected_character=st.multiselect("🎯 人物／畫面特色（可複選）",CHARACTER_OPTIONS,key="v10_character_options")
     _c1,_c2=st.columns([1,8])
@@ -6205,8 +6378,8 @@ if _save_character_settings:
         st.error("❌ 儲存失敗")
 
 st.session_state.setdefault("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
-v10_section("💬 ④ 貼圖類型", "#3498db")
-st.caption("選擇這組貼圖要使用文字，或以人物表情特寫呈現。")
+v10_section(t("section_content"), "#3498db")
+st.caption(t("content_intro"))
 
 def _v12_set_sticker_content_mode(mode):
     # 切換模式前後都以獨立草稿保存／回填，不依賴條件式 widget state。
@@ -6907,7 +7080,7 @@ if _sticker_mode == "text":
             st.write("尚未選擇。")
 
 st.divider()
-v10_section("🌈 ⑤ 背景設定", "#16a085")
+v10_section(t("section_background"), "#16a085")
 st.markdown('<div class="v11-transparent-title">🖼️ 透明背景</div>', unsafe_allow_html=True)
 with st.container(key="transparent_png_option"):
     transparent = st.checkbox("使用透明背景 PNG", value=False)
@@ -7168,8 +7341,8 @@ with st.expander("🔍 點選查看貼圖設定"):
 
 
 
-v10_section("✨ ⑥ 生成 4×2 原始總圖", "#e67e22")
-st.markdown('<div class="v11-section-tip">📌 <b>準備完成後：</b>按一次生成即可。生成期間按鈕會自動鎖定，請耐心等待。</div>', unsafe_allow_html=True)
+v10_section(t("section_generate"), "#e67e22")
+st.markdown(f'<div class="v11-section-tip">{t("generate_intro")}</div>', unsafe_allow_html=True)
 
 # ============================================================
 # V11｜STEP 02C-2｜兩階段生成鎖定（正式版）
@@ -7451,10 +7624,10 @@ if (
 
 if st.session_state.generated_4x2_bytes:
     st.divider()
-    v10_section("🖼️ ⑦ 檢視生成結果", "#32c6c0")
-    st.caption("確認這張 4×2 總圖後，再往下微調每一格的裁切範圍並加入暫存作品籃。")
+    v10_section(t("section_results"), "#32c6c0")
+    st.caption(t("results_intro"))
     st.divider()
-    v10_section("✂️ ⑧ 直接用滑鼠調整 8 個裁切框", "#e74c3c")
+    v10_section(t("section_crop"), "#e74c3c")
 
     src = Image.open(BytesIO(st.session_state.generated_4x2_bytes)).convert("RGBA")
     w, h = src.size
