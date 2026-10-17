@@ -2039,7 +2039,7 @@ st.markdown(f"""
   <details>
     <summary title="{t('quick_nav_open')}" aria-label="{t('quick_nav_open')}">✦</summary>
     <nav class="v12-quick-nav-menu" aria-label="{t('quick_nav_menu')}">
-      <a class="v12-quick-nav-link" style="--nav-accent:#7c5cff" href="?v12_view=library" title="{t('quick_nav_library_title')}" aria-label="{t('quick_nav_library_title')}"><span class="v12-quick-nav-label">{t('quick_nav_library')}</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#7c5cff" href="?v12_view=library" target="_self" title="{t('quick_nav_library_title')}" aria-label="{t('quick_nav_library_title')}"><span class="v12-quick-nav-label">{t('quick_nav_library')}</span></a>
       <a class="v12-quick-nav-link" style="--nav-accent:#ff5c7a" href="#v12-step-01" title="01 {t('quick_nav_01')}"><span class="v12-quick-nav-label">{t('quick_nav_01')}</span><span class="v12-quick-nav-number">01</span></a>
       <a class="v12-quick-nav-link" style="--nav-accent:#ff9f43" href="#v12-step-02" title="02 {t('quick_nav_02')}"><span class="v12-quick-nav-label">{t('quick_nav_02')}</span><span class="v12-quick-nav-number">02</span></a>
       <a class="v12-quick-nav-link" style="--nav-accent:#2ecc71" href="#v12-step-03" title="03 {t('quick_nav_03')}"><span class="v12-quick-nav-label">{t('quick_nav_03')}</span><span class="v12-quick-nav-number">03</span></a>
