@@ -2451,6 +2451,22 @@ def _beta_admin_adjust_credits(session, user_id, delta, note):
     return response if isinstance(response, dict) else {}
 
 
+def _beta_admin_grant_test_purchase(session, user_id, product_code, note):
+    """Create an audited, zero-charge test purchase for an administrator."""
+    response = _beta_rpc(
+        "admin_grant_test_purchase",
+        {
+            "p_user_id": str(user_id),
+            "p_product_code": str(product_code),
+            "p_note": str(note or "管理員測試購買")[:160],
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
+
+
 def _beta_render_admin_console(session):
     """Show a small audited console only when Supabase authorizes this member."""
     if not session:
@@ -2463,7 +2479,7 @@ def _beta_render_admin_console(session):
 
     st.markdown("---")
     with st.expander("🛠️ Beta 管理後台（僅管理者）", expanded=False):
-        st.caption("可補回或扣除測試點數。每一次調整都會記錄操作者、原因與時間。")
+        st.caption("可補回或扣除測試點數，也可建立不收款的測試購買。所有操作都會記錄操作者、原因與時間。")
         search_text = st.text_input(
             "搜尋會員 Email 或名稱（空白會顯示最近 100 位）",
             key="beta_admin_member_search",
@@ -2527,6 +2543,48 @@ def _beta_render_admin_console(session):
                 )
             except Exception:
                 st.error("調整未完成。請確認點數不會低於 0，或稍後再試。")
+
+        st.markdown("#### 🧪 管理員測試購買")
+        st.info("此操作只用於驗證方案權益：不會收款、不會寄送付款通知，也不會對外顯示為正式訂單。")
+        product_options = {
+            "7 點點數包｜7 點／每日文案 7 次／作品集 7 組｜效期 30 天": "credit_pack_7",
+            "基本方案｜20 點／每日文案 15 次／作品集 20 組｜週期 1 個月": "basic_monthly",
+            "標準方案｜30 點／每日文案 20 次／作品集 30 組｜週期 1 個月": "standard_monthly",
+            "進階方案｜40 點／每日文案 25 次／作品集 40 組｜週期 1 個月": "advanced_monthly",
+        }
+        selected_product_label = st.selectbox(
+            "模擬購買方案", list(product_options.keys()), key="beta_admin_test_purchase_product"
+        )
+        purchase_note = st.text_input(
+            "測試備註（會寫入管理紀錄）",
+            value="管理員測試購買",
+            max_chars=160,
+            key="beta_admin_test_purchase_note",
+        )
+        if st.button("建立管理員測試購買", type="primary", key="beta_admin_test_purchase"):
+            if len(purchase_note.strip()) < 3:
+                st.warning("請填寫至少 3 個字的測試備註。")
+            else:
+                try:
+                    result = _beta_admin_grant_test_purchase(
+                        session,
+                        selected["user_id"],
+                        product_options[selected_product_label],
+                        purchase_note,
+                    )
+                    credits = int(result.get("granted_credits", 0) or 0)
+                    daily = int(result.get("daily_copy_limit", 0) or 0)
+                    capacity = int(result.get("library_capacity", 0) or 0)
+                    expiry = str(result.get("credit_expires_at", "") or "")[:10]
+                    st.success(
+                        f"測試購買已建立：加入 {credits} 點、每日文案 {daily} 次、"
+                        f"作品集上限 {capacity} 組；圖片點數效期至 {expiry}。"
+                    )
+                    st.session_state["beta_admin_members"] = _beta_admin_list_members(
+                        session, search_text
+                    )
+                except Exception:
+                    st.error("測試購買建立失敗，請確認資料庫遷移已完成後再試。")
 
 
 def _beta_render_account_panel():
