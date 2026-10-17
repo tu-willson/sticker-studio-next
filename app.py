@@ -597,6 +597,17 @@ st.markdown("""
   background:#e53e57 !important;
   border-color:#e53e57 !important;
 }
+/* 登出屬於帳號狀態操作，使用紅色警示按鈕避免誤認為一般設定。 */
+.st-key-beta_logout button{
+  background:#e53935 !important;
+  border-color:#e53935 !important;
+  color:#fff !important;
+  font-weight:800 !important;
+}
+.st-key-beta_logout button:hover{
+  background:#c62828 !important;
+  border-color:#c62828 !important;
+}
 /* 雲端保存是影響打包等待時間的重要選項，放大以提高可見度。 */
 .st-key-v12_save_to_cloud_on_package [data-testid="stCheckbox"] label p{
   font-size:19px !important;
@@ -2207,7 +2218,7 @@ def _beta_render_account_panel():
             )
         except Exception:
             st.caption("AI 文案今日額度暫時無法讀取。")
-        if st.button("登出會員 Beta", key="beta_logout"):
+        if st.button("登出會員 Beta", type="primary", key="beta_logout"):
             st.session_state.pop("beta_auth_session", None)
             st.session_state.pop("beta_pending_login_url", None)
             _beta_clear_cached_copy_usage_status()
