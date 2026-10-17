@@ -1453,7 +1453,7 @@ div[data-testid="stCheckbox"] label{
 .v12-quick-nav-menu{
   position:absolute;
   right:2px;
-  bottom:62px;
+  bottom:116px;
   width:48px;
   height:auto;
   margin:0;
@@ -1488,6 +1488,39 @@ div[data-testid="stCheckbox"] label{
 .v12-quick-nav-number{display:block;line-height:1.02;text-align:center;}
 .v12-quick-nav-label{font-size:.65rem;font-weight:950;}
 .v12-quick-nav-number{margin-top:2px;font-size:.72rem;opacity:.94;}
+div[class*="st-key-v12_quick_library"]{
+  position:fixed !important;
+  right:24px;
+  bottom:calc(170px + env(safe-area-inset-bottom, 0px));
+  z-index:10000;
+  display:none !important;
+  width:48px !important;
+  margin:0 !important;
+}
+body:has(.v12-quick-nav details[open]) div[class*="st-key-v12_quick_library"]{display:block !important;}
+div[class*="st-key-v12_quick_library"] button{
+  width:48px !important;
+  min-width:48px !important;
+  height:48px !important;
+  min-height:48px !important;
+  padding:0 !important;
+  border-radius:50% !important;
+  border:1px solid rgba(255,255,255,.72) !important;
+  background:linear-gradient(145deg,#a58aff,#7c5cff) !important;
+  box-shadow:0 7px 16px rgba(2,7,18,.34) !important;
+  color:#fff !important;
+  font-size:.65rem !important;
+  font-weight:950 !important;
+  line-height:1.02 !important;
+  white-space:pre-line !important;
+}
+div[class*="st-key-v12_quick_library"] button p{
+  color:#fff !important;
+  font-size:.65rem !important;
+  font-weight:950 !important;
+  line-height:1.02 !important;
+  white-space:pre-line !important;
+}
 html{scroll-behavior:smooth;}
 [id^="v12-step-"]{scroll-margin-top:1rem;}
 .v12-font-gallery-note{
@@ -1654,9 +1687,19 @@ html{scroll-behavior:smooth;}
   }
   .v12-quick-nav-menu{
     right:0;
-    bottom:55px;
+    bottom:107px;
     transform:scale(.9);
     transform-origin:bottom right;
+  }
+  div[class*="st-key-v12_quick_library"]{
+    right:14px;
+    bottom:calc(171px + env(safe-area-inset-bottom, 0px));
+  }
+  div[class*="st-key-v12_quick_library"] button{
+    width:46px !important;
+    min-width:46px !important;
+    height:46px !important;
+    min-height:46px !important;
   }
 }
 
@@ -2039,7 +2082,6 @@ st.markdown(f"""
   <details>
     <summary title="{t('quick_nav_open')}" aria-label="{t('quick_nav_open')}">✦</summary>
     <nav class="v12-quick-nav-menu" aria-label="{t('quick_nav_menu')}">
-      <a class="v12-quick-nav-link" style="--nav-accent:#7c5cff" href="#!" onclick="const libraryButton=document.querySelector('.st-key-v12_nav_library button');if(libraryButton)libraryButton.click();return false;" title="{t('quick_nav_library_title')}" aria-label="{t('quick_nav_library_title')}"><span class="v12-quick-nav-label">{t('quick_nav_library')}</span></a>
       <a class="v12-quick-nav-link" style="--nav-accent:#ff5c7a" href="#v12-step-01" title="01 {t('quick_nav_01')}"><span class="v12-quick-nav-label">{t('quick_nav_01')}</span><span class="v12-quick-nav-number">01</span></a>
       <a class="v12-quick-nav-link" style="--nav-accent:#ff9f43" href="#v12-step-02" title="02 {t('quick_nav_02')}"><span class="v12-quick-nav-label">{t('quick_nav_02')}</span><span class="v12-quick-nav-number">02</span></a>
       <a class="v12-quick-nav-link" style="--nav-accent:#2ecc71" href="#v12-step-03" title="03 {t('quick_nav_03')}"><span class="v12-quick-nav-label">{t('quick_nav_03')}</span><span class="v12-quick-nav-number">03</span></a>
@@ -5973,6 +6015,14 @@ with _v12_nav_cols[2]:
         _save_v10_presets()
         st.session_state["v12_view"] = "library"
         st.rerun()
+
+# This is a real Streamlit button, visually placed in the expanded floating
+# menu so it follows the exact same in-page navigation as "My Works" above.
+if st.button(t("quick_nav_library_button"), key="v12_quick_library", help=t("quick_nav_library_title")):
+    _public02a_sync_style_bank_from_widgets()
+    _save_v10_presets()
+    st.session_state["v12_view"] = "library"
+    st.rerun()
 
 st.session_state.setdefault("v12_view", "create")
 
