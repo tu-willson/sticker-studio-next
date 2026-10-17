@@ -36,6 +36,46 @@ def _v12_generation_suffix():
     return {"zh-TW": "／月", "en": " / month", "ja": "／月"}[_v12_ui_locale()]
 
 
+def _v12_crop_canvas_translations():
+    """Translate the isolated crop Canvas UI without translating project content."""
+    locale = _v12_ui_locale()
+    if locale == "en":
+        return {
+            "📍 定位點裁切": "📍 Crop guides",
+            "3 條上半部＋3 條下半部垂直定位線＋1 條水平定位線。": "3 upper and 3 lower vertical guides, plus 1 horizontal guide.",
+            "上下 6 條藍色垂直線可各自獨立拖曳；按「🔒 鎖定定位」後產生 01～08 裁切框。": "The six blue vertical guides can be dragged independently. Lock the guides to prepare crop frames 01–08.",
+            "正在建立定位線……": "Creating crop guides…",
+            "🔴 固定外框　🔵 上下 6 條獨立垂直分隔線　🟠 水平分隔線　｜　🔒 鎖定後可進行裁切": "🔴 Fixed outer frame　🔵 6 independent vertical guides　🟠 Horizontal guide　｜　🔒 Lock, then crop",
+            "↩️ 恢復分隔線位置": "↩️ Reset guides",
+            "🔒 鎖定定位": "🔒 Lock guides",
+            "🖱️ 正在調整定位線……": "🖱️ Adjusting guides…",
+            "✅ 定位線已更新": "✅ Guides updated",
+            "↩️ 已恢復標準4×2定位": "↩️ Standard 4×2 guides restored",
+            "🔓 解鎖定位": "🔓 Unlock guides",
+            "🔒 定位已鎖定，可以加入下方暫存作品籃": "🔒 Guides locked. You can add this batch to the workspace below.",
+            "🛠️ 定位已解鎖，可以繼續微調": "🛠️ Guides unlocked. You can keep fine-tuning.",
+            "✅ 定位線已建立：上 3 條＋下 3 條藍色垂直線可獨立拖曳": "✅ Guides ready: the 3 upper and 3 lower blue vertical lines can be dragged independently.",
+        }
+    if locale == "ja":
+        return {
+            "📍 定位點裁切": "📍 切り抜きガイド",
+            "3 條上半部＋3 條下半部垂直定位線＋1 條水平定位線。": "上段3本＋下段3本の垂直ガイドと、1本の水平ガイド。",
+            "上下 6 條藍色垂直線可各自獨立拖曳；按「🔒 鎖定定位」後產生 01～08 裁切框。": "上下6本の青い垂直ガイドは個別にドラッグできます。ガイドをロックすると01～08の切り抜き枠を準備できます。",
+            "正在建立定位線……": "切り抜きガイドを作成中…",
+            "🔴 固定外框　🔵 上下 6 條獨立垂直分隔線　🟠 水平分隔線　｜　🔒 鎖定後可進行裁切": "🔴 固定外枠　🔵 6本の独立した垂直ガイド　🟠 水平ガイド　｜　🔒 ロック後に切り抜き可能",
+            "↩️ 恢復分隔線位置": "↩️ ガイドをリセット",
+            "🔒 鎖定定位": "🔒 ガイドをロック",
+            "🖱️ 正在調整定位線……": "🖱️ ガイドを調整中…",
+            "✅ 定位線已更新": "✅ ガイドを更新しました",
+            "↩️ 已恢復標準4×2定位": "↩️ 標準4×2ガイドに戻しました",
+            "🔓 解鎖定位": "🔓 ガイドをロック解除",
+            "🔒 定位已鎖定，可以加入下方暫存作品籃": "🔒 ガイドをロックしました。下の作業かごにこのバッチを追加できます。",
+            "🛠️ 定位已解鎖，可以繼續微調": "🛠️ ガイドのロックを解除しました。引き続き微調整できます。",
+            "✅ 定位線已建立：上 3 條＋下 3 條藍色垂直線可獨立拖曳": "✅ ガイドを作成しました。上3本と下3本の青い垂直線は個別にドラッグできます。",
+        }
+    return {}
+
+
 def _v12_pricing_rules_markdown():
     """Public checkout rules, kept separate so they can be fully localized."""
     locale = _v12_ui_locale()
@@ -4052,24 +4092,20 @@ def _v12_render_sticker_basket_workspace():
     """Allow an unlimited session basket, then make one final limited-size project ZIP."""
     basket = _v12_get_sticker_basket()
     if not basket:
-        st.info("暫存作品籃目前沒有圖片。先把上方目前這批 8 張加入後，再繼續累積下一批。")
+        st.info(t("basket_empty"))
         return
 
     selected = _v12_selected_sticker_basket_items()
-    st.info(
-        f"🧺 暫存作品籃共有 {len(basket)} 張；目前已勾選 {len(selected)} 張要打包。"
-        f"可不限張數累積；但每一份打包並保存的作品集最多 {V12_PROJECT_STICKER_LIMIT} 張貼圖"
-        "（MAIN／TAB 另計，不占上限）。"
-    )
+    st.info(t("basket_summary", count=len(basket), selected=len(selected), limit=V12_PROJECT_STICKER_LIMIT))
 
     control_left, control_right = st.columns(2)
     with control_left:
-        if st.button("☑️ 全部保留下載", key="v12_basket_select_all", use_container_width=True):
+        if st.button(t("basket_select_all"), key="v12_basket_select_all", use_container_width=True):
             for item in basket:
                 st.session_state[f"v12_basket_select_{item['id']}"] = True
             st.rerun(scope="fragment")
     with control_right:
-        if st.button("◻️ 全部取消選取", key="v12_basket_deselect_all", use_container_width=True):
+        if st.button(t("basket_deselect_all"), key="v12_basket_deselect_all", use_container_width=True):
             for item in basket:
                 st.session_state[f"v12_basket_select_{item['id']}"] = False
             st.rerun(scope="fragment")
@@ -4085,14 +4121,14 @@ def _v12_render_sticker_basket_workspace():
             with column:
                 st.image(
                     item["image_bytes"],
-                    caption=f"{item['batch_label']}｜原圖 {item['source_slot']:02d}",
+                    caption=t("basket_source", batch=item["batch_label"], slot=item["source_slot"]),
                     use_container_width=True,
                 )
                 st.session_state.setdefault(f"v12_basket_select_{item_id}", True)
-                st.checkbox("保留下載", key=f"v12_basket_select_{item_id}")
+                st.checkbox(t("basket_keep"), key=f"v12_basket_select_{item_id}")
                 # 手機／平板通常不方便處理 ZIP；作品籃中的每一張都能直接存成 PNG。
                 st.download_button(
-                    "⬇️ 單張下載 PNG",
+                    t("basket_png"),
                     data=item["image_bytes"],
                     file_name=(
                         f"LINE貼圖_{item['batch_label'].replace(' ', '')}_"
@@ -4102,57 +4138,51 @@ def _v12_render_sticker_basket_workspace():
                     use_container_width=True,
                     key=f"v12_basket_download_{item_id}",
                 )
-                if st.button("🗑️ 移除", key=f"v12_basket_remove_{item_id}", use_container_width=True):
+                if st.button(t("remove"), key=f"v12_basket_remove_{item_id}", use_container_width=True):
                     _v12_remove_sticker_basket_item(item_id)
                     st.rerun(scope="fragment")
 
     selected = _v12_selected_sticker_basket_items()
     st.divider()
     if not selected:
-        st.warning("請先至少勾選 1 張貼圖，才能指定 MAIN／TAB 與建立 ZIP。")
+        st.warning(t("basket_selection_required"))
         return
     if len(selected) > V12_PROJECT_STICKER_LIMIT:
         excess = len(selected) - V12_PROJECT_STICKER_LIMIT
-        st.warning(
-            f"單一作品集最多可保存 {V12_PROJECT_STICKER_LIMIT} 張貼圖；目前已勾選 "
-            f"{len(selected)} 張（MAIN／TAB 另計）。請先取消至少 {excess} 張後，再建立 ZIP 或同步保存。"
-        )
+        st.warning(t("basket_limit", limit=V12_PROJECT_STICKER_LIMIT, selected=len(selected), excess=excess))
         return
 
     options = {
-        f"{item['batch_label']}・原圖 {item['source_slot']:02d}": item
+        t("basket_source", batch=item["batch_label"], slot=item["source_slot"]): item
         for item in selected
     }
     option_labels = list(options.keys())
 
-    st.markdown("### ⭐ 指定 MAIN／TAB")
-    st.caption("MAIN 會輸出為 240×240，TAB 會輸出為 96×74；可從所有已勾選的暫存貼圖中指定。")
+    st.markdown(f"### {t('main_tab_title')}")
+    st.caption(t("main_tab_caption"))
     main_key = "v12_basket_main_choice"
     tab_key = "v12_basket_tab_choice"
     if st.session_state.get(main_key) not in option_labels:
         st.session_state[main_key] = option_labels[0]
     main_choices, tab_choices = st.columns(2)
     with main_choices:
-        main_label = st.selectbox("選擇 MAIN", option_labels, key=main_key)
+        main_label = st.selectbox(t("choose_main"), option_labels, key=main_key)
     tab_labels = [label for label in option_labels if label != main_label] or [main_label]
     if st.session_state.get(tab_key) not in tab_labels:
         st.session_state[tab_key] = tab_labels[0]
     with tab_choices:
-        tab_label = st.selectbox("選擇 TAB", tab_labels, key=tab_key)
+        tab_label = st.selectbox(t("choose_tab"), tab_labels, key=tab_key)
 
     if len(selected) == 1:
-        st.caption("只勾選 1 張時，MAIN 與 TAB 會使用同一張圖片；勾選更多張後可分別指定。")
-    st.info(
-        f"目前會打包 {len(selected)}／{V12_PROJECT_STICKER_LIMIT} 張貼圖｜"
-        f"MAIN：{main_label}｜TAB：{tab_label}（兩者另計）"
-    )
+        st.caption(t("main_tab_same"))
+    st.info(t("package_summary", selected=len(selected), limit=V12_PROJECT_STICKER_LIMIT, main=main_label, tab=tab_label))
 
-    st.markdown("### 🏷️ 作品名稱")
-    st.caption("此名稱會同時用於「我的作品」紀錄與 ZIP 下載檔案名稱。")
+    st.markdown(f"### {t('project_title')}")
+    st.caption(t("project_caption"))
     st.text_input(
-        "為這組作品命名",
+        t("project_label"),
         key="v12_project_name_input",
-        placeholder="例如：阿土的日常貼圖",
+        placeholder=t("project_placeholder"),
         max_chars=80,
         on_change=_v12_project_name_on_change,
     )
@@ -4162,7 +4192,7 @@ def _v12_render_sticker_basket_workspace():
 
     cloud_session = _beta_current_user() if _beta_config() else None
     save_to_cloud = st.checkbox(
-        "☁️ 同步保存到雲端「我的作品」",
+        t("save_cloud"),
         value=False,
         key="v12_save_to_cloud_on_package",
         disabled=not bool(cloud_session),
@@ -4183,7 +4213,7 @@ def _v12_render_sticker_basket_workspace():
         )
     )
     save_creation_materials = st.checkbox(
-        "🔒 同時保存私人創作素材（人物照片／畫風參考），方便下次繼續製作",
+        t("save_materials"),
         value=True,
         key="v12_save_creation_materials_on_package",
         disabled=not bool(cloud_session) or not has_creation_materials,
@@ -4192,7 +4222,7 @@ def _v12_render_sticker_basket_workspace():
         st.caption("創作素材僅自己可讀；取消勾選後，雲端作品只會保存已選成品與設定。")
 
     if st.button(
-        f"📦 將已選 {len(selected)} 張貼圖一次打包",
+        t("package_selected", count=len(selected)),
         type="primary",
         use_container_width=True,
         key="v12_basket_package_selected",
@@ -4294,7 +4324,7 @@ def _v12_render_sticker_basket_workspace():
     last_zip = st.session_state.get("v12_basket_last_zip_bytes")
     if last_zip:
         st.download_button(
-            "⬇️ 下載最近建立的完整 LINE 套件 ZIP",
+            t("download_zip"),
             data=last_zip,
             file_name=st.session_state.get("v12_basket_last_zip_name") or "LINE貼圖.zip",
             mime="application/zip",
@@ -7616,8 +7646,8 @@ if (
     and _v12_get_sticker_basket()
 ):
     st.divider()
-    v10_section("🧺 STEP 11B｜已載回的精選作品", "#9b59b6")
-    st.caption("這些是從「我的作品」載回的已選成品；可直接重新指定 MAIN／TAB 並打包，不會重新生成或扣除生成次數。")
+    v10_section(t("basket_section"), "#9b59b6")
+    st.caption(t("basket_loaded_intro"))
     _v12_render_sticker_basket_workspace()
 
 
@@ -7634,30 +7664,25 @@ if st.session_state.generated_4x2_bytes:
     if st.session_state.crop_boxes is None:
         st.session_state.crop_boxes = base_boxes(w, h)
 
-    st.info(
-        "直接拖曳：移動裁切框。拖曳四角：改變大小。"
-        "拖曳四邊：單方向調整。8 個框同時顯示，不需要逐張打開。"
-    )
+    st.info(t("crop_drag_help"))
 
     # --------------------------------------------------------
     # 明確顯示原始 4×2 圖
     # 不依賴 Canvas 是否成功載入圖片。
     # 固定預覽寬度，避免隨網頁容器無限放大。
     # --------------------------------------------------------
-    v10_subsection("🖼️ 原始 4×2 圖片", "#e74c3c")
+    v10_subsection(t("crop_original"), "#e74c3c")
     _orig_left, _orig_center, _orig_right = st.columns([1, 5, 1])
     with _orig_center:
         st.image(
             st.session_state.generated_4x2_bytes,
-            caption=f"原始生成圖：{w} × {h} px",
+            caption=t("crop_original_caption", width=w, height=h),
             use_container_width=True,
         )
 
-    st.caption(
-        "上方是原始圖片預覽；下方 Canvas 才是可直接拖曳的裁切操作區。"
-    )
+    st.caption(t("crop_canvas_caption"))
     if st.session_state.get("v12_grid_breathing_room_applied", False):
-        st.caption("✂️ 本批已自動將每格內容縮小 12% 並置中，保留較寬的裁切空間。")
+        st.caption(t("crop_breathing"))
 
     _CROP_HTML_TEMPLATE = '<!doctype html>\n<html><head><meta charset="utf-8">\n<style>\n*{box-sizing:border-box}\nbody{margin:0;font-family:Arial,"Microsoft JhengHei",sans-serif;color:#333}\n.help{font-size:14px;line-height:1.6;background:#f5f7fa;padding:10px;border-radius:8px}\n.viewer{position:relative;width:720px;max-width:100%;margin:10px auto 0;border:1px solid #bbb;border-radius:8px;overflow:hidden;background:#eee}\n#cv{display:block;width:720px;max-width:100%;height:auto;touch-action:none;user-select:none}\n.status{font-size:28px;line-height:1.45;font-weight:700;padding:12px 0;color:#fff;text-align:center}\n.actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}\nbutton{border:0;border-radius:8px;padding:9px 13px;cursor:pointer}\nbutton.primary{background:#222;color:#fff}\nbutton.lock{background:#333;color:#fff}\nbutton:disabled{opacity:.45;cursor:not-allowed}\n.coords{font:20px/1.6 Consolas,monospace;white-space:pre-wrap;background:#1b2028;color:#fff;padding:14px;border-radius:10px;text-align:center}\n.legend{font-size:26px;line-height:1.5;font-weight:700;padding:10px 0;color:#fff;text-align:center}\n</style></head><body>\n<div class="help">\n<b>📍 定位點裁切</b><br>\n3 條上半部＋3 條下半部垂直定位線＋1 條水平定位線。\n上下 6 條藍色垂直線可各自獨立拖曳；按「🔒 鎖定定位」後產生 01～08 裁切框。\n</div>\n<div class="viewer"><canvas id="cv"></canvas></div>\n<div class="status" id="status">正在建立定位線……</div>\n<div class="legend">🔴 固定外框\u3000🔵 上下 6 條獨立垂直分隔線\u3000🟠 水平分隔線\u3000｜\u3000🔒 鎖定後可進行裁切</div>\n<div class="actions">\n<button onclick="resetGuides()">↩️ 恢復分隔線位置</button>\n<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>\n<button id="downloadBtn" class="primary" onclick="downloadAll()" disabled>✂️ 裁切並依序下載01～08(手機下載)</button>\n</div>\n\n<script>\nconst B64="__IMAGE_B64__", IW=__IW__, IH=__IH__;\nconst cv=document.getElementById("cv"),ctx=cv.getContext("2d");\nconst statusEl=document.getElementById("status"),coordsEl=document.getElementById("coords");\nconst lockBtn=document.getElementById("lockBtn"),downloadBtn=document.getElementById("downloadBtn");\nconst colors=["#ff4040","#3987ff","#32ad61","#ff922e"];\nlet scale=1,locked=false,active=-1,startX=0,startY=0,snap=null;\n\nfunction clamp(v,a,b){return Math.max(a,Math.min(b,v))}\nfunction guidesDefault(){\n  return {\n    xTop:[IW/4,IW/2,3*IW/4],\n    xBottom:[IW/4,IW/2,3*IW/4],\n    y:[0,IH/2,IH]\n  };\n}\nlet g=guidesDefault();\n\nconst image=new Image();\nimage.src="data:image/png;base64,"+B64;\n\nfunction resize(){\n  const viewer=cv.parentElement;\n  const mw=Math.min(720,Math.max(320,viewer.clientWidth||720));\n  cv.width=Math.round(mw);\n  cv.height=Math.round(mw*IH/IW);\n  scale=cv.width/IW;\n  draw();\n}\n\nfunction boxes(){\n  const out=[];\n  const xt=[0,g.xTop[0],g.xTop[1],g.xTop[2],IW];\n  const xb=[0,g.xBottom[0],g.xBottom[1],g.xBottom[2],IW];\n  for(let c=0;c<4;c++) out.push([xt[c],g.y[0],xt[c+1],g.y[1]]);\n  for(let c=0;c<4;c++) out.push([xb[c],g.y[1],xb[c+1],g.y[2]]);\n  return out;\n}\n\nfunction draw(){\n  ctx.clearRect(0,0,cv.width,cv.height);\n  ctx.drawImage(image,0,0,cv.width,cv.height);\n\n  // Slight guide shading.\n  ctx.save();\n  ctx.fillStyle="rgba(255,255,255,.08)";\n  ctx.fillRect(0,0,cv.width,cv.height);\n  ctx.restore();\n\n  // 上下各 3 條：六條垂直線完全獨立。\n  for(let i=0;i<3;i++){\n    const xt=g.xTop[i]*scale;\n    const xb=g.xBottom[i]*scale;\n    ctx.save();\n    ctx.strokeStyle="#3987ff";\n    ctx.lineWidth=2.5;\n    ctx.setLineDash([10,7]);\n    ctx.beginPath();ctx.moveTo(xt,0);ctx.lineTo(xt,g.y[1]*scale);ctx.stroke();\n    ctx.beginPath();ctx.moveTo(xb,g.y[1]*scale);ctx.lineTo(xb,cv.height);ctx.stroke();\n    ctx.setLineDash([]);\n    ctx.fillStyle="#3987ff";\n    ctx.fillRect(xt-5,4,10,18);\n    ctx.fillRect(xb-5,g.y[1]*scale+4,10,18);\n    ctx.restore();\n  }\n\n  // 左右外框固定。\n  ctx.save();\n  ctx.strokeStyle="#ff4040";\n  ctx.lineWidth=2.5;\n  ctx.setLineDash([10,7]);\n  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,cv.height);ctx.stroke();\n  ctx.beginPath();ctx.moveTo(cv.width,0);ctx.lineTo(cv.width,cv.height);ctx.stroke();\n  ctx.setLineDash([]);\n  ctx.fillStyle="#ff4040";\n  ctx.fillRect(0,4,10,18);\n  ctx.fillRect(cv.width-10,4,10,18);\n  ctx.restore();  // Draw 3 horizontal guide lines.\n  for(let i=0;i<3;i++){\n    const y=g.y[i]*scale;\n    ctx.save();\n    ctx.strokeStyle="#ff922e";\n    ctx.lineWidth=i===1?2.5:2;\n    ctx.setLineDash([10,7]);\n    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cv.width,y);ctx.stroke();\n    ctx.setLineDash([]);\n    ctx.fillStyle="#ff922e";\n    ctx.fillRect(4,y-5,22,10);\n    ctx.restore();\n  }\n\n  // Number each derived cell; these are guide labels only.\n  const b=boxes();\n  const cellColors=["#ff4040","#3987ff","#32ad61","#a04bd0","#ff922e","#25aeb0","#db3f9b","#956c3c"];\n  for(let i=0;i<8;i++){\n    const x=b[i][0]*scale,y=b[i][1]*scale;\n    ctx.save();\n    ctx.font="bold 17px Arial";\n    ctx.lineWidth=3;\n    ctx.strokeStyle="rgba(255,255,255,.95)";\n    ctx.strokeText(String(i+1).padStart(2,"0"),x+8,y+21);\n    ctx.fillStyle=cellColors[i];\n    ctx.fillText(String(i+1).padStart(2,"0"),x+8,y+21);\n    ctx.restore();\n  }\n\n  updateCoords();\n}\n\nfunction updateCoords(){\n  // 座標資訊已從使用者介面移除；保留函式避免影響既有裁切流程。\n}\n\nfunction pointerPos(e){\n  const r=cv.getBoundingClientRect();\n  return {x:(e.clientX-r.left)*IW/r.width,y:(e.clientY-r.top)*IH/r.height};\n}\n\nfunction nearestGuide(p){\n  const tol=Math.max(18,18/scale);\n  let best=-1,bd=Infinity,type="";\n  const arr=p.y<g.y[1] ? g.xTop : g.xBottom;\n  const segType=p.y<g.y[1] ? "xTop" : "xBottom";\n  for(let i=0;i<3;i++){\n    const d=Math.abs(p.x-arr[i]);\n    if(d<tol&&d<bd){best=i;bd=d;type=segType;}\n  }\n  const dy=Math.abs(p.y-g.y[1]);\n  if(dy<tol&&dy<bd){best=1;bd=dy;type="y";}\n  return {index:best,type:type};\n}cv.addEventListener("pointerdown",e=>{\n  if(locked)return;\n  const p=pointerPos(e),h=nearestGuide(p);\n  if(h.index<0)return;\n  e.preventDefault();\n  try{cv.setPointerCapture(e.pointerId)}catch(_){}\n  active=h.index;startX=p.x;startY=p.y;snap={xTop:[...g.xTop],xBottom:[...g.xBottom],y:[...g.y],type:h.type};\n  statusEl.textContent="🖱️ 正在調整定位線……";\n});\n\ncv.addEventListener("pointermove",e=>{\n  if(active<0||locked)return;\n  e.preventDefault();\n  const p=pointerPos(e);\n  if(snap.type==="xTop" || snap.type==="xBottom"){\n    const arr=snap.type==="xTop" ? g.xTop : g.xBottom;\n    const snapArr=snap.type==="xTop" ? snap.xTop : snap.xBottom;\n    const min=30;\n    const lo=(active===0 ? 0 : arr[active-1])+min;\n    const hi=(active===2 ? IW : arr[active+1])-min;\n    arr[active]=clamp(snapArr[active]+(p.x-startX),lo,hi);\n  }else{\n    const min=30;\n    g.y[1]=clamp(snap.y[1]+(p.y-startY),g.y[0]+min,g.y[2]-min);\n  }\n  draw();\n});\n\ncv.addEventListener("pointerup",e=>{\n  if(active>=0){try{cv.releasePointerCapture(e.pointerId)}catch(_){}}\n  active=-1;\n  if(!locked)statusEl.textContent="✅ 定位線已更新";\n});\n\nfunction resetGuides(){\n  locked=false;\n  g=guidesDefault();\n  lockBtn.textContent="🔒 鎖定定位";\n  downloadBtn.disabled=true;\n  statusEl.textContent="↩️ 已恢復標準4×2定位";\n  draw();\n}\n\nfunction toggleLock(){\n  locked=!locked;\n  if(locked){\n    lockBtn.textContent="🔓 解鎖定位";\n    downloadBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，可以開始裁切";\n  }else{\n    lockBtn.textContent="🔒 鎖定定位";\n    downloadBtn.disabled=true;\n    statusEl.textContent="🛠️ 定位已解鎖，可以繼續微調";\n  }\n  draw();\n}\n\nfunction saveBlob(blob,name){\n  const u=URL.createObjectURL(blob),a=document.createElement("a");\n  a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();\n  setTimeout(()=>URL.revokeObjectURL(u),1000);\n}\n\n// V10 STEP 10C.6：移植 V8「邊界連通背景移除」邏輯。\n// 只移除從圖片邊緣連通、且接近背景色的區域；不整片刪除人物/文字中的白色。\nfunction removeConnectedBackground(canvas, tolerance=30){\n  const ctx2=canvas.getContext("2d",{willReadFrequently:true});\n  const W=canvas.width,H=canvas.height;\n  const img=ctx2.getImageData(0,0,W,H);\n  const px=img.data;\n\n  const pts=[\n    [0,0],[W-1,0],[0,H-1],[W-1,H-1],\n    [Math.min(4,W-1),Math.min(4,H-1)],\n    [Math.max(0,W-5),Math.min(4,H-1)],\n    [Math.min(4,W-1),Math.max(0,H-5)],\n    [Math.max(0,W-5),Math.max(0,H-5)]\n  ];\n\n  let sr=0,sg=0,sb=0,count=0;\n  for(const [x,y] of pts){\n    const k=(y*W+x)*4;\n    if(px[k+3]===0) continue;\n    sr+=px[k]; sg+=px[k+1]; sb+=px[k+2]; count++;\n  }\n  if(count===0) return;\n\n  const bg=[sr/count,sg/count,sb/count];\n  const tol2=tolerance*tolerance;\n\n  function nearBg(k){\n    if(px[k+3]===0) return true;\n    const dr=px[k]-bg[0],dg=px[k+1]-bg[1],db=px[k+2]-bg[2];\n    return dr*dr+dg*dg+db*db<=tol2;\n  }\n\n  const seen=new Uint8Array(W*H);\n  const qx=[],qy=[];\n  let head=0;\n\n  function push(x,y){\n    if(x<0||x>=W||y<0||y>=H) return;\n    const n=y*W+x;\n    if(seen[n]) return;\n    seen[n]=1;\n    qx.push(x);qy.push(y);\n  }\n\n  for(let x=0;x<W;x++){push(x,0);push(x,H-1);}\n  for(let y=0;y<H;y++){push(0,y);push(W-1,y);}\n\n  while(head<qx.length){\n    const x=qx[head],y=qy[head++];\n    const k=(y*W+x)*4;\n    if(!nearBg(k)) continue;\n    px[k+3]=0;\n    push(x-1,y);push(x+1,y);push(x,y-1);push(x,y+1);\n  }\n\n  ctx2.putImageData(img,0,0);\n}\n\nfunction makeSticker(i){\n  const b=boxes()[i].map(v=>Math.round(v));\n  const x1=clamp(b[0],0,IW-2),y1=clamp(b[1],0,IH-2);\n  const x2=clamp(b[2],x1+2,IW),y2=clamp(b[3],y1+2,IH);\n  const cw=370,ch=320,sw=x2-x1,sh=y2-y1;\n  const rat=Math.min(cw/sw,ch/sh),nw=Math.max(1,Math.round(sw*rat)),nh=Math.max(1,Math.round(sh*rat));\n\n  const o=document.createElement("canvas");\n  o.width=cw;o.height=ch;\n  const octx=o.getContext("2d",{willReadFrequently:true});\n  octx.clearRect(0,0,cw,ch);\n\n  // 保留 V10 原本的定位點裁切、等比例縮放、置中。\n  octx.drawImage(\n    image,x1,y1,sw,sh,\n    Math.round((cw-nw)/2),Math.round((ch-nh)/2),nw,nh\n  );\n\n  // 只有勾選「透明背景 PNG」時才套用 V8 邏輯。\n  if(__TRANSPARENT__){\n    removeConnectedBackground(o,30);\n  }\n\n  return new Promise(r=>o.toBlob(r,"image/png"));\n}\n\nasync function downloadAll(){\n  if(!locked)return;\n  statusEl.textContent="⏳ 正在製作01～08 PNG……";\n  for(let i=0;i<8;i++){\n    saveBlob(await makeSticker(i),String(i+1).padStart(2,"0")+".png");\n    await new Promise(r=>setTimeout(r,180));\n  }\n  statusEl.textContent="🎉 01～08 已全部裁切並下載！";\n}\n\nimage.onload=()=>{\n  resize();\n  statusEl.textContent="✅ 定位線已建立：上 3 條＋下 3 條藍色垂直線可獨立拖曳";\n};\nwindow.addEventListener("resize",resize);\n</script></body></html>'
     # 本版不在 Canvas 直接下載；裁切結果會先加入下方暫存作品籃，再一次打包。
@@ -7674,6 +7699,8 @@ if st.session_state.generated_4x2_bytes:
         '    downloadBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，可以開始裁切";',
         '    statusEl.textContent="🔒 定位已鎖定，可以加入下方暫存作品籃";',
     )
+    for _crop_source, _crop_translation in _v12_crop_canvas_translations().items():
+        _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(_crop_source, _crop_translation)
     _image_b64 = base64.b64encode(st.session_state.generated_4x2_bytes).decode("ascii")
     _boxes_json = __import__("json").dumps(st.session_state.crop_boxes, ensure_ascii=False)
     _crop_html = _CROP_HTML_TEMPLATE.replace("__IMAGE_B64__", _image_b64).replace("__IW__", str(int(w))).replace("__IH__", str(int(h))).replace("__BOXES__", _boxes_json).replace("__TRANSPARENT__", "true" if transparent else "false")
@@ -7685,16 +7712,16 @@ if st.session_state.generated_4x2_bytes:
     )
 
     st.divider()
-    v10_section("🧺 STEP 11B｜暫存作品籃與一次打包", "#9b59b6")
+    v10_section(t("basket_section"), "#9b59b6")
     st.markdown(
         '<div style="font-size:22px;line-height:1.55;font-weight:700;'
         'text-align:center;color:#fff;margin:10px 0 16px;">'
-        '先將目前這批 8 張裁切圖加入暫存作品籃；可繼續生成更多批，最後再一次挑選、指定 MAIN／TAB 與打包下載。'
+        f'{t("basket_intro")}'
         '</div>',
         unsafe_allow_html=True,
     )
     if st.button(
-        "✂️ 將目前這批 8 張加入暫存作品籃",
+        t("basket_add"),
         type="primary",
         use_container_width=True,
         key="v12_add_current_grid_to_basket",
@@ -7710,12 +7737,12 @@ if st.session_state.generated_4x2_bytes:
                 st.info(message)
         except Exception as error:
             st.error(f"加入暫存作品籃失敗：{error}")
-    st.caption("暫存作品籃只保留在目前瀏覽工作階段；可累積不限張數，最後才會下載 ZIP。")
+    st.caption(t("basket_session_only"))
     _v12_render_sticker_basket_workspace()
     _basket_library_col = st.columns([1, 2, 1])[1]
     with _basket_library_col:
         if st.button(
-            "📚 前往我的作品",
+            t("basket_go_library"),
             key="v12_basket_library",
             type="primary",
             use_container_width=True,
