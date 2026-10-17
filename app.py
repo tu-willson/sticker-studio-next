@@ -3105,6 +3105,7 @@ st.session_state.setdefault("v12_projects_local_index", [])
 # V12｜STEP 01B①｜資料結構標準化
 # ============================================================
 V12_HISTORY_LIMIT = 12
+V12_PROJECT_STICKER_LIMIT = 40
 
 def _v12_png_bytes(image):
     buf = BytesIO()
@@ -3270,7 +3271,7 @@ def _v12_make_special_sticker(image_bytes, size):
 
 @st.fragment
 def _v12_render_sticker_basket_workspace():
-    """Allow an unlimited session basket, then make one final LINE ZIP."""
+    """Allow an unlimited session basket, then make one final limited-size project ZIP."""
     basket = _v12_get_sticker_basket()
     if not basket:
         st.info("暫存作品籃目前沒有圖片。先把上方目前這批 8 張加入後，再繼續累積下一批。")
@@ -3279,7 +3280,7 @@ def _v12_render_sticker_basket_workspace():
     selected = _v12_selected_sticker_basket_items()
     st.info(
         f"🧺 暫存作品籃共有 {len(basket)} 張；目前已勾選 {len(selected)} 張要打包。"
-        "可不限張數累積，本次瀏覽結束前不會自動下載。"
+        f"可不限張數累積；但每一份打包並保存的作品集最多 {V12_PROJECT_STICKER_LIMIT} 張。"
     )
 
     control_left, control_right = st.columns(2)
@@ -3319,6 +3320,13 @@ def _v12_render_sticker_basket_workspace():
     if not selected:
         st.warning("請先至少勾選 1 張貼圖，才能指定 MAIN／TAB 與建立 ZIP。")
         return
+    if len(selected) > V12_PROJECT_STICKER_LIMIT:
+        excess = len(selected) - V12_PROJECT_STICKER_LIMIT
+        st.warning(
+            f"單一作品集最多可保存 {V12_PROJECT_STICKER_LIMIT} 張貼圖；目前已勾選 "
+            f"{len(selected)} 張。請先取消至少 {excess} 張後，再建立 ZIP 或同步保存。"
+        )
+        return
 
     options = {
         f"{item['batch_label']}・原圖 {item['source_slot']:02d}": item
@@ -3343,7 +3351,10 @@ def _v12_render_sticker_basket_workspace():
 
     if len(selected) == 1:
         st.caption("只勾選 1 張時，MAIN 與 TAB 會使用同一張圖片；勾選更多張後可分別指定。")
-    st.info(f"目前會打包 {len(selected)} 張貼圖｜MAIN：{main_label}｜TAB：{tab_label}")
+    st.info(
+        f"目前會打包 {len(selected)}／{V12_PROJECT_STICKER_LIMIT} 張貼圖｜"
+        f"MAIN：{main_label}｜TAB：{tab_label}"
+    )
 
     st.markdown("### 🏷️ 作品名稱")
     st.caption("此名稱會同時用於「我的作品」紀錄與 ZIP 下載檔案名稱。")
