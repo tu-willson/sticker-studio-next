@@ -5358,7 +5358,7 @@ if st.session_state["v12_view"] == "library":
                 f"☁️ 雲端作品庫：已保存 {_cloud_status['saved_count']}／"
                 f"{_cloud_status['library_capacity']} 組作品"
             )
-            st.caption("目前 Beta 每位登入會員可保存 5 組。日後訂閱方案會提高上限，但容量不累計。")
+            st.caption("作品集上限會依目前會員權益套用；訂閱與點數包容量不會累計。")
             _cloud_projects = _beta_list_library_projects(_cloud_session)
         except Exception:
             _cloud_projects = []
