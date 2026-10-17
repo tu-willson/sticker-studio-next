@@ -830,6 +830,13 @@ st.markdown("""
   font-weight:900;
   letter-spacing:.04em;
   margin:1.0rem auto 1.8rem;
+  white-space:nowrap;
+}
+@media (max-width:640px){
+  .v10-main-title{
+    font-size:clamp(1.7rem,8vw,2.2rem);
+    letter-spacing:.015em;
+  }
 }
 .v10-section{
   position:relative;
@@ -5375,7 +5382,7 @@ if st.session_state["v12_view"] == "library":
 
 
 st.markdown('<div id="v12-page-top"></div>', unsafe_allow_html=True)
-st.markdown('<div class="v10-main-title">🎨 LINE 貼圖創作工作室</div>', unsafe_allow_html=True)
+st.markdown('<div class="v10-main-title">🎨 LINE 貼圖創作室</div>', unsafe_allow_html=True)
 st.caption("V11｜公開版｜快速完成 LINE 貼圖創作")
 
 # OAuth redirects arrive with a short-lived code in the URL.  Handle it before
