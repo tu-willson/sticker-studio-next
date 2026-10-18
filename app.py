@@ -796,6 +796,14 @@ def _save_v10_presets():
 
 import streamlit.components.v1 as components
 
+# The crop editor needs to return the final guide coordinates to Python.
+# `components.html` is display-only, so use a small first-party Streamlit
+# component as a bridge instead of trying to navigate the enclosing page.
+_V12_CROP_GUIDES_COMPONENT = components.declare_component(
+    "v12_crop_guides",
+    path=str(Path(__file__).with_name("crop_guides_component")),
+)
+
 def _v11_clear_generation_state() -> None:
     """Clear only transient generation UI/session flags after a terminal outcome."""
     for _key in (
@@ -7898,29 +7906,6 @@ if st.session_state.generated_4x2_bytes:
     src = Image.open(BytesIO(st.session_state.generated_4x2_bytes)).convert("RGBA")
     w, h = src.size
 
-    _crop_boxes_from_url = str(st.query_params.get("crop_boxes", "") or "")
-    _crop_grid_from_url = str(st.query_params.get("crop_grid", "") or "")
-    if _crop_boxes_from_url:
-        # The Canvas runs inside an isolated browser frame.  On lock it returns
-        # only the numeric guide coordinates; validate them against this exact
-        # generated grid before using them for every later crop/export.
-        try:
-            _decoded_crop_boxes = json.loads(
-                base64.b64decode(_crop_boxes_from_url.encode("ascii")).decode("utf-8")
-            )
-            _current_grid_hash = hashlib.sha256(
-                st.session_state.generated_4x2_bytes
-            ).hexdigest()
-            if secrets.compare_digest(_crop_grid_from_url, _current_grid_hash):
-                st.session_state.crop_boxes = _v12_valid_crop_boxes(
-                    _decoded_crop_boxes, w, h
-                )
-                st.session_state["v12_crop_guides_saved"] = True
-        except Exception:
-            pass
-        st.query_params.clear()
-        st.rerun()
-
     if st.session_state.crop_boxes is None:
         st.session_state.crop_boxes = base_boxes(w, h)
 
@@ -7980,29 +7965,10 @@ let g=guidesFromBoxes(INITIAL_BOXES);''',
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
         '    statusEl.textContent="🔒 定位已鎖定，可以加入下方暫存作品籃";',
         '''    statusEl.textContent="🔒 定位已鎖定，正在儲存裁切範圍……";
-    try{
-      // The embedded Streamlit frame cannot read window.top.location because
-      // it is cross-origin. document.referrer is the parent app URL and is
-      // safe to read from the frame.
-      const url=new URL(document.referrer || window.location.href);
-      url.searchParams.set("crop_boxes",btoa(JSON.stringify(boxes())));
-      url.searchParams.set("crop_grid","__GRID_HASH__");
-      url.hash="v12-step-08";
-      // A normal top-target link keeps the browser action tied to this user's
-      // click.  Directly calling window.top.location.assign is blocked by the
-      // iframe sandbox used by Streamlit's HTML component.
-      const handoff=document.createElement("a");
-      handoff.href=url.toString();
-      handoff.target="_top";
-      handoff.style.display="none";
-      document.body.appendChild(handoff);
-      handoff.click();
-      setTimeout(()=>{
-        statusEl.textContent="⚠️ 無法儲存裁切範圍，請重新整理後再試";
-      },1000);
-    }catch(_){
-      statusEl.textContent="⚠️ 無法儲存裁切範圍，請重新整理後再試";
-    }''',
+    window.parent.postMessage({
+      type:"v12-crop-save",
+      value:JSON.stringify({gridHash:"__GRID_HASH__",boxes:boxes()})
+    },"*");''',
     )
     for _crop_source, _crop_translation in _v12_crop_canvas_translations().items():
         _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(_crop_source, _crop_translation)
@@ -8013,12 +7979,41 @@ let g=guidesFromBoxes(INITIAL_BOXES);''',
         "__GRID_HASH__",
         hashlib.sha256(st.session_state.generated_4x2_bytes).hexdigest(),
     )
-    import streamlit.components.v1 as components
-    components.html(
-        _crop_html,
-        height=760,
-        scrolling=False,
+    _crop_saved_value = _V12_CROP_GUIDES_COMPONENT(
+        html=_crop_html,
+        frame_height=760,
+        key="v12_crop_guides_component",
+        default=None,
     )
+    if _crop_saved_value:
+        try:
+            _crop_saved_payload = (
+                _crop_saved_value
+                if isinstance(_crop_saved_value, dict)
+                else json.loads(str(_crop_saved_value))
+            )
+            _crop_saved_hash = str(_crop_saved_payload.get("gridHash", "") or "")
+            _crop_saved_boxes = _crop_saved_payload.get("boxes")
+            _current_grid_hash = hashlib.sha256(
+                st.session_state.generated_4x2_bytes
+            ).hexdigest()
+            _crop_saved_token = json.dumps(
+                [_crop_saved_hash, _crop_saved_boxes],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            if (
+                secrets.compare_digest(_crop_saved_hash, _current_grid_hash)
+                and _crop_saved_token != st.session_state.get("v12_crop_last_saved_token")
+            ):
+                st.session_state.crop_boxes = _v12_valid_crop_boxes(
+                    _crop_saved_boxes, w, h
+                )
+                st.session_state["v12_crop_last_saved_token"] = _crop_saved_token
+                st.session_state["v12_crop_guides_saved"] = True
+                st.rerun()
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
 
     st.divider()
     v10_section(t("basket_section"), "#9b59b6")

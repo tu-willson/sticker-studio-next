@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    html, body, #crop-frame { margin: 0; width: 100%; height: 100%; border: 0; overflow: hidden; }
+    #crop-frame { display: block; }
+  </style>
+</head>
+<body>
+  <iframe id="crop-frame" title="Sticker crop guides"></iframe>
+  <script>
+    const frame = document.getElementById("crop-frame");
+    let latestHtml = "";
+
+    function sendToStreamlit(type, payload = {}) {
+      window.parent.postMessage({ isStreamlitMessage: true, type, ...payload }, "*");
+    }
+
+    function setFrameHeight(height) {
+      sendToStreamlit("streamlit:setFrameHeight", { height });
+    }
+
+    window.addEventListener("message", (event) => {
+      const message = event.data || {};
+
+      if (message.type === "streamlit:render") {
+        const args = message.args || {};
+        const markup = String(args.html || "");
+        if (markup && markup !== latestHtml) {
+          latestHtml = markup;
+          frame.srcdoc = markup;
+        }
+        setFrameHeight(Number(args.frame_height) || 760);
+        return;
+      }
+
+      if (
+        message.type === "v12-crop-save"
+        && event.source === frame.contentWindow
+        && typeof message.value === "string"
+      ) {
+        sendToStreamlit("streamlit:setComponentValue", { value: message.value });
+      }
+    });
+
+    frame.addEventListener("load", () => setFrameHeight(760));
+    sendToStreamlit("streamlit:componentReady", { apiVersion: 1 });
+    setFrameHeight(760);
+  </script>
+</body>
+</html>
