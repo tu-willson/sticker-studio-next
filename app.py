@@ -8057,8 +8057,12 @@ function saveBlob(blob,name){''',
         '</div>',
         unsafe_allow_html=True,
     )
+    st.info(
+        "✂️ 若有移動上方裁切線，請先按畫布內的「✅ 套用裁切並加入暫存作品籃」。"
+        "下方按鈕只會使用上一次已套用的裁切範圍。"
+    )
     if st.button(
-        t("basket_add"),
+        "📥 使用目前已套用的裁切範圍加入暫存作品籃",
         type="primary",
         use_container_width=True,
         key="v12_add_current_grid_to_basket",
