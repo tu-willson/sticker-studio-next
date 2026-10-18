@@ -7981,7 +7981,10 @@ let g=guidesFromBoxes(INITIAL_BOXES);''',
         '    statusEl.textContent="🔒 定位已鎖定，可以加入下方暫存作品籃";',
         '''    statusEl.textContent="🔒 定位已鎖定，正在儲存裁切範圍……";
     try{
-      const url=new URL(window.top.location.href);
+      // The embedded Streamlit frame cannot read window.top.location because
+      // it is cross-origin. document.referrer is the parent app URL and is
+      // safe to read from the frame.
+      const url=new URL(document.referrer || window.location.href);
       url.searchParams.set("crop_boxes",btoa(JSON.stringify(boxes())));
       url.searchParams.set("crop_grid","__GRID_HASH__");
       url.hash="v12-step-08";
