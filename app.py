@@ -7988,7 +7988,18 @@ let g=guidesFromBoxes(INITIAL_BOXES);''',
       url.searchParams.set("crop_boxes",btoa(JSON.stringify(boxes())));
       url.searchParams.set("crop_grid","__GRID_HASH__");
       url.hash="v12-step-08";
-      window.top.location.assign(url.toString());
+      // A normal top-target link keeps the browser action tied to this user's
+      // click.  Directly calling window.top.location.assign is blocked by the
+      // iframe sandbox used by Streamlit's HTML component.
+      const handoff=document.createElement("a");
+      handoff.href=url.toString();
+      handoff.target="_top";
+      handoff.style.display="none";
+      document.body.appendChild(handoff);
+      handoff.click();
+      setTimeout(()=>{
+        statusEl.textContent="⚠️ 無法儲存裁切範圍，請重新整理後再試";
+      },1000);
     }catch(_){
       statusEl.textContent="⚠️ 無法儲存裁切範圍，請重新整理後再試";
     }''',
