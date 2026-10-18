@@ -5132,6 +5132,26 @@ def _v12_clear_sticker_action_prompts():
         st.session_state[f"v12_sticker_action_prompt_widget_{i}"] = ""
 
 
+def _v12_clear_sticker_slot(i):
+    """Clear one text slot and every setting that belongs exclusively to it."""
+    if not 0 <= i < 8:
+        return
+
+    st.session_state[f"sticker_text_{i}"] = ""
+    st.session_state[f"v12_sticker_text_widget_{i}"] = ""
+
+    _v12_write_sticker_action_draft_slot(i, enabled=False, prompt="")
+    st.session_state[f"v12_sticker_action_enabled_widget_{i}"] = False
+    st.session_state[f"v12_sticker_action_prompt_widget_{i}"] = ""
+
+    st.session_state[f"v12_text_color_enabled_{i}"] = False
+    st.session_state[f"v12_text_color_enabled_widget_{i}"] = False
+    st.session_state[f"v12_text_color_count_{i}"] = 0
+    st.session_state[f"v12_text_color_segments_{i}"] = _v12_default_color_segments()
+    for j in range(3):
+        st.session_state.pop(f"v12_text_color_segment_{i}_{j}", None)
+
+
 _v12_init_color_segment_state()
 _v12_init_sticker_action_state()
 
@@ -6747,12 +6767,22 @@ def _v12_render_text_slot(i):
         _action_enabled_widget_key,
         bool(_action_draft_item["enabled"]),
     )
-    _action_enabled = st.checkbox(
-        t("action_enable"),
-        key=_action_enabled_widget_key,
-        on_change=_v12_sync_sticker_action_enabled,
-        args=(i,),
-    )
+    _action_toggle, _action_clear = st.columns([4, 1])
+    with _action_toggle:
+        _action_enabled = st.checkbox(
+            t("action_enable"),
+            key=_action_enabled_widget_key,
+            on_change=_v12_sync_sticker_action_enabled,
+            args=(i,),
+        )
+    with _action_clear:
+        st.button(
+            t("slot_clear", number=i + 1),
+            key=f"v12_clear_sticker_slot_{i}",
+            use_container_width=True,
+            on_click=_v12_clear_sticker_slot,
+            args=(i,),
+        )
     _v12_write_sticker_action_draft_slot(i, enabled=_action_enabled)
     if _action_enabled:
         _action_prompt_widget_key = f"v12_sticker_action_prompt_widget_{i}"
@@ -6760,13 +6790,14 @@ def _v12_render_text_slot(i):
             _action_prompt_widget_key,
             str(_action_draft_item["prompt"] or ""),
         )
-        st.text_input(
+        st.text_area(
             t("action_prompt"),
             key=_action_prompt_widget_key,
             on_change=_v12_sync_sticker_action_prompt,
             args=(i,),
             placeholder=t("action_placeholder"),
             max_chars=500,
+            height=68,
         )
         _v12_write_sticker_action_draft_slot(
             i,
