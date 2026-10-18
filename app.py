@@ -142,6 +142,7 @@ def _v12_crop_canvas_translations():
             "🔴 固定外框　🔵 上下 6 條獨立垂直分隔線　🟠 水平分隔線　｜　🔒 鎖定後可進行裁切": "🔴 Fixed outer frame　🔵 6 independent vertical guides　🟠 Horizontal guide　｜　🔒 Lock, then crop",
             "↩️ 恢復分隔線位置": "↩️ Reset guides",
             "🔒 鎖定定位": "🔒 Lock guides",
+            "✅ 套用裁切並加入暫存作品籃": "✅ Apply crops and add to workspace",
             "🖱️ 正在調整定位線……": "🖱️ Adjusting guides…",
             "✅ 定位線已更新": "✅ Guides updated",
             "↩️ 已恢復標準4×2定位": "↩️ Standard 4×2 guides restored",
@@ -150,6 +151,8 @@ def _v12_crop_canvas_translations():
             "🔒 定位已鎖定，正在儲存裁切範圍……": "🔒 Guides locked. Saving the crop areas…",
             "⚠️ 無法儲存裁切範圍，請重新整理後再試": "⚠️ The crop areas could not be saved. Please refresh and try again.",
             "🛠️ 定位已解鎖，可以繼續微調": "🛠️ Guides unlocked. You can keep fine-tuning.",
+            "🔒 定位已鎖定，請套用裁切範圍後加入作品籃": "🔒 Guides locked. Apply the crop areas to add them to the workspace.",
+            "🔒 正在套用裁切範圍並加入作品籃……": "🔒 Applying crop areas and adding them to the workspace…",
             "✅ 定位線已建立：上 3 條＋下 3 條藍色垂直線可獨立拖曳": "✅ Guides ready: the 3 upper and 3 lower blue vertical lines can be dragged independently.",
         }
     if locale == "ja":
@@ -161,6 +164,7 @@ def _v12_crop_canvas_translations():
             "🔴 固定外框　🔵 上下 6 條獨立垂直分隔線　🟠 水平分隔線　｜　🔒 鎖定後可進行裁切": "🔴 固定外枠　🔵 6本の独立した垂直ガイド　🟠 水平ガイド　｜　🔒 ロック後に切り抜き可能",
             "↩️ 恢復分隔線位置": "↩️ ガイドをリセット",
             "🔒 鎖定定位": "🔒 ガイドをロック",
+            "✅ 套用裁切並加入暫存作品籃": "✅ 切り抜きを適用して作業かごに追加",
             "🖱️ 正在調整定位線……": "🖱️ ガイドを調整中…",
             "✅ 定位線已更新": "✅ ガイドを更新しました",
             "↩️ 已恢復標準4×2定位": "↩️ 標準4×2ガイドに戻しました",
@@ -169,6 +173,8 @@ def _v12_crop_canvas_translations():
             "🔒 定位已鎖定，正在儲存裁切範圍……": "🔒 ガイドをロックしました。切り抜き範囲を保存中…",
             "⚠️ 無法儲存裁切範圍，請重新整理後再試": "⚠️ 切り抜き範囲を保存できませんでした。更新してもう一度お試しください。",
             "🛠️ 定位已解鎖，可以繼續微調": "🛠️ ガイドのロックを解除しました。引き続き微調整できます。",
+            "🔒 定位已鎖定，請套用裁切範圍後加入作品籃": "🔒 ガイドをロックしました。切り抜きを適用して作業かごに追加してください。",
+            "🔒 正在套用裁切範圍並加入作品籃……": "🔒 切り抜きを適用して作業かごに追加中…",
             "✅ 定位線已建立：上 3 條＋下 3 條藍色垂直線可獨立拖曳": "✅ ガイドを作成しました。上3本と下3本の青い垂直線は個別にドラッグできます。",
         }
     return {}
@@ -7937,13 +7943,16 @@ if st.session_state.generated_4x2_bytes:
         '',
     ).replace(
         'const lockBtn=document.getElementById("lockBtn"),downloadBtn=document.getElementById("downloadBtn");',
-        'const lockBtn=document.getElementById("lockBtn");',
+        'const lockBtn=document.getElementById("lockBtn"),applyBtn=document.getElementById("applyBtn");',
     ).replace(
         '  downloadBtn.disabled=true;\n',
-        '',
+        '  applyBtn.disabled=true;\n',
     ).replace(
         '    downloadBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，可以開始裁切";',
-        '    statusEl.textContent="🔒 定位已鎖定，可以加入下方暫存作品籃";',
+        '    applyBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，請套用裁切範圍後加入作品籃";',
+    ).replace(
+        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>',
+        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>\n<button id="applyBtn" class="primary" onclick="applyCrop()" disabled>✅ 套用裁切並加入暫存作品籃</button>',
     )
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
         'let g=guidesDefault();',
@@ -7963,12 +7972,17 @@ function guidesFromBoxes(raw){
 let g=guidesFromBoxes(INITIAL_BOXES);''',
     )
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
-        '    statusEl.textContent="🔒 定位已鎖定，可以加入下方暫存作品籃";',
-        '''    statusEl.textContent="🔒 定位已鎖定，正在儲存裁切範圍……";
-    window.parent.postMessage({
-      type:"v12-crop-save",
-      value:JSON.stringify({gridHash:"__GRID_HASH__",boxes:boxes()})
-    },"*");''',
+        'function saveBlob(blob,name){',
+        '''function applyCrop(){
+  if(!locked)return;
+  statusEl.textContent="🔒 正在套用裁切範圍並加入作品籃……";
+  window.parent.postMessage({
+    type:"v12-crop-save",
+    value:JSON.stringify({action:"add_to_basket",gridHash:"__GRID_HASH__",boxes:boxes()})
+  },"*");
+}
+
+function saveBlob(blob,name){''',
     )
     for _crop_source, _crop_translation in _v12_crop_canvas_translations().items():
         _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(_crop_source, _crop_translation)
@@ -7994,6 +8008,7 @@ let g=guidesFromBoxes(INITIAL_BOXES);''',
             )
             _crop_saved_hash = str(_crop_saved_payload.get("gridHash", "") or "")
             _crop_saved_boxes = _crop_saved_payload.get("boxes")
+            _crop_saved_action = str(_crop_saved_payload.get("action", "") or "")
             _current_grid_hash = hashlib.sha256(
                 st.session_state.generated_4x2_bytes
             ).hexdigest()
@@ -8002,21 +8017,39 @@ let g=guidesFromBoxes(INITIAL_BOXES);''',
                 ensure_ascii=False,
                 separators=(",", ":"),
             )
-            if (
-                secrets.compare_digest(_crop_saved_hash, _current_grid_hash)
-                and _crop_saved_token != st.session_state.get("v12_crop_last_saved_token")
-            ):
-                st.session_state.crop_boxes = _v12_valid_crop_boxes(
+            if secrets.compare_digest(_crop_saved_hash, _current_grid_hash):
+                _applied_crop_boxes = _v12_valid_crop_boxes(
                     _crop_saved_boxes, w, h
                 )
-                st.session_state["v12_crop_last_saved_token"] = _crop_saved_token
-                st.session_state["v12_crop_guides_saved"] = True
-                st.rerun()
+                _needs_rerun = False
+                if _crop_saved_token != st.session_state.get("v12_crop_last_saved_token"):
+                    st.session_state.crop_boxes = _applied_crop_boxes
+                    st.session_state["v12_crop_last_saved_token"] = _crop_saved_token
+                    st.session_state["v12_crop_guides_saved"] = True
+                    _needs_rerun = True
+                if _crop_saved_action == "add_to_basket":
+                    _added, _message = _v12_add_current_grid_to_sticker_basket(
+                        st.session_state.get("generated_4x2_bytes"),
+                        _applied_crop_boxes,
+                    )
+                    st.session_state["v12_crop_basket_feedback"] = {
+                        "added": _added,
+                        "message": _message,
+                    }
+                    _needs_rerun = True
+                if _needs_rerun:
+                    st.rerun()
         except (TypeError, ValueError, json.JSONDecodeError):
             pass
 
     st.divider()
     v10_section(t("basket_section"), "#9b59b6")
+    _crop_basket_feedback = st.session_state.pop("v12_crop_basket_feedback", None)
+    if isinstance(_crop_basket_feedback, dict):
+        if _crop_basket_feedback.get("added"):
+            st.success(str(_crop_basket_feedback.get("message") or ""))
+        else:
+            st.info(str(_crop_basket_feedback.get("message") or ""))
     st.markdown(
         '<div style="font-size:22px;line-height:1.55;font-weight:700;'
         'text-align:center;color:#fff;margin:10px 0 16px;">'
