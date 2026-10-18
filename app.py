@@ -147,6 +147,8 @@ def _v12_crop_canvas_translations():
             "↩️ 已恢復標準4×2定位": "↩️ Standard 4×2 guides restored",
             "🔓 解鎖定位": "🔓 Unlock guides",
             "🔒 定位已鎖定，可以加入下方暫存作品籃": "🔒 Guides locked. You can add this batch to the workspace below.",
+            "🔒 定位已鎖定，正在儲存裁切範圍……": "🔒 Guides locked. Saving the crop areas…",
+            "⚠️ 無法儲存裁切範圍，請重新整理後再試": "⚠️ The crop areas could not be saved. Please refresh and try again.",
             "🛠️ 定位已解鎖，可以繼續微調": "🛠️ Guides unlocked. You can keep fine-tuning.",
             "✅ 定位線已建立：上 3 條＋下 3 條藍色垂直線可獨立拖曳": "✅ Guides ready: the 3 upper and 3 lower blue vertical lines can be dragged independently.",
         }
@@ -164,6 +166,8 @@ def _v12_crop_canvas_translations():
             "↩️ 已恢復標準4×2定位": "↩️ 標準4×2ガイドに戻しました",
             "🔓 解鎖定位": "🔓 ガイドをロック解除",
             "🔒 定位已鎖定，可以加入下方暫存作品籃": "🔒 ガイドをロックしました。下の作業かごにこのバッチを追加できます。",
+            "🔒 定位已鎖定，正在儲存裁切範圍……": "🔒 ガイドをロックしました。切り抜き範囲を保存中…",
+            "⚠️ 無法儲存裁切範圍，請重新整理後再試": "⚠️ 切り抜き範囲を保存できませんでした。更新してもう一度お試しください。",
             "🛠️ 定位已解鎖，可以繼續微調": "🛠️ ガイドのロックを解除しました。引き続き微調整できます。",
             "✅ 定位線已建立：上 3 條＋下 3 條藍色垂直線可獨立拖曳": "✅ ガイドを作成しました。上3本と下3本の青い垂直線は個別にドラッグできます。",
         }
@@ -4104,15 +4108,40 @@ def _v12_png_bytes(image):
     return buf.getvalue()
 
 
-def _v12_crop_grid_cell(sheet, idx):
-    """Create one LINE-size sticker from a standard 4×2 source grid."""
+def _v12_valid_crop_boxes(crop_boxes, width, height):
+    """Return eight safe image-coordinate crop boxes, or the standard grid.
+
+    The browser guide editor works in original-image pixels.  Keeping one
+    validator here means the basket, downloads, and cloud project all apply
+    exactly the same saved guide positions.
+    """
+    fallback = base_boxes(width, height)
+    if not isinstance(crop_boxes, (list, tuple)) or len(crop_boxes) != 8:
+        return fallback
+
+    normalized = []
+    for default, raw in zip(fallback, crop_boxes):
+        if not isinstance(raw, (list, tuple)) or len(raw) != 4:
+            return fallback
+        try:
+            x1, y1, x2, y2 = (int(round(float(value))) for value in raw)
+        except (TypeError, ValueError):
+            return fallback
+        x1 = max(0, min(width - 2, x1))
+        y1 = max(0, min(height - 2, y1))
+        x2 = max(x1 + 2, min(width, x2))
+        y2 = max(y1 + 2, min(height, y2))
+        if x2 <= x1 or y2 <= y1:
+            return fallback
+        normalized.append([x1, y1, x2, y2])
+    return normalized
+
+
+def _v12_crop_grid_cell(sheet, idx, crop_boxes=None):
+    """Create one LINE-size sticker from the saved crop guides."""
     sw, sh = sheet.size
-    col = int(idx) % 4
-    row = int(idx) // 4
-    x1 = round(col * sw / 4)
-    x2 = round((col + 1) * sw / 4)
-    y1 = round(row * sh / 2)
-    y2 = round((row + 1) * sh / 2)
+    boxes = _v12_valid_crop_boxes(crop_boxes, sw, sh)
+    x1, y1, x2, y2 = boxes[int(idx)]
     crop = sheet.crop((x1, y1, x2, y2)).convert("RGBA")
     out = Image.new("RGBA", (370, 320), (255, 255, 255, 0))
     resampling = getattr(Image, "Resampling", Image)
@@ -4195,17 +4224,20 @@ def _v12_get_sticker_basket():
     return normalized
 
 
-def _v12_add_current_grid_to_sticker_basket(grid_bytes):
+def _v12_add_current_grid_to_sticker_basket(grid_bytes, crop_boxes=None):
     """Crop the current 4×2 result once and add all eight images to the session basket."""
     payload = bytes(grid_bytes or b"")
     if not payload:
         raise ValueError("尚未取得可裁切的原始總圖。")
-    source_hash = hashlib.sha256(payload).hexdigest()
+    sheet = Image.open(BytesIO(payload)).convert("RGBA")
+    saved_boxes = _v12_valid_crop_boxes(crop_boxes, *sheet.size)
+    source_hash = hashlib.sha256(
+        payload + json.dumps(saved_boxes, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
     basket = _v12_get_sticker_basket()
     if any(item.get("source_grid_hash") == source_hash for item in basket):
-        return False, "這批原始總圖已加入暫存作品籃。"
+        return False, "這組原始圖與目前裁切範圍已加入暫存作品籃。"
 
-    sheet = Image.open(BytesIO(payload)).convert("RGBA")
     batch_number = int(st.session_state.get("v12_sticker_basket_batch_number", 0)) + 1
     batch_label = f"批次 {batch_number:02d}"
     additions = []
@@ -4213,7 +4245,9 @@ def _v12_add_current_grid_to_sticker_basket(grid_bytes):
         item_id = str(uuid4())
         additions.append({
             "id": item_id,
-            "image_bytes": _v12_png_bytes(_v12_crop_grid_cell(sheet, index)),
+            "image_bytes": _v12_png_bytes(
+                _v12_crop_grid_cell(sheet, index, saved_boxes)
+            ),
             "batch_label": batch_label,
             "source_slot": index + 1,
             "source_grid_hash": source_hash,
@@ -7580,6 +7614,7 @@ st.session_state.setdefault("v11_generation_in_progress", False)
 _generation_pending = bool(st.session_state.get("v11_generation_pending", False))
 _generation_in_progress = bool(st.session_state.get("v11_generation_in_progress", False))
 _generation_locked = _generation_pending or _generation_in_progress
+_generation_feedback = st.session_state.pop("v11_generation_release_feedback", None)
 
 # ------------------------------------------------------------
 # 第一階段：使用者按下按鈕
@@ -7649,6 +7684,12 @@ if st.button(
     st.session_state["v11_generation_started_at"] = __import__("time").time()
     st.rerun()
 
+if isinstance(_generation_feedback, dict):
+    if _generation_feedback.get("success"):
+        st.success("🎉 生成完成，現在可以再次生成，或前往下方確認成果。")
+    else:
+        st.error("❌ 這次生成未完成，現在可以立即重新嘗試。")
+
 # ------------------------------------------------------------
 # 第二階段：只有 pending lock 存在時才進入真正生成。
 # 此時上面的 st.button 已經先以 disabled=True 呈現。
@@ -7665,6 +7706,7 @@ if st.session_state.get("v11_generation_pending", False):
     _beta_job_id = str(st.session_state.get("beta_generation_job_id", "") or "")
     _beta_generation_returned = False
     _beta_live_session = None
+    _generation_succeeded = False
 
     try:
         _beta_live_session = _beta_current_user()
@@ -7785,6 +7827,7 @@ if st.session_state.get("v11_generation_pending", False):
             img.save(out, "PNG")
             st.session_state.generated_4x2_bytes = out.getvalue()
             st.session_state.crop_boxes = None
+            _generation_succeeded = True
             if _sticker_mode == "expression":
                 _v12_commit_random_expression_recipes()
             if _using_beta_credit:
@@ -7824,6 +7867,14 @@ if st.session_state.get("v11_generation_pending", False):
             "v12_expression_generation_new_cycle_start",
         ):
             st.session_state.pop(_expression_job_key, None)
+        st.session_state["v11_generation_release_feedback"] = {
+            "success": _generation_succeeded,
+        }
+        # Streamlit rendered the disabled state before the long-running call.
+        # Immediately redraw after the terminal result so the next generation
+        # button becomes available in seconds instead of waiting for a manual
+        # page interaction.
+        st.rerun()
 
 # ------------------------------------------------------------
 # STEP 10C native component
@@ -7843,23 +7894,39 @@ if st.session_state.generated_4x2_bytes:
     st.divider()
     v10_section(t("section_results"), "#32c6c0")
     st.caption(t("results_intro"))
-    st.divider()
-    v10_section(t("section_crop"), "#e74c3c")
 
     src = Image.open(BytesIO(st.session_state.generated_4x2_bytes)).convert("RGBA")
     w, h = src.size
 
+    _crop_boxes_from_url = str(st.query_params.get("crop_boxes", "") or "")
+    _crop_grid_from_url = str(st.query_params.get("crop_grid", "") or "")
+    if _crop_boxes_from_url:
+        # The Canvas runs inside an isolated browser frame.  On lock it returns
+        # only the numeric guide coordinates; validate them against this exact
+        # generated grid before using them for every later crop/export.
+        try:
+            _decoded_crop_boxes = json.loads(
+                base64.b64decode(_crop_boxes_from_url.encode("ascii")).decode("utf-8")
+            )
+            _current_grid_hash = hashlib.sha256(
+                st.session_state.generated_4x2_bytes
+            ).hexdigest()
+            if secrets.compare_digest(_crop_grid_from_url, _current_grid_hash):
+                st.session_state.crop_boxes = _v12_valid_crop_boxes(
+                    _decoded_crop_boxes, w, h
+                )
+                st.session_state["v12_crop_guides_saved"] = True
+        except Exception:
+            pass
+        st.query_params.clear()
+        st.rerun()
+
     if st.session_state.crop_boxes is None:
         st.session_state.crop_boxes = base_boxes(w, h)
 
-    st.info(t("crop_drag_help"))
-
-    # --------------------------------------------------------
-    # 明確顯示原始 4×2 圖
-    # 不依賴 Canvas 是否成功載入圖片。
-    # 固定預覽寬度，避免隨網頁容器無限放大。
-    # --------------------------------------------------------
-    v10_subsection(t("crop_original"), "#e74c3c")
+    # STEP 07 owns the source result preview; STEP 08 is now only for the
+    # interactive crop guides and final outputs.
+    v10_subsection(t("crop_original"), "#32c6c0")
     _orig_left, _orig_center, _orig_right = st.columns([1, 5, 1])
     with _orig_center:
         st.image(
@@ -7867,6 +7934,12 @@ if st.session_state.generated_4x2_bytes:
             caption=t("crop_original_caption", width=w, height=h),
             use_container_width=True,
         )
+
+    st.divider()
+    v10_section(t("section_crop"), "#e74c3c")
+    st.info(t("crop_drag_help"))
+    if st.session_state.pop("v12_crop_guides_saved", False):
+        st.success("✂️ 裁切範圍已儲存；加入作品籃與後續下載都會使用這次調整。")
 
     st.caption(t("crop_canvas_caption"))
     if st.session_state.get("v12_grid_breathing_room_applied", False):
@@ -7887,11 +7960,45 @@ if st.session_state.generated_4x2_bytes:
         '    downloadBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，可以開始裁切";',
         '    statusEl.textContent="🔒 定位已鎖定，可以加入下方暫存作品籃";',
     )
+    _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
+        'let g=guidesDefault();',
+        '''const INITIAL_BOXES=__BOXES__;
+function guidesFromBoxes(raw){
+  if(!Array.isArray(raw)||raw.length!==8)return guidesDefault();
+  try{
+    const n=raw.map(box=>box.map(Number));
+    if(n.some(box=>box.length!==4||box.some(v=>!Number.isFinite(v))))return guidesDefault();
+    return {
+      xTop:[n[0][2],n[1][2],n[2][2]],
+      xBottom:[n[4][2],n[5][2],n[6][2]],
+      y:[n[0][1],n[0][3],n[4][3]]
+    };
+  }catch(_){return guidesDefault();}
+}
+let g=guidesFromBoxes(INITIAL_BOXES);''',
+    )
+    _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
+        '    statusEl.textContent="🔒 定位已鎖定，可以加入下方暫存作品籃";',
+        '''    statusEl.textContent="🔒 定位已鎖定，正在儲存裁切範圍……";
+    try{
+      const url=new URL(window.top.location.href);
+      url.searchParams.set("crop_boxes",btoa(JSON.stringify(boxes())));
+      url.searchParams.set("crop_grid","__GRID_HASH__");
+      url.hash="v12-step-08";
+      window.top.location.assign(url.toString());
+    }catch(_){
+      statusEl.textContent="⚠️ 無法儲存裁切範圍，請重新整理後再試";
+    }''',
+    )
     for _crop_source, _crop_translation in _v12_crop_canvas_translations().items():
         _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(_crop_source, _crop_translation)
     _image_b64 = base64.b64encode(st.session_state.generated_4x2_bytes).decode("ascii")
     _boxes_json = __import__("json").dumps(st.session_state.crop_boxes, ensure_ascii=False)
     _crop_html = _CROP_HTML_TEMPLATE.replace("__IMAGE_B64__", _image_b64).replace("__IW__", str(int(w))).replace("__IH__", str(int(h))).replace("__BOXES__", _boxes_json).replace("__TRANSPARENT__", "true" if transparent else "false")
+    _crop_html = _crop_html.replace(
+        "__GRID_HASH__",
+        hashlib.sha256(st.session_state.generated_4x2_bytes).hexdigest(),
+    )
     import streamlit.components.v1 as components
     components.html(
         _crop_html,
@@ -7916,7 +8023,8 @@ if st.session_state.generated_4x2_bytes:
     ):
         try:
             added, message = _v12_add_current_grid_to_sticker_basket(
-                st.session_state.get("generated_4x2_bytes")
+                st.session_state.get("generated_4x2_bytes"),
+                st.session_state.get("crop_boxes"),
             )
             if added:
                 st.success(message)
