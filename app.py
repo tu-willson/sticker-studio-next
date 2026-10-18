@@ -7244,13 +7244,23 @@ if "v10_font_gallery_open" not in st.session_state:
 if "v12_font_gallery_page" not in st.session_state:
     st.session_state.v12_font_gallery_page = 1
 
-if _sticker_mode == "text" and st.button(
-    t("font_open_gallery") if not st.session_state.v10_font_gallery_open
-    else t("font_close_gallery"),
-    key="v10_font_gallery_toggle",
-    use_container_width=True,
-):
-    st.session_state.v10_font_gallery_open = not st.session_state.v10_font_gallery_open
+if _sticker_mode == "text":
+    _font_gallery_button, _font_gallery_source = st.columns([3, 2])
+    with _font_gallery_button:
+        if st.button(
+            t("font_open_gallery") if not st.session_state.v10_font_gallery_open
+            else t("font_close_gallery"),
+            key="v10_font_gallery_toggle",
+            use_container_width=True,
+        ):
+            st.session_state.v10_font_gallery_open = not st.session_state.v10_font_gallery_open
+    with _font_gallery_source:
+        st.markdown(
+            '<div style="padding-top:.55rem;font-size:.78rem;opacity:.72;white-space:nowrap;">'
+            '來源出處：<a href="https://www.threads.com/@cz88422" target="_blank" '
+            'rel="noopener noreferrer"><strong>cz88422</strong></a></div>',
+            unsafe_allow_html=True,
+        )
     st.rerun()
 
 if _sticker_mode == "text" and st.session_state.v10_font_gallery_open:
