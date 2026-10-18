@@ -8027,7 +8027,19 @@ function saveBlob(blob,name){''',
                     st.session_state["v12_crop_last_saved_token"] = _crop_saved_token
                     st.session_state["v12_crop_guides_saved"] = True
                     _needs_rerun = True
-                if _crop_saved_action == "add_to_basket":
+                _crop_action_token = f"{_crop_saved_action}:{_crop_saved_token}"
+                if (
+                    _crop_saved_action == "add_to_basket"
+                    and _crop_action_token
+                    != st.session_state.get("v12_crop_last_handled_action_token")
+                ):
+                    # Custom component values persist across Streamlit reruns.
+                    # Consume each browser action exactly once so the rerun
+                    # needed to show the basket cannot trigger an infinite
+                    # add/rerun loop.
+                    st.session_state[
+                        "v12_crop_last_handled_action_token"
+                    ] = _crop_action_token
                     _added, _message = _v12_add_current_grid_to_sticker_basket(
                         st.session_state.get("generated_4x2_bytes"),
                         _applied_crop_boxes,
