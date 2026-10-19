@@ -4173,11 +4173,11 @@ def _v12_prepare_generated_grid(raw, add_crop_room=False):
     image = Image.open(BytesIO(raw)).convert("RGBA")
     if not add_crop_room:
         return raw, False
-    image, applied = _v12_add_grid_breathing_room(image, shrink_ratio=0.88)
+    image, applied = _v12_add_grid_breathing_room(image, shrink_ratio=0.86)
     return (_v12_png_bytes(image) if applied else raw), applied
 
 
-def _v12_add_grid_breathing_room(sheet, shrink_ratio=0.88):
+def _v12_add_grid_breathing_room(sheet, shrink_ratio=0.86):
     """Shrink each transparent 4×2 cell independently to create crop room.
 
     Image models do not reliably obey relative spacing instructions.  When the
@@ -4194,7 +4194,7 @@ def _v12_add_grid_breathing_room(sheet, shrink_ratio=0.88):
     try:
         ratio = float(shrink_ratio)
     except (TypeError, ValueError):
-        ratio = 0.88
+        ratio = 0.86
     ratio = max(0.75, min(0.95, ratio))
     sw, sh = source.size
     result = Image.new("RGBA", source.size, (255, 255, 255, 0))
@@ -7877,7 +7877,7 @@ if st.session_state.get("v11_generation_pending", False):
                 raise
             raw = base64.b64decode(result.data[0].b64_json)
             _grid_bytes, _grid_crop_room_applied = _v12_prepare_generated_grid(
-                raw, add_crop_room=bool(transparent and _auto_crop_room)
+                raw, add_crop_room=bool(_auto_crop_room)
             )
             st.session_state["v12_grid_breathing_room_applied"] = bool(
                 _grid_crop_room_applied
