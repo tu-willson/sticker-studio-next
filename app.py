@@ -8114,11 +8114,8 @@ if st.session_state.generated_4x2_bytes:
         'button.lock{background:#333;color:#fff}',
         'button.lock{background:#333;color:#fff}\\nbutton.curve{background:#6c4ad1;color:#fff}',
     ).replace(
-        '3 條上半部＋3 條下半部垂直定位線＋1 條水平定位線。\\n上下 6 條藍色垂直線可各自獨立拖曳；按「🔒 鎖定定位」後產生 01～08 裁切框。',
+        '3 條上半部＋3 條下半部垂直定位線＋1 條水平定位線。\n上下 6 條藍色垂直線可各自獨立拖曳；按「🔒 鎖定定位」後產生 01～08 裁切框。',
         '先用直線決定大方向；需要繞開人物、手勢或道具時，開啟「進階曲線裁切」並拖曳紫色控制點。曲線邊界由相鄰兩張貼圖共用，鎖定後會直接套用到輸出的 PNG。',
-    ).replace(
-        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>',
-        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>\\n<button id="curveBtn" class="curve" onclick="toggleCurve()">〰️ 開啟進階曲線裁切</button>',
     )
 
     # 本版不在 Canvas 直接下載；裁切結果會先加入下方暫存作品籃，再一次打包。
@@ -8136,7 +8133,7 @@ if st.session_state.generated_4x2_bytes:
         '    applyBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，請套用裁切範圍後加入作品籃";',
     ).replace(
         '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>',
-        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>\n<button id="applyBtn" class="primary" onclick="applyCrop()" disabled>✅ 套用裁切並加入暫存作品籃</button>',
+        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>\n<button id="curveBtn" class="curve" onclick="toggleCurve()">〰️ 開啟進階曲線裁切</button>\n<button id="applyBtn" class="primary" onclick="applyCrop()" disabled>✅ 套用裁切並加入暫存作品籃</button>',
     )
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
         'let g=guidesDefault();',
