@@ -31,6 +31,40 @@ def t(key, **kwargs):
     return tr(_v12_ui_locale(), key, **kwargs)
 
 
+_V12_SPACING_TEXT_FALLBACKS = {
+    "zh-TW": {
+        "grid_spacing_experiment": "啟用人物縮小／安全邊距實驗（僅透明 PNG）",
+        "grid_spacing_experiment_help": "只影響下一次生成。可分別選擇人物縮小比例與每格安全邊距；生成後也會依同一縮小比例把 8 格置中，方便比較間距效果。",
+        "grid_shrink_percent": "人物縮小比例",
+        "grid_margin_percent": "每格四周至少保留",
+        "grid_percent_option": "{percent}%",
+    },
+    "en": {
+        "grid_spacing_experiment": "Test character scaling and safe margins (transparent PNG only)",
+        "grid_spacing_experiment_help": "Applies only to the next generation. Choose a character scaling amount and cell safe margin; the generated grid is then centered with the same scale for easier spacing comparisons.",
+        "grid_shrink_percent": "Character scale-down",
+        "grid_margin_percent": "Minimum margin around each cell",
+        "grid_percent_option": "{percent}%",
+    },
+    "ja": {
+        "grid_spacing_experiment": "人物の縮小／安全余白テストを有効にする（透明PNGのみ）",
+        "grid_spacing_experiment_help": "次回の生成だけに適用されます。人物の縮小率と各セルの安全余白を選択でき、生成後も同じ縮小率で8枠を中央配置して間隔を比較できます。",
+        "grid_shrink_percent": "人物の縮小率",
+        "grid_margin_percent": "各セルの最低余白",
+        "grid_percent_option": "{percent}%",
+    },
+}
+
+
+def _v12_spacing_t(key, **kwargs):
+    """Translate spacing-test UI, with a local fallback during Streamlit module reloads."""
+    translated = t(key, **kwargs)
+    if translated != key:
+        return translated
+    fallback = _V12_SPACING_TEXT_FALLBACKS[_v12_ui_locale()][key]
+    return fallback.format(**kwargs)
+
+
 def _v12_localized_option(value, translations):
     """Display a localized label while retaining the stable internal option value."""
     return translations.get(str(value), {}).get(_v12_ui_locale(), str(value))
@@ -7410,11 +7444,11 @@ with st.container(key="transparent_png_option"):
     transparent = st.checkbox(t("transparent_png"), value=False)
 
 _spacing_experiment_enabled = st.checkbox(
-    t("grid_spacing_experiment"),
+    _v12_spacing_t("grid_spacing_experiment"),
     value=False,
     key="v12_grid_spacing_experiment_enabled",
     disabled=not transparent,
-    help=t("grid_spacing_experiment_help"),
+    help=_v12_spacing_t("grid_spacing_experiment_help"),
 )
 _spacing_shrink_percent = 15
 _spacing_margin_percent = 12
@@ -7422,19 +7456,19 @@ if _spacing_experiment_enabled and transparent:
     _spacing_shrink_col, _spacing_margin_col = st.columns(2)
     with _spacing_shrink_col:
         _spacing_shrink_percent = st.radio(
-            t("grid_shrink_percent"),
+            _v12_spacing_t("grid_shrink_percent"),
             [15, 25, 35],
             horizontal=True,
             key="v12_grid_spacing_shrink_percent",
-            format_func=lambda value: t("grid_percent_option", percent=value),
+            format_func=lambda value: _v12_spacing_t("grid_percent_option", percent=value),
         )
     with _spacing_margin_col:
         _spacing_margin_percent = st.radio(
-            t("grid_margin_percent"),
+            _v12_spacing_t("grid_margin_percent"),
             [12, 20, 25],
             horizontal=True,
             key="v12_grid_spacing_margin_percent",
-            format_func=lambda value: t("grid_percent_option", percent=value),
+            format_func=lambda value: _v12_spacing_t("grid_percent_option", percent=value),
         )
 _spacing_experiment_active = bool(transparent and _spacing_experiment_enabled)
 
