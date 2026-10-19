@@ -7992,11 +7992,12 @@ if st.session_state.generated_4x2_bytes:
             "button.primary{background:#222;color:#fff}\n"
             "button.lock{background:#333;color:#fff}\n"
             "button:disabled{opacity:.45;cursor:not-allowed}",
-            ".actions{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0;align-items:stretch}\n"
-            ".actions button{flex:1 1 210px;min-height:58px;border:0;border-radius:10px;padding:14px 20px;cursor:pointer;font-size:20px;font-weight:800;line-height:1.25}\n"
+            ".actions{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;align-items:stretch}\n"
+            ".actions button{flex:1 1 190px;min-height:46px;border:0;border-radius:9px;padding:10px 16px;cursor:pointer;font-size:17px;font-weight:800;line-height:1.25}\n"
             "button.primary{background:#222;color:#fff}\n"
-            "button.lock{background:#333;color:#fff}\n"
-            "#applyBtn{flex:2 1 430px;min-height:70px;background:#ff4f67;color:#fff;font-size:22px;box-shadow:0 6px 16px rgba(255,79,103,.34)}\n"
+            "button.lock{background:#2f8edc;color:#fff}\n"
+            "button.lock:not(:disabled):hover{background:#2479bd}\n"
+            "#applyBtn{flex:1.35 1 300px;min-height:52px;background:#ff4f67;color:#fff;font-size:18px;box-shadow:0 4px 12px rgba(255,79,103,.28)}\n"
             "#applyBtn:not(:disabled):hover{background:#e53e57}\n"
             "button:disabled{opacity:.45;cursor:not-allowed}",
         ).replace(
