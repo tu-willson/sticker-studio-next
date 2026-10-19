@@ -8138,21 +8138,6 @@ function saveBlob(blob,name){''',
         '</div>',
         unsafe_allow_html=True,
     )
-    st.info(
-        "✂️ 下方按鈕會直接讀取上方畫布目前鎖定的定位，"
-        "與畫布內的「✅ 套用裁切並加入暫存作品籃」完全使用相同流程。"
-    )
-    if st.button(
-        "✅ 套用目前裁切並加入暫存作品籃",
-        type="primary",
-        use_container_width=True,
-        key="v12_add_current_grid_to_basket",
-    ):
-        # The live guide positions exist only inside the browser canvas.  Ask
-        # that canvas to execute its own apply action instead of falling back
-        # to an older server-side crop_boxes value.
-        st.session_state["v12_crop_apply_request_token"] = secrets.token_urlsafe(16)
-        st.rerun()
     st.caption(t("basket_session_only"))
     _v12_render_sticker_basket_workspace()
     _basket_library_col = st.columns([1, 2, 1])[1]
