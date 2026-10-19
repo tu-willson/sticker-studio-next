@@ -4185,12 +4185,30 @@ def _v12_valid_crop_boxes(crop_boxes, width, height):
     return normalized
 
 
-def _v12_crop_grid_cell(sheet, idx, crop_boxes=None):
-    """Create one LINE-size sticker from the saved straight crop guides."""
+def _v12_crop_grid_cell(sheet, idx, crop_boxes=None, zoom_ratio=1.0):
+    """Create one LINE-size sticker from the saved straight crop guides.
+
+    ``zoom_ratio`` crops inward around the saved crop's centre before fitting
+    the sticker canvas.  This enlarges the character without changing the
+    output dimensions or moving the user's guide positions.
+    """
     sw, sh = sheet.size
     boxes = _v12_valid_crop_boxes(crop_boxes, sw, sh)
     x1, y1, x2, y2 = boxes[int(idx)]
     crop = sheet.crop((x1, y1, x2, y2)).convert("RGBA")
+    try:
+        zoom = float(zoom_ratio)
+    except (TypeError, ValueError):
+        zoom = 1.0
+    zoom = max(1.0, min(1.30, zoom))
+    if zoom > 1.0:
+        zoom_width = max(2, min(crop.width, round(crop.width / zoom)))
+        zoom_height = max(2, min(crop.height, round(crop.height / zoom)))
+        zoom_left = max(0, (crop.width - zoom_width) // 2)
+        zoom_top = max(0, (crop.height - zoom_height) // 2)
+        crop = crop.crop(
+            (zoom_left, zoom_top, zoom_left + zoom_width, zoom_top + zoom_height)
+        )
     out = Image.new("RGBA", (370, 320), (255, 255, 255, 0))
     resampling = getattr(Image, "Resampling", Image)
     scale = min(370 / crop.width, 320 / crop.height)
@@ -4279,15 +4297,23 @@ def _v12_get_sticker_basket():
     return normalized
 
 
-def _v12_add_current_grid_to_sticker_basket(grid_bytes, crop_boxes=None):
+def _v12_add_current_grid_to_sticker_basket(
+    grid_bytes, crop_boxes=None, zoom_ratio=1.0
+):
     """Crop the current 4×2 result once and add all eight images to the session basket."""
     payload = bytes(grid_bytes or b"")
     if not payload:
         raise ValueError("尚未取得可裁切的原始總圖。")
     sheet = Image.open(BytesIO(payload)).convert("RGBA")
     saved_boxes = _v12_valid_crop_boxes(crop_boxes, *sheet.size)
+    try:
+        effective_zoom_ratio = max(1.0, min(1.30, float(zoom_ratio)))
+    except (TypeError, ValueError):
+        effective_zoom_ratio = 1.0
     source_hash = hashlib.sha256(
-        payload + json.dumps(saved_boxes, separators=(",", ":")).encode("utf-8")
+        payload
+        + json.dumps(saved_boxes, separators=(",", ":")).encode("utf-8")
+        + f"|crop-zoom:{effective_zoom_ratio:.3f}".encode("ascii")
     ).hexdigest()
     basket = _v12_get_sticker_basket()
     if any(item.get("source_grid_hash") == source_hash for item in basket):
@@ -4301,7 +4327,9 @@ def _v12_add_current_grid_to_sticker_basket(grid_bytes, crop_boxes=None):
         additions.append({
             "id": item_id,
             "image_bytes": _v12_png_bytes(
-                _v12_crop_grid_cell(sheet, index, saved_boxes)
+                _v12_crop_grid_cell(
+                    sheet, index, saved_boxes, zoom_ratio=effective_zoom_ratio
+                )
             ),
             "batch_label": batch_label,
             "source_slot": index + 1,
@@ -4958,6 +4986,7 @@ st.session_state.setdefault("v12_style_reference_custom_elements", "")
 st.session_state.setdefault("generated_4x2_bytes", None)
 st.session_state.setdefault("v12_grid_breathing_room_applied", False)
 st.session_state.setdefault("v12_grid_breathing_room_percent", 0)
+st.session_state.setdefault("v12_crop_basket_zoom_ratio", 1.0)
 st.session_state.setdefault("last_prompt", "")
 st.session_state.setdefault("crop_boxes", None)
 st.session_state.setdefault("v12_sticker_basket", [])
@@ -7959,6 +7988,19 @@ if st.session_state.get("v11_generation_pending", False):
             st.session_state["v12_grid_breathing_room_percent"] = (
                 _spacing_shrink_percent if _grid_crop_room_applied else 0
             )
+            # The 25% / 20% layout deliberately leaves enough transparent
+            # room to enlarge the saved sticker after its final user crop.
+            # Keep this with the generated grid, rather than the live controls,
+            # so changing options later cannot alter an already-created sheet.
+            st.session_state["v12_crop_basket_zoom_ratio"] = (
+                1.15
+                if (
+                    _grid_crop_room_applied
+                    and _spacing_shrink_percent == 25
+                    and _spacing_margin_percent == 20
+                )
+                else 1.0
+            )
             if _grid_crop_room_applied:
                 _status.info("✂️ 正在為每張貼圖保留裁切留白……")
             st.session_state.generated_4x2_bytes = _grid_bytes
@@ -8218,6 +8260,9 @@ function saveBlob(blob,name){''',
                     _added, _message = _v12_add_current_grid_to_sticker_basket(
                         st.session_state.get("generated_4x2_bytes"),
                         _applied_crop_boxes,
+                        zoom_ratio=st.session_state.get(
+                            "v12_crop_basket_zoom_ratio", 1.0
+                        ),
                     )
                     st.session_state["v12_crop_basket_feedback"] = {
                         "added": _added,
