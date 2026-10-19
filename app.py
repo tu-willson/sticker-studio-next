@@ -4168,12 +4168,12 @@ def _v12_crop_grid_cell(sheet, idx, crop_boxes=None):
     return out
 
 
-def _v12_prepare_generated_grid(raw, add_crop_room=False):
+def _v12_prepare_generated_grid(raw, add_crop_room=False, shrink_ratio=0.86):
     """Validate the API image and preserve its exact bytes unless opted in."""
     image = Image.open(BytesIO(raw)).convert("RGBA")
     if not add_crop_room:
         return raw, False
-    image, applied = _v12_add_grid_breathing_room(image, shrink_ratio=0.86)
+    image, applied = _v12_add_grid_breathing_room(image, shrink_ratio=shrink_ratio)
     return (_v12_png_bytes(image) if applied else raw), applied
 
 
@@ -4195,7 +4195,7 @@ def _v12_add_grid_breathing_room(sheet, shrink_ratio=0.86):
         ratio = float(shrink_ratio)
     except (TypeError, ValueError):
         ratio = 0.86
-    ratio = max(0.75, min(0.95, ratio))
+    ratio = max(0.60, min(0.95, ratio))
     sw, sh = source.size
     result = Image.new("RGBA", source.size, (255, 255, 255, 0))
     resampling = getattr(Image, "Resampling", Image)
@@ -4923,6 +4923,7 @@ st.session_state.setdefault("v12_style_reference_elements", [])
 st.session_state.setdefault("v12_style_reference_custom_elements", "")
 st.session_state.setdefault("generated_4x2_bytes", None)
 st.session_state.setdefault("v12_grid_breathing_room_applied", False)
+st.session_state.setdefault("v12_grid_breathing_room_percent", 0)
 st.session_state.setdefault("last_prompt", "")
 st.session_state.setdefault("crop_boxes", None)
 st.session_state.setdefault("v12_sticker_basket", [])
@@ -5764,7 +5765,21 @@ def _v12_render_ai_copy_assistant():
 
 def build_prompt(style, custom_style, selected_character, custom_character,
                  texts, transparent, color_segments=None, ai_copy_topic="", ai_copy_tone="", ai_copy_topics=None,
-                 sticker_mode="text", expression_specs=None, action_prompts=None):
+                 sticker_mode="text", expression_specs=None, action_prompts=None,
+                 shrink_percent=None, safety_margin_percent=None):
+    if shrink_percent is None:
+        _layout_shrink_instruction = "相較於一般滿版貼圖，請將每格的人物與特效整體自然縮小約 10～15%，置中安排，讓四周保留約一成可供裁切的自然空白。"
+    else:
+        _layout_shrink_instruction = (
+            f"本次為間距實驗：請將每格的人物與特效整體自然縮小約 {int(shrink_percent)}%，"
+            "置中安排，讓四周留下明顯且乾淨的裁切空間。"
+        )
+    if safety_margin_percent is None:
+        _safety_margin_instruction = "每格左右與上下都要保留至少約 12% 的乾淨透明／背景安全邊距，作為裁切走廊。"
+    else:
+        _safety_margin_instruction = (
+            f"每格左右與上下都要保留至少約 {int(safety_margin_percent)}% 的乾淨透明／背景安全邊距，作為裁切走廊。"
+        )
     p = [
         "請以我提供的人物照片作為主要人物參考。",
         "保留人物身份辨識特徵，不任意改變人物核心外觀。",
@@ -5773,11 +5788,11 @@ def build_prompt(style, custom_style, selected_character, custom_character,
         "八格人物維持同一人物身份與主要視覺風格。",
         "每一格都是獨立貼圖，請讓人物、手勢、文字、道具與特效適合各自裁切。",
         "人物與整體動作可維持誇張、自然、有張力；但任何拳頭、手勢、情緒特效都不得碰到或越過格子邊界。",
-        "相較於一般滿版貼圖，請將每格的人物與特效整體自然縮小約 10～15%，置中安排，讓四周保留約一成可供裁切的自然空白。",
+        _layout_shrink_instruction,
         "遇到大動作時，請優先整體縮小並保留完整姿勢，而不是把手腳、道具、陰影或裝飾延伸到隔壁格。",
         "相鄰貼圖之間必須保留一整條連續、乾淨的背景色或透明空間作為裁切走廊；不要畫格線、框線或分隔線。",
         "【排版硬性規則】將 8 格視為 8 張完全獨立、不可跨越的畫板。每一格的所有像素——人物、文字、道具、特效、光芒、陰影與裝飾——都必須完整留在該格內，絕對不得延伸、重疊或漏進左右／上下相鄰格。",
-        "每格左右與上下都要保留至少約 12% 的乾淨透明／背景安全邊距，作為裁切走廊。內容較多時必須整體縮小，不可把多出的部分放到隔壁格；尤其第二排第 05～08 格，不可將物件、角色或裝飾跨到鄰格。",
+        _safety_margin_instruction + "內容較多時必須整體縮小，不可把多出的部分放到隔壁格；尤其第二排第 05～08 格，不可將物件、角色或裝飾跨到鄰格。",
         "不要拉伸、變形或壓縮人物。",
         "非常重要：圖片中禁止出現01、02、03、04、05、06、07、08等編號。",
         "禁止加入格號、序號、位置標籤或數字標記。",
@@ -7394,13 +7409,34 @@ st.markdown(f'<div class="v11-transparent-title">{t("background_transparent")}</
 with st.container(key="transparent_png_option"):
     transparent = st.checkbox(t("transparent_png"), value=False)
 
-_auto_crop_room = st.checkbox(
-    t("auto_crop_room"),
+_spacing_experiment_enabled = st.checkbox(
+    t("grid_spacing_experiment"),
     value=False,
-    key="v12_auto_crop_room_enabled",
+    key="v12_grid_spacing_experiment_enabled",
     disabled=not transparent,
-    help=t("auto_crop_room_help"),
+    help=t("grid_spacing_experiment_help"),
 )
+_spacing_shrink_percent = 15
+_spacing_margin_percent = 12
+if _spacing_experiment_enabled and transparent:
+    _spacing_shrink_col, _spacing_margin_col = st.columns(2)
+    with _spacing_shrink_col:
+        _spacing_shrink_percent = st.radio(
+            t("grid_shrink_percent"),
+            [15, 25, 35],
+            horizontal=True,
+            key="v12_grid_spacing_shrink_percent",
+            format_func=lambda value: t("grid_percent_option", percent=value),
+        )
+    with _spacing_margin_col:
+        _spacing_margin_percent = st.radio(
+            t("grid_margin_percent"),
+            [12, 20, 25],
+            horizontal=True,
+            key="v12_grid_spacing_margin_percent",
+            format_func=lambda value: t("grid_percent_option", percent=value),
+        )
+_spacing_experiment_active = bool(transparent and _spacing_experiment_enabled)
 
 v10_subsection(t("settings_review"), "#ff9f43")
 style_mode = st.session_state.get("v10_style_mode", "↓ 請選擇風格")
@@ -7422,6 +7458,8 @@ prompt = build_prompt(
     sticker_mode=_sticker_mode,
     expression_specs=_prompt_expression_specs,
     action_prompts=_prompt_sticker_action_prompts,
+    shrink_percent=_spacing_shrink_percent if _spacing_experiment_active else None,
+    safety_margin_percent=_spacing_margin_percent if _spacing_experiment_active else None,
 )
 
 if _style_reference_active:
@@ -7877,10 +7915,15 @@ if st.session_state.get("v11_generation_pending", False):
                 raise
             raw = base64.b64decode(result.data[0].b64_json)
             _grid_bytes, _grid_crop_room_applied = _v12_prepare_generated_grid(
-                raw, add_crop_room=bool(_auto_crop_room)
+                raw,
+                add_crop_room=_spacing_experiment_active,
+                shrink_ratio=1 - (_spacing_shrink_percent / 100),
             )
             st.session_state["v12_grid_breathing_room_applied"] = bool(
                 _grid_crop_room_applied
+            )
+            st.session_state["v12_grid_breathing_room_percent"] = (
+                _spacing_shrink_percent if _grid_crop_room_applied else 0
             )
             if _grid_crop_room_applied:
                 _status.info("✂️ 正在為每張貼圖保留裁切留白……")
@@ -7982,7 +8025,12 @@ if st.session_state.generated_4x2_bytes:
 
     st.caption(t("crop_canvas_caption"))
     if st.session_state.get("v12_grid_breathing_room_applied", False):
-        st.caption(t("crop_breathing"))
+        st.caption(
+            t(
+                "crop_breathing",
+                percent=int(st.session_state.get("v12_grid_breathing_room_percent", 15) or 15),
+            )
+        )
 
     _CROP_HTML_TEMPLATE = '<!doctype html>\n<html><head><meta charset="utf-8">\n<style>\n*{box-sizing:border-box}\nbody{margin:0;font-family:Arial,"Microsoft JhengHei",sans-serif;color:#333}\n.help{font-size:14px;line-height:1.6;background:#f5f7fa;padding:10px;border-radius:8px}\n.viewer{position:relative;width:720px;max-width:100%;margin:10px auto 0;border:1px solid #bbb;border-radius:8px;overflow:hidden;background:#eee}\n#cv{display:block;width:720px;max-width:100%;height:auto;touch-action:none;user-select:none}\n.status{font-size:28px;line-height:1.45;font-weight:700;padding:12px 0;color:#fff;text-align:center}\n.actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}\nbutton{border:0;border-radius:8px;padding:9px 13px;cursor:pointer}\nbutton.primary{background:#222;color:#fff}\nbutton.lock{background:#333;color:#fff}\nbutton:disabled{opacity:.45;cursor:not-allowed}\n.coords{font:20px/1.6 Consolas,monospace;white-space:pre-wrap;background:#1b2028;color:#fff;padding:14px;border-radius:10px;text-align:center}\n.legend{font-size:26px;line-height:1.5;font-weight:700;padding:10px 0;color:#fff;text-align:center}\n</style></head><body>\n<div class="help">\n<b>📍 定位點裁切</b><br>\n3 條上半部＋3 條下半部垂直定位線＋1 條水平定位線。\n上下 6 條藍色垂直線可各自獨立拖曳；按「🔒 鎖定定位」後產生 01～08 裁切框。\n</div>\n<div class="viewer"><canvas id="cv"></canvas></div>\n<div class="status" id="status">正在建立定位線……</div>\n<div class="legend">🔴 固定外框\u3000🔵 上下 6 條獨立垂直分隔線\u3000🟠 水平分隔線\u3000｜\u3000🔒 鎖定後可進行裁切</div>\n<div class="actions">\n<button onclick="resetGuides()">↩️ 恢復分隔線位置</button>\n<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>\n<button id="downloadBtn" class="primary" onclick="downloadAll()" disabled>✂️ 裁切並依序下載01～08(手機下載)</button>\n</div>\n\n<script>\nconst B64="__IMAGE_B64__", IW=__IW__, IH=__IH__;\nconst cv=document.getElementById("cv"),ctx=cv.getContext("2d");\nconst statusEl=document.getElementById("status"),coordsEl=document.getElementById("coords");\nconst lockBtn=document.getElementById("lockBtn"),downloadBtn=document.getElementById("downloadBtn");\nconst colors=["#ff4040","#3987ff","#32ad61","#ff922e"];\nlet scale=1,locked=false,active=-1,startX=0,startY=0,snap=null;\n\nfunction clamp(v,a,b){return Math.max(a,Math.min(b,v))}\nfunction guidesDefault(){\n  return {\n    xTop:[IW/4,IW/2,3*IW/4],\n    xBottom:[IW/4,IW/2,3*IW/4],\n    y:[0,IH/2,IH]\n  };\n}\nlet g=guidesDefault();\n\nconst image=new Image();\nimage.src="data:image/png;base64,"+B64;\n\nfunction resize(){\n  const viewer=cv.parentElement;\n  const mw=Math.min(720,Math.max(320,viewer.clientWidth||720));\n  cv.width=Math.round(mw);\n  cv.height=Math.round(mw*IH/IW);\n  scale=cv.width/IW;\n  draw();\n}\n\nfunction boxes(){\n  const out=[];\n  const xt=[0,g.xTop[0],g.xTop[1],g.xTop[2],IW];\n  const xb=[0,g.xBottom[0],g.xBottom[1],g.xBottom[2],IW];\n  for(let c=0;c<4;c++) out.push([xt[c],g.y[0],xt[c+1],g.y[1]]);\n  for(let c=0;c<4;c++) out.push([xb[c],g.y[1],xb[c+1],g.y[2]]);\n  return out;\n}\n\nfunction draw(){\n  ctx.clearRect(0,0,cv.width,cv.height);\n  ctx.drawImage(image,0,0,cv.width,cv.height);\n\n  // Slight guide shading.\n  ctx.save();\n  ctx.fillStyle="rgba(255,255,255,.08)";\n  ctx.fillRect(0,0,cv.width,cv.height);\n  ctx.restore();\n\n  // 上下各 3 條：六條垂直線完全獨立。\n  for(let i=0;i<3;i++){\n    const xt=g.xTop[i]*scale;\n    const xb=g.xBottom[i]*scale;\n    ctx.save();\n    ctx.strokeStyle="#3987ff";\n    ctx.lineWidth=2.5;\n    ctx.setLineDash([10,7]);\n    ctx.beginPath();ctx.moveTo(xt,0);ctx.lineTo(xt,g.y[1]*scale);ctx.stroke();\n    ctx.beginPath();ctx.moveTo(xb,g.y[1]*scale);ctx.lineTo(xb,cv.height);ctx.stroke();\n    ctx.setLineDash([]);\n    ctx.fillStyle="#3987ff";\n    ctx.fillRect(xt-5,4,10,18);\n    ctx.fillRect(xb-5,g.y[1]*scale+4,10,18);\n    ctx.restore();\n  }\n\n  // 左右外框固定。\n  ctx.save();\n  ctx.strokeStyle="#ff4040";\n  ctx.lineWidth=2.5;\n  ctx.setLineDash([10,7]);\n  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,cv.height);ctx.stroke();\n  ctx.beginPath();ctx.moveTo(cv.width,0);ctx.lineTo(cv.width,cv.height);ctx.stroke();\n  ctx.setLineDash([]);\n  ctx.fillStyle="#ff4040";\n  ctx.fillRect(0,4,10,18);\n  ctx.fillRect(cv.width-10,4,10,18);\n  ctx.restore();  // Draw 3 horizontal guide lines.\n  for(let i=0;i<3;i++){\n    const y=g.y[i]*scale;\n    ctx.save();\n    ctx.strokeStyle="#ff922e";\n    ctx.lineWidth=i===1?2.5:2;\n    ctx.setLineDash([10,7]);\n    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cv.width,y);ctx.stroke();\n    ctx.setLineDash([]);\n    ctx.fillStyle="#ff922e";\n    ctx.fillRect(4,y-5,22,10);\n    ctx.restore();\n  }\n\n  // Number each derived cell; these are guide labels only.\n  const b=boxes();\n  const cellColors=["#ff4040","#3987ff","#32ad61","#a04bd0","#ff922e","#25aeb0","#db3f9b","#956c3c"];\n  for(let i=0;i<8;i++){\n    const x=b[i][0]*scale,y=b[i][1]*scale;\n    ctx.save();\n    ctx.font="bold 17px Arial";\n    ctx.lineWidth=3;\n    ctx.strokeStyle="rgba(255,255,255,.95)";\n    ctx.strokeText(String(i+1).padStart(2,"0"),x+8,y+21);\n    ctx.fillStyle=cellColors[i];\n    ctx.fillText(String(i+1).padStart(2,"0"),x+8,y+21);\n    ctx.restore();\n  }\n\n  updateCoords();\n}\n\nfunction updateCoords(){\n  // 座標資訊已從使用者介面移除；保留函式避免影響既有裁切流程。\n}\n\nfunction pointerPos(e){\n  const r=cv.getBoundingClientRect();\n  return {x:(e.clientX-r.left)*IW/r.width,y:(e.clientY-r.top)*IH/r.height};\n}\n\nfunction nearestGuide(p){\n  const tol=Math.max(18,18/scale);\n  let best=-1,bd=Infinity,type="";\n  const arr=p.y<g.y[1] ? g.xTop : g.xBottom;\n  const segType=p.y<g.y[1] ? "xTop" : "xBottom";\n  for(let i=0;i<3;i++){\n    const d=Math.abs(p.x-arr[i]);\n    if(d<tol&&d<bd){best=i;bd=d;type=segType;}\n  }\n  const dy=Math.abs(p.y-g.y[1]);\n  if(dy<tol&&dy<bd){best=1;bd=dy;type="y";}\n  return {index:best,type:type};\n}cv.addEventListener("pointerdown",e=>{\n  if(locked)return;\n  const p=pointerPos(e),h=nearestGuide(p);\n  if(h.index<0)return;\n  e.preventDefault();\n  try{cv.setPointerCapture(e.pointerId)}catch(_){}\n  active=h.index;startX=p.x;startY=p.y;snap={xTop:[...g.xTop],xBottom:[...g.xBottom],y:[...g.y],type:h.type};\n  statusEl.textContent="🖱️ 正在調整定位線……";\n});\n\ncv.addEventListener("pointermove",e=>{\n  if(active<0||locked)return;\n  e.preventDefault();\n  const p=pointerPos(e);\n  if(snap.type==="xTop" || snap.type==="xBottom"){\n    const arr=snap.type==="xTop" ? g.xTop : g.xBottom;\n    const snapArr=snap.type==="xTop" ? snap.xTop : snap.xBottom;\n    const min=30;\n    const lo=(active===0 ? 0 : arr[active-1])+min;\n    const hi=(active===2 ? IW : arr[active+1])-min;\n    arr[active]=clamp(snapArr[active]+(p.x-startX),lo,hi);\n  }else{\n    const min=30;\n    g.y[1]=clamp(snap.y[1]+(p.y-startY),g.y[0]+min,g.y[2]-min);\n  }\n  draw();\n});\n\ncv.addEventListener("pointerup",e=>{\n  if(active>=0){try{cv.releasePointerCapture(e.pointerId)}catch(_){}}\n  active=-1;\n  if(!locked)statusEl.textContent="✅ 定位線已更新";\n});\n\nfunction resetGuides(){\n  locked=false;\n  g=guidesDefault();\n  lockBtn.textContent="🔒 鎖定定位";\n  downloadBtn.disabled=true;\n  statusEl.textContent="↩️ 已恢復標準4×2定位";\n  draw();\n}\n\nfunction toggleLock(){\n  locked=!locked;\n  if(locked){\n    lockBtn.textContent="🔓 解鎖定位";\n    downloadBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，可以開始裁切";\n  }else{\n    lockBtn.textContent="🔒 鎖定定位";\n    downloadBtn.disabled=true;\n    statusEl.textContent="🛠️ 定位已解鎖，可以繼續微調";\n  }\n  draw();\n}\n\nfunction saveBlob(blob,name){\n  const u=URL.createObjectURL(blob),a=document.createElement("a");\n  a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();\n  setTimeout(()=>URL.revokeObjectURL(u),1000);\n}\n\n// V10 STEP 10C.6：移植 V8「邊界連通背景移除」邏輯。\n// 只移除從圖片邊緣連通、且接近背景色的區域；不整片刪除人物/文字中的白色。\nfunction removeConnectedBackground(canvas, tolerance=30){\n  const ctx2=canvas.getContext("2d",{willReadFrequently:true});\n  const W=canvas.width,H=canvas.height;\n  const img=ctx2.getImageData(0,0,W,H);\n  const px=img.data;\n\n  const pts=[\n    [0,0],[W-1,0],[0,H-1],[W-1,H-1],\n    [Math.min(4,W-1),Math.min(4,H-1)],\n    [Math.max(0,W-5),Math.min(4,H-1)],\n    [Math.min(4,W-1),Math.max(0,H-5)],\n    [Math.max(0,W-5),Math.max(0,H-5)]\n  ];\n\n  let sr=0,sg=0,sb=0,count=0;\n  for(const [x,y] of pts){\n    const k=(y*W+x)*4;\n    if(px[k+3]===0) continue;\n    sr+=px[k]; sg+=px[k+1]; sb+=px[k+2]; count++;\n  }\n  if(count===0) return;\n\n  const bg=[sr/count,sg/count,sb/count];\n  const tol2=tolerance*tolerance;\n\n  function nearBg(k){\n    if(px[k+3]===0) return true;\n    const dr=px[k]-bg[0],dg=px[k+1]-bg[1],db=px[k+2]-bg[2];\n    return dr*dr+dg*dg+db*db<=tol2;\n  }\n\n  const seen=new Uint8Array(W*H);\n  const qx=[],qy=[];\n  let head=0;\n\n  function push(x,y){\n    if(x<0||x>=W||y<0||y>=H) return;\n    const n=y*W+x;\n    if(seen[n]) return;\n    seen[n]=1;\n    qx.push(x);qy.push(y);\n  }\n\n  for(let x=0;x<W;x++){push(x,0);push(x,H-1);}\n  for(let y=0;y<H;y++){push(0,y);push(W-1,y);}\n\n  while(head<qx.length){\n    const x=qx[head],y=qy[head++];\n    const k=(y*W+x)*4;\n    if(!nearBg(k)) continue;\n    px[k+3]=0;\n    push(x-1,y);push(x+1,y);push(x,y-1);push(x,y+1);\n  }\n\n  ctx2.putImageData(img,0,0);\n}\n\nfunction makeSticker(i){\n  const b=boxes()[i].map(v=>Math.round(v));\n  const x1=clamp(b[0],0,IW-2),y1=clamp(b[1],0,IH-2);\n  const x2=clamp(b[2],x1+2,IW),y2=clamp(b[3],y1+2,IH);\n  const cw=370,ch=320,sw=x2-x1,sh=y2-y1;\n  const rat=Math.min(cw/sw,ch/sh),nw=Math.max(1,Math.round(sw*rat)),nh=Math.max(1,Math.round(sh*rat));\n\n  const o=document.createElement("canvas");\n  o.width=cw;o.height=ch;\n  const octx=o.getContext("2d",{willReadFrequently:true});\n  octx.clearRect(0,0,cw,ch);\n\n  // 保留 V10 原本的定位點裁切、等比例縮放、置中。\n  octx.drawImage(\n    image,x1,y1,sw,sh,\n    Math.round((cw-nw)/2),Math.round((ch-nh)/2),nw,nh\n  );\n\n  // 只有勾選「透明背景 PNG」時才套用 V8 邏輯。\n  if(__TRANSPARENT__){\n    removeConnectedBackground(o,30);\n  }\n\n  return new Promise(r=>o.toBlob(r,"image/png"));\n}\n\nasync function downloadAll(){\n  if(!locked)return;\n  statusEl.textContent="⏳ 正在製作01～08 PNG……";\n  for(let i=0;i<8;i++){\n    saveBlob(await makeSticker(i),String(i+1).padStart(2,"0")+".png");\n    await new Promise(r=>setTimeout(r,180));\n  }\n  statusEl.textContent="🎉 01～08 已全部裁切並下載！";\n}\n\nimage.onload=()=>{\n  resize();\n  statusEl.textContent="✅ 定位線已建立：上 3 條＋下 3 條藍色垂直線可獨立拖曳";\n};\nwindow.addEventListener("resize",resize);\n</script></body></html>'
     _CROP_HTML_TEMPLATE = (
