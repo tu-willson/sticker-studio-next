@@ -31,37 +31,28 @@ def t(key, **kwargs):
     return tr(_v12_ui_locale(), key, **kwargs)
 
 
-_V12_SPACING_TEXT_FALLBACKS = {
+_V12_CROP_ROOM_TEXT_FALLBACKS = {
     "zh-TW": {
-        "grid_spacing_experiment": "啟用人物縮小／安全邊距實驗（僅透明 PNG）",
-        "grid_spacing_experiment_help": "只影響下一次生成。可分別選擇人物縮小比例與每格安全邊距；生成後也會依同一縮小比例把 8 格置中，方便比較間距效果。",
-        "grid_shrink_percent": "人物縮小比例",
-        "grid_margin_percent": "每格四周至少保留",
-        "grid_percent_option": "{percent}%",
+        "auto_crop_room": "逐格縮小至 86% 以保留裁切安全邊距",
+        "auto_crop_room_help": "只影響下一次生成。勾選後，透明 PNG 的每一格會獨立縮小至 86% 並置中，讓你在後續手動調整裁切線時保有較多安全空間。未勾選則保留完整原圖。",
     },
     "en": {
-        "grid_spacing_experiment": "Test character scaling and safe margins (transparent PNG only)",
-        "grid_spacing_experiment_help": "Applies only to the next generation. Choose a character scaling amount and cell safe margin; the generated grid is then centered with the same scale for easier spacing comparisons.",
-        "grid_shrink_percent": "Character scale-down",
-        "grid_margin_percent": "Minimum margin around each cell",
-        "grid_percent_option": "{percent}%",
+        "auto_crop_room": "Scale each cell to 86% to preserve crop safety margins",
+        "auto_crop_room_help": "Applies only to the next generation. When enabled, each transparent-PNG cell is independently scaled to 86% and centered to leave more room for manual crop-guide adjustments. When disabled, the original grid is kept intact.",
     },
     "ja": {
-        "grid_spacing_experiment": "人物の縮小／安全余白テストを有効にする（透明PNGのみ）",
-        "grid_spacing_experiment_help": "次回の生成だけに適用されます。人物の縮小率と各セルの安全余白を選択でき、生成後も同じ縮小率で8枠を中央配置して間隔を比較できます。",
-        "grid_shrink_percent": "人物の縮小率",
-        "grid_margin_percent": "各セルの最低余白",
-        "grid_percent_option": "{percent}%",
+        "auto_crop_room": "各枠を86％に縮小して切り抜き安全余白を確保",
+        "auto_crop_room_help": "次回の生成だけに適用されます。有効にすると透明PNGの各枠を個別に86％へ縮小して中央配置し、手動で切り抜きガイドを調整する余地を確保します。無効の場合は元画像をそのまま保持します。",
     },
 }
 
 
-def _v12_spacing_t(key, **kwargs):
-    """Translate spacing-test UI, with a local fallback during Streamlit module reloads."""
+def _v12_crop_room_t(key, **kwargs):
+    """Translate crop-room UI, with a local fallback during Streamlit reloads."""
     translated = t(key, **kwargs)
     if translated != key:
         return translated
-    fallback = _V12_SPACING_TEXT_FALLBACKS[_v12_ui_locale()][key]
+    fallback = _V12_CROP_ROOM_TEXT_FALLBACKS[_v12_ui_locale()][key]
     return fallback.format(**kwargs)
 
 
@@ -4185,30 +4176,12 @@ def _v12_valid_crop_boxes(crop_boxes, width, height):
     return normalized
 
 
-def _v12_crop_grid_cell(sheet, idx, crop_boxes=None, zoom_ratio=1.0):
-    """Create one LINE-size sticker from the saved straight crop guides.
-
-    ``zoom_ratio`` crops inward around the saved crop's centre before fitting
-    the sticker canvas.  This enlarges the character without changing the
-    output dimensions or moving the user's guide positions.
-    """
+def _v12_crop_grid_cell(sheet, idx, crop_boxes=None):
+    """Create one LINE-size sticker from the saved straight crop guides."""
     sw, sh = sheet.size
     boxes = _v12_valid_crop_boxes(crop_boxes, sw, sh)
     x1, y1, x2, y2 = boxes[int(idx)]
     crop = sheet.crop((x1, y1, x2, y2)).convert("RGBA")
-    try:
-        zoom = float(zoom_ratio)
-    except (TypeError, ValueError):
-        zoom = 1.0
-    zoom = max(1.0, min(1.30, zoom))
-    if zoom > 1.0:
-        zoom_width = max(2, min(crop.width, round(crop.width / zoom)))
-        zoom_height = max(2, min(crop.height, round(crop.height / zoom)))
-        zoom_left = max(0, (crop.width - zoom_width) // 2)
-        zoom_top = max(0, (crop.height - zoom_height) // 2)
-        crop = crop.crop(
-            (zoom_left, zoom_top, zoom_left + zoom_width, zoom_top + zoom_height)
-        )
     out = Image.new("RGBA", (370, 320), (255, 255, 255, 0))
     resampling = getattr(Image, "Resampling", Image)
     scale = min(370 / crop.width, 320 / crop.height)
@@ -4297,23 +4270,15 @@ def _v12_get_sticker_basket():
     return normalized
 
 
-def _v12_add_current_grid_to_sticker_basket(
-    grid_bytes, crop_boxes=None, zoom_ratio=1.0
-):
+def _v12_add_current_grid_to_sticker_basket(grid_bytes, crop_boxes=None):
     """Crop the current 4×2 result once and add all eight images to the session basket."""
     payload = bytes(grid_bytes or b"")
     if not payload:
         raise ValueError("尚未取得可裁切的原始總圖。")
     sheet = Image.open(BytesIO(payload)).convert("RGBA")
     saved_boxes = _v12_valid_crop_boxes(crop_boxes, *sheet.size)
-    try:
-        effective_zoom_ratio = max(1.0, min(1.30, float(zoom_ratio)))
-    except (TypeError, ValueError):
-        effective_zoom_ratio = 1.0
     source_hash = hashlib.sha256(
-        payload
-        + json.dumps(saved_boxes, separators=(",", ":")).encode("utf-8")
-        + f"|crop-zoom:{effective_zoom_ratio:.3f}".encode("ascii")
+        payload + json.dumps(saved_boxes, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     basket = _v12_get_sticker_basket()
     if any(item.get("source_grid_hash") == source_hash for item in basket):
@@ -4327,9 +4292,7 @@ def _v12_add_current_grid_to_sticker_basket(
         additions.append({
             "id": item_id,
             "image_bytes": _v12_png_bytes(
-                _v12_crop_grid_cell(
-                    sheet, index, saved_boxes, zoom_ratio=effective_zoom_ratio
-                )
+                _v12_crop_grid_cell(sheet, index, saved_boxes)
             ),
             "batch_label": batch_label,
             "source_slot": index + 1,
@@ -4986,7 +4949,6 @@ st.session_state.setdefault("v12_style_reference_custom_elements", "")
 st.session_state.setdefault("generated_4x2_bytes", None)
 st.session_state.setdefault("v12_grid_breathing_room_applied", False)
 st.session_state.setdefault("v12_grid_breathing_room_percent", 0)
-st.session_state.setdefault("v12_crop_basket_zoom_ratio", 1.0)
 st.session_state.setdefault("last_prompt", "")
 st.session_state.setdefault("crop_boxes", None)
 st.session_state.setdefault("v12_sticker_basket", [])
@@ -5828,21 +5790,9 @@ def _v12_render_ai_copy_assistant():
 
 def build_prompt(style, custom_style, selected_character, custom_character,
                  texts, transparent, color_segments=None, ai_copy_topic="", ai_copy_tone="", ai_copy_topics=None,
-                 sticker_mode="text", expression_specs=None, action_prompts=None,
-                 shrink_percent=None, safety_margin_percent=None):
-    if shrink_percent is None:
-        _layout_shrink_instruction = "相較於一般滿版貼圖，請將每格的人物與特效整體自然縮小約 10～15%，置中安排，讓四周保留約一成可供裁切的自然空白。"
-    else:
-        _layout_shrink_instruction = (
-            f"本次為間距實驗：請將每格的人物與特效整體自然縮小約 {int(shrink_percent)}%，"
-            "置中安排，讓四周留下明顯且乾淨的裁切空間。"
-        )
-    if safety_margin_percent is None:
-        _safety_margin_instruction = "每格左右與上下都要保留至少約 12% 的乾淨透明／背景安全邊距，作為裁切走廊。"
-    else:
-        _safety_margin_instruction = (
-            f"每格左右與上下都要保留至少約 {int(safety_margin_percent)}% 的乾淨透明／背景安全邊距，作為裁切走廊。"
-        )
+                 sticker_mode="text", expression_specs=None, action_prompts=None):
+    _layout_instruction = "人物與特效請置中安排，四周保留自然空間，方便後續以裁切線微調。"
+    _safety_margin_instruction = "每格左右與上下都要保留至少約 12% 的乾淨透明／背景安全邊距，作為裁切走廊。"
     p = [
         "請以我提供的人物照片作為主要人物參考。",
         "保留人物身份辨識特徵，不任意改變人物核心外觀。",
@@ -5851,7 +5801,7 @@ def build_prompt(style, custom_style, selected_character, custom_character,
         "八格人物維持同一人物身份與主要視覺風格。",
         "每一格都是獨立貼圖，請讓人物、手勢、文字、道具與特效適合各自裁切。",
         "人物與整體動作可維持誇張、自然、有張力；但任何拳頭、手勢、情緒特效都不得碰到或越過格子邊界。",
-        _layout_shrink_instruction,
+        _layout_instruction,
         "遇到大動作時，請優先整體縮小並保留完整姿勢，而不是把手腳、道具、陰影或裝飾延伸到隔壁格。",
         "相鄰貼圖之間必須保留一整條連續、乾淨的背景色或透明空間作為裁切走廊；不要畫格線、框線或分隔線。",
         "【排版硬性規則】將 8 格視為 8 張完全獨立、不可跨越的畫板。每一格的所有像素——人物、文字、道具、特效、光芒、陰影與裝飾——都必須完整留在該格內，絕對不得延伸、重疊或漏進左右／上下相鄰格。",
@@ -7472,34 +7422,13 @@ st.markdown(f'<div class="v11-transparent-title">{t("background_transparent")}</
 with st.container(key="transparent_png_option"):
     transparent = st.checkbox(t("transparent_png"), value=False)
 
-_spacing_experiment_enabled = st.checkbox(
-    _v12_spacing_t("grid_spacing_experiment"),
+_auto_crop_room = st.checkbox(
+    _v12_crop_room_t("auto_crop_room"),
     value=False,
-    key="v12_grid_spacing_experiment_enabled",
+    key="v12_auto_crop_room_enabled",
     disabled=not transparent,
-    help=_v12_spacing_t("grid_spacing_experiment_help"),
+    help=_v12_crop_room_t("auto_crop_room_help"),
 )
-_spacing_shrink_percent = 15
-_spacing_margin_percent = 12
-if _spacing_experiment_enabled and transparent:
-    _spacing_shrink_col, _spacing_margin_col = st.columns(2)
-    with _spacing_shrink_col:
-        _spacing_shrink_percent = st.radio(
-            _v12_spacing_t("grid_shrink_percent"),
-            [15, 25, 35],
-            horizontal=True,
-            key="v12_grid_spacing_shrink_percent",
-            format_func=lambda value: _v12_spacing_t("grid_percent_option", percent=value),
-        )
-    with _spacing_margin_col:
-        _spacing_margin_percent = st.radio(
-            _v12_spacing_t("grid_margin_percent"),
-            [12, 20, 25],
-            horizontal=True,
-            key="v12_grid_spacing_margin_percent",
-            format_func=lambda value: _v12_spacing_t("grid_percent_option", percent=value),
-        )
-_spacing_experiment_active = bool(transparent and _spacing_experiment_enabled)
 
 v10_subsection(t("settings_review"), "#ff9f43")
 style_mode = st.session_state.get("v10_style_mode", "↓ 請選擇風格")
@@ -7521,8 +7450,6 @@ prompt = build_prompt(
     sticker_mode=_sticker_mode,
     expression_specs=_prompt_expression_specs,
     action_prompts=_prompt_sticker_action_prompts,
-    shrink_percent=_spacing_shrink_percent if _spacing_experiment_active else None,
-    safety_margin_percent=_spacing_margin_percent if _spacing_experiment_active else None,
 )
 
 if _style_reference_active:
@@ -7979,27 +7906,13 @@ if st.session_state.get("v11_generation_pending", False):
             raw = base64.b64decode(result.data[0].b64_json)
             _grid_bytes, _grid_crop_room_applied = _v12_prepare_generated_grid(
                 raw,
-                add_crop_room=_spacing_experiment_active,
-                shrink_ratio=1 - (_spacing_shrink_percent / 100),
+                add_crop_room=bool(_auto_crop_room),
             )
             st.session_state["v12_grid_breathing_room_applied"] = bool(
                 _grid_crop_room_applied
             )
             st.session_state["v12_grid_breathing_room_percent"] = (
-                _spacing_shrink_percent if _grid_crop_room_applied else 0
-            )
-            # The 25% / 20% layout deliberately leaves enough transparent
-            # room to enlarge the saved sticker after its final user crop.
-            # Keep this with the generated grid, rather than the live controls,
-            # so changing options later cannot alter an already-created sheet.
-            st.session_state["v12_crop_basket_zoom_ratio"] = (
-                1.15
-                if (
-                    _grid_crop_room_applied
-                    and _spacing_shrink_percent == 25
-                    and _spacing_margin_percent == 20
-                )
-                else 1.0
+                14 if _grid_crop_room_applied else 0
             )
             if _grid_crop_room_applied:
                 _status.info("✂️ 正在為每張貼圖保留裁切留白……")
@@ -8260,9 +8173,6 @@ function saveBlob(blob,name){''',
                     _added, _message = _v12_add_current_grid_to_sticker_basket(
                         st.session_state.get("generated_4x2_bytes"),
                         _applied_crop_boxes,
-                        zoom_ratio=st.session_state.get(
-                            "v12_crop_basket_zoom_ratio", 1.0
-                        ),
                     )
                     st.session_state["v12_crop_basket_feedback"] = {
                         "added": _added,
