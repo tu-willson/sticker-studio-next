@@ -12,6 +12,7 @@
   <script>
     const frame = document.getElementById("crop-frame");
     let latestHtml = "";
+    let lastApplyRequestToken = "";
 
     function sendToStreamlit(type, payload = {}) {
       window.parent.postMessage({ isStreamlitMessage: true, type, ...payload }, "*");
@@ -19,6 +20,19 @@
 
     function setFrameHeight(height) {
       sendToStreamlit("streamlit:setFrameHeight", { height });
+    }
+
+    function requestCurrentCropApply(token) {
+      if (!token || token === lastApplyRequestToken) return;
+      lastApplyRequestToken = token;
+      const deliver = () => {
+        frame.contentWindow?.postMessage({ type: "v12-crop-apply-current" }, "*");
+      };
+      // The crop canvas may be in the middle of a Streamlit rerender.  A few
+      // short deliveries make this reliable without changing its live guides.
+      deliver();
+      setTimeout(deliver, 120);
+      setTimeout(deliver, 450);
     }
 
     window.addEventListener("message", (event) => {
@@ -32,6 +46,7 @@
           frame.srcdoc = markup;
         }
         setFrameHeight(Number(args.frame_height) || 760);
+        requestCurrentCropApply(String(args.apply_request_token || ""));
         return;
       }
 

@@ -5,7 +5,7 @@ import streamlit as st
 from openai import OpenAI
 import base64
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageChops, ImageDraw
 import random
 from pathlib import Path
 import json
@@ -4151,12 +4151,125 @@ def _v12_valid_crop_boxes(crop_boxes, width, height):
     return normalized
 
 
-def _v12_crop_grid_cell(sheet, idx, crop_boxes=None):
-    """Create one LINE-size sticker from the saved crop guides."""
+def _v12_curve_polygons(crop_boxes, curve_guides, width, height):
+    """Build eight shared-boundary polygons for optional curved crop guides."""
+    if not isinstance(curve_guides, dict) or not curve_guides.get("enabled"):
+        return None
+    boxes = _v12_valid_crop_boxes(crop_boxes, width, height)
+    try:
+        top_controls = curve_guides["top"]
+        bottom_controls = curve_guides["bottom"]
+        horizontal_controls = curve_guides["horizontal"]
+        if not (
+            isinstance(top_controls, list)
+            and len(top_controls) == 3
+            and isinstance(bottom_controls, list)
+            and len(bottom_controls) == 3
+            and isinstance(horizontal_controls, list)
+            and len(horizontal_controls) == 4
+        ):
+            return None
+
+        def point(value):
+            if not isinstance(value, (list, tuple)) or len(value) != 2:
+                raise ValueError("invalid curve point")
+            x, y = (float(value[0]), float(value[1]))
+            if not (0 <= x <= width and 0 <= y <= height):
+                raise ValueError("curve point out of bounds")
+            return (x, y)
+
+        top_controls = [point(value) for value in top_controls]
+        bottom_controls = [point(value) for value in bottom_controls]
+        horizontal_controls = [point(value) for value in horizontal_controls]
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    top_x = [boxes[index][2] for index in range(3)]
+    bottom_x = [boxes[index][2] for index in range(4, 7)]
+    mid_y = float(boxes[0][3])
+    # The average creates one shared junction even when the user previously
+    # positioned the top and bottom straight guides independently.
+    junctions = [(0.0, mid_y)] + [
+        ((top_x[index] + bottom_x[index]) / 2, mid_y) for index in range(3)
+    ] + [(float(width), mid_y)]
+
+    def quadratic(start, control, end, steps=18):
+        return [
+            (
+                (1 - ratio) ** 2 * start[0]
+                + 2 * (1 - ratio) * ratio * control[0]
+                + ratio**2 * end[0],
+                (1 - ratio) ** 2 * start[1]
+                + 2 * (1 - ratio) * ratio * control[1]
+                + ratio**2 * end[1],
+            )
+            for ratio in (step / steps for step in range(steps + 1))
+        ]
+
+    top_edges = [
+        quadratic((top_x[index], 0.0), top_controls[index], junctions[index + 1])
+        for index in range(3)
+    ]
+    bottom_edges = [
+        quadratic(junctions[index + 1], bottom_controls[index], (bottom_x[index], float(height)))
+        for index in range(3)
+    ]
+    horizontal_edges = [
+        quadratic(junctions[index], horizontal_controls[index], junctions[index + 1])
+        for index in range(4)
+    ]
+
+    polygons = []
+    for column in range(4):
+        top_left = 0.0 if column == 0 else top_x[column - 1]
+        top_right = float(width) if column == 3 else top_x[column]
+        shape = [(top_left, 0.0), (top_right, 0.0)]
+        if column < 3:
+            shape.extend(top_edges[column][1:])
+        else:
+            shape.append((float(width), mid_y))
+        shape.extend(reversed(horizontal_edges[column][:-1]))
+        if column > 0:
+            shape.extend(reversed(top_edges[column - 1][1:-1]))
+        else:
+            shape.append((0.0, 0.0))
+        polygons.append(shape)
+
+    for column in range(4):
+        bottom_left = 0.0 if column == 0 else bottom_x[column - 1]
+        bottom_right = float(width) if column == 3 else bottom_x[column]
+        shape = list(horizontal_edges[column])
+        if column < 3:
+            shape.extend(bottom_edges[column][1:])
+        else:
+            shape.append((float(width), float(height)))
+        shape.append((bottom_left, float(height)))
+        if column > 0:
+            shape.extend(reversed(bottom_edges[column - 1][1:-1]))
+        else:
+            shape.append((0.0, mid_y))
+        polygons.append(shape)
+    return polygons
+
+
+def _v12_crop_grid_cell(sheet, idx, crop_boxes=None, curve_guides=None):
+    """Create one LINE-size sticker from straight or shared curved guides."""
     sw, sh = sheet.size
     boxes = _v12_valid_crop_boxes(crop_boxes, sw, sh)
     x1, y1, x2, y2 = boxes[int(idx)]
-    crop = sheet.crop((x1, y1, x2, y2)).convert("RGBA")
+    polygons = _v12_curve_polygons(boxes, curve_guides, sw, sh)
+    source = sheet.convert("RGBA")
+    if polygons is not None:
+        polygon = polygons[int(idx)]
+        mask = Image.new("L", source.size, 0)
+        ImageDraw.Draw(mask).polygon(polygon, fill=255)
+        source.putalpha(ImageChops.multiply(source.getchannel("A"), mask))
+        xs, ys = zip(*polygon)
+        x1 = max(0, int(min(xs)))
+        y1 = max(0, int(min(ys)))
+        x2 = min(sw, max(x1 + 2, int(max(xs)) + 1))
+        y2 = min(sh, max(y1 + 2, int(max(ys)) + 1))
+    crop = source.crop((x1, y1, x2, y2)).convert("RGBA")
     out = Image.new("RGBA", (370, 320), (255, 255, 255, 0))
     resampling = getattr(Image, "Resampling", Image)
     scale = min(370 / crop.width, 320 / crop.height)
@@ -4215,13 +4328,11 @@ def _v12_add_grid_breathing_room(sheet, shrink_ratio=0.88):
             ),
             resampling.LANCZOS,
         )
-        result.alpha_composite(
-            scaled,
-            (
-                x1 + (cell.width - scaled.width) // 2,
-                y1 + (cell.height - scaled.height) // 2,
-            ),
+        position = (
+            x1 + (cell.width - scaled.width) // 2,
+            y1 + (cell.height - scaled.height) // 2,
         )
+        result.alpha_composite(scaled, position)
     return result, True
 
 
@@ -4247,15 +4358,22 @@ def _v12_get_sticker_basket():
     return normalized
 
 
-def _v12_add_current_grid_to_sticker_basket(grid_bytes, crop_boxes=None):
+def _v12_add_current_grid_to_sticker_basket(grid_bytes, crop_boxes=None, curve_guides=None):
     """Crop the current 4×2 result once and add all eight images to the session basket."""
     payload = bytes(grid_bytes or b"")
     if not payload:
         raise ValueError("尚未取得可裁切的原始總圖。")
     sheet = Image.open(BytesIO(payload)).convert("RGBA")
     saved_boxes = _v12_valid_crop_boxes(crop_boxes, *sheet.size)
+    saved_curve_guides = curve_guides if _v12_curve_polygons(
+        saved_boxes, curve_guides, *sheet.size
+    ) is not None else None
     source_hash = hashlib.sha256(
-        payload + json.dumps(saved_boxes, separators=(",", ":")).encode("utf-8")
+        payload
+        + json.dumps(
+            {"boxes": saved_boxes, "curve": saved_curve_guides},
+            separators=(",", ":"),
+        ).encode("utf-8")
     ).hexdigest()
     basket = _v12_get_sticker_basket()
     if any(item.get("source_grid_hash") == source_hash for item in basket):
@@ -4269,7 +4387,7 @@ def _v12_add_current_grid_to_sticker_basket(grid_bytes, crop_boxes=None):
         additions.append({
             "id": item_id,
             "image_bytes": _v12_png_bytes(
-                _v12_crop_grid_cell(sheet, index, saved_boxes)
+                _v12_crop_grid_cell(sheet, index, saved_boxes, saved_curve_guides)
             ),
             "batch_label": batch_label,
             "source_slot": index + 1,
@@ -4927,6 +5045,7 @@ st.session_state.setdefault("generated_4x2_bytes", None)
 st.session_state.setdefault("v12_grid_breathing_room_applied", False)
 st.session_state.setdefault("last_prompt", "")
 st.session_state.setdefault("crop_boxes", None)
+st.session_state.setdefault("v12_crop_curve_guides", None)
 st.session_state.setdefault("v12_sticker_basket", [])
 st.session_state.setdefault("v12_sticker_basket_batch_number", 0)
 st.session_state.setdefault("v12_basket_last_zip_bytes", None)
@@ -5774,10 +5893,10 @@ def build_prompt(style, custom_style, selected_character, custom_character,
         "第一排四格、第二排四格；依使用者輸入順序由左至右、由上至下對應。",
         "八格人物維持同一人物身份與主要視覺風格。",
         "每一格都是獨立貼圖，請讓人物、手勢、文字、道具與特效適合各自裁切。",
-        "人物與整體動作可維持誇張、自然、有張力；不必為了留白而犧牲拳頭、手勢或情緒表現。",
+        "人物與整體動作可維持誇張、自然、有張力；但任何拳頭、手勢、情緒特效都不得碰到或越過格子邊界。",
         "相較於一般滿版貼圖，請將每格的人物與特效整體自然縮小約 10～15%，置中安排，讓四周保留約一成可供裁切的自然空白。",
-        "遇到大動作時，請優先整體稍微縮小並保留完整姿勢，而不是截斷手腳、壓縮人物或讓動作變得僵硬。",
-        "相鄰貼圖之間請自然保留乾淨的背景色或透明空間，避免相鄰人物彼此貼太近；不要畫格線、框線或分隔線。",
+        "遇到大動作時，請優先整體縮小並保留完整姿勢，而不是把手腳、道具、陰影或裝飾延伸到隔壁格。",
+        "相鄰貼圖之間必須保留一整條連續、乾淨的背景色或透明空間作為裁切走廊；不要畫格線、框線或分隔線。",
         "【排版硬性規則】將 8 格視為 8 張完全獨立、不可跨越的畫板。每一格的所有像素——人物、文字、道具、特效、光芒、陰影與裝飾——都必須完整留在該格內，絕對不得延伸、重疊或漏進左右／上下相鄰格。",
         "每格左右與上下都要保留至少約 12% 的乾淨透明／背景安全邊距，作為裁切走廊。內容較多時必須整體縮小，不可把多出的部分放到隔壁格；尤其第二排第 05～08 格，不可將物件、角色或裝飾跨到鄰格。",
         "不要拉伸、變形或壓縮人物。",
@@ -7891,6 +8010,10 @@ if st.session_state.get("v11_generation_pending", False):
                 _status.info("✂️ 正在為每張貼圖保留裁切留白……")
             st.session_state.generated_4x2_bytes = _grid_bytes
             st.session_state.crop_boxes = None
+            st.session_state["v12_crop_curve_guides"] = None
+            # A lower-page apply request belongs only to its original grid.
+            # Never replay it when a new 4×2 image has just been generated.
+            st.session_state.pop("v12_crop_apply_request_token", None)
             _generation_succeeded = True
             if _sticker_mode == "expression":
                 _v12_commit_random_expression_recipes()
@@ -7987,13 +8110,24 @@ if st.session_state.generated_4x2_bytes:
         st.caption(t("crop_breathing"))
 
     _CROP_HTML_TEMPLATE = '<!doctype html>\n<html><head><meta charset="utf-8">\n<style>\n*{box-sizing:border-box}\nbody{margin:0;font-family:Arial,"Microsoft JhengHei",sans-serif;color:#333}\n.help{font-size:14px;line-height:1.6;background:#f5f7fa;padding:10px;border-radius:8px}\n.viewer{position:relative;width:720px;max-width:100%;margin:10px auto 0;border:1px solid #bbb;border-radius:8px;overflow:hidden;background:#eee}\n#cv{display:block;width:720px;max-width:100%;height:auto;touch-action:none;user-select:none}\n.status{font-size:28px;line-height:1.45;font-weight:700;padding:12px 0;color:#fff;text-align:center}\n.actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}\nbutton{border:0;border-radius:8px;padding:9px 13px;cursor:pointer}\nbutton.primary{background:#222;color:#fff}\nbutton.lock{background:#333;color:#fff}\nbutton:disabled{opacity:.45;cursor:not-allowed}\n.coords{font:20px/1.6 Consolas,monospace;white-space:pre-wrap;background:#1b2028;color:#fff;padding:14px;border-radius:10px;text-align:center}\n.legend{font-size:26px;line-height:1.5;font-weight:700;padding:10px 0;color:#fff;text-align:center}\n</style></head><body>\n<div class="help">\n<b>📍 定位點裁切</b><br>\n3 條上半部＋3 條下半部垂直定位線＋1 條水平定位線。\n上下 6 條藍色垂直線可各自獨立拖曳；按「🔒 鎖定定位」後產生 01～08 裁切框。\n</div>\n<div class="viewer"><canvas id="cv"></canvas></div>\n<div class="status" id="status">正在建立定位線……</div>\n<div class="legend">🔴 固定外框\u3000🔵 上下 6 條獨立垂直分隔線\u3000🟠 水平分隔線\u3000｜\u3000🔒 鎖定後可進行裁切</div>\n<div class="actions">\n<button onclick="resetGuides()">↩️ 恢復分隔線位置</button>\n<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>\n<button id="downloadBtn" class="primary" onclick="downloadAll()" disabled>✂️ 裁切並依序下載01～08(手機下載)</button>\n</div>\n\n<script>\nconst B64="__IMAGE_B64__", IW=__IW__, IH=__IH__;\nconst cv=document.getElementById("cv"),ctx=cv.getContext("2d");\nconst statusEl=document.getElementById("status"),coordsEl=document.getElementById("coords");\nconst lockBtn=document.getElementById("lockBtn"),downloadBtn=document.getElementById("downloadBtn");\nconst colors=["#ff4040","#3987ff","#32ad61","#ff922e"];\nlet scale=1,locked=false,active=-1,startX=0,startY=0,snap=null;\n\nfunction clamp(v,a,b){return Math.max(a,Math.min(b,v))}\nfunction guidesDefault(){\n  return {\n    xTop:[IW/4,IW/2,3*IW/4],\n    xBottom:[IW/4,IW/2,3*IW/4],\n    y:[0,IH/2,IH]\n  };\n}\nlet g=guidesDefault();\n\nconst image=new Image();\nimage.src="data:image/png;base64,"+B64;\n\nfunction resize(){\n  const viewer=cv.parentElement;\n  const mw=Math.min(720,Math.max(320,viewer.clientWidth||720));\n  cv.width=Math.round(mw);\n  cv.height=Math.round(mw*IH/IW);\n  scale=cv.width/IW;\n  draw();\n}\n\nfunction boxes(){\n  const out=[];\n  const xt=[0,g.xTop[0],g.xTop[1],g.xTop[2],IW];\n  const xb=[0,g.xBottom[0],g.xBottom[1],g.xBottom[2],IW];\n  for(let c=0;c<4;c++) out.push([xt[c],g.y[0],xt[c+1],g.y[1]]);\n  for(let c=0;c<4;c++) out.push([xb[c],g.y[1],xb[c+1],g.y[2]]);\n  return out;\n}\n\nfunction draw(){\n  ctx.clearRect(0,0,cv.width,cv.height);\n  ctx.drawImage(image,0,0,cv.width,cv.height);\n\n  // Slight guide shading.\n  ctx.save();\n  ctx.fillStyle="rgba(255,255,255,.08)";\n  ctx.fillRect(0,0,cv.width,cv.height);\n  ctx.restore();\n\n  // 上下各 3 條：六條垂直線完全獨立。\n  for(let i=0;i<3;i++){\n    const xt=g.xTop[i]*scale;\n    const xb=g.xBottom[i]*scale;\n    ctx.save();\n    ctx.strokeStyle="#3987ff";\n    ctx.lineWidth=2.5;\n    ctx.setLineDash([10,7]);\n    ctx.beginPath();ctx.moveTo(xt,0);ctx.lineTo(xt,g.y[1]*scale);ctx.stroke();\n    ctx.beginPath();ctx.moveTo(xb,g.y[1]*scale);ctx.lineTo(xb,cv.height);ctx.stroke();\n    ctx.setLineDash([]);\n    ctx.fillStyle="#3987ff";\n    ctx.fillRect(xt-5,4,10,18);\n    ctx.fillRect(xb-5,g.y[1]*scale+4,10,18);\n    ctx.restore();\n  }\n\n  // 左右外框固定。\n  ctx.save();\n  ctx.strokeStyle="#ff4040";\n  ctx.lineWidth=2.5;\n  ctx.setLineDash([10,7]);\n  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,cv.height);ctx.stroke();\n  ctx.beginPath();ctx.moveTo(cv.width,0);ctx.lineTo(cv.width,cv.height);ctx.stroke();\n  ctx.setLineDash([]);\n  ctx.fillStyle="#ff4040";\n  ctx.fillRect(0,4,10,18);\n  ctx.fillRect(cv.width-10,4,10,18);\n  ctx.restore();  // Draw 3 horizontal guide lines.\n  for(let i=0;i<3;i++){\n    const y=g.y[i]*scale;\n    ctx.save();\n    ctx.strokeStyle="#ff922e";\n    ctx.lineWidth=i===1?2.5:2;\n    ctx.setLineDash([10,7]);\n    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cv.width,y);ctx.stroke();\n    ctx.setLineDash([]);\n    ctx.fillStyle="#ff922e";\n    ctx.fillRect(4,y-5,22,10);\n    ctx.restore();\n  }\n\n  // Number each derived cell; these are guide labels only.\n  const b=boxes();\n  const cellColors=["#ff4040","#3987ff","#32ad61","#a04bd0","#ff922e","#25aeb0","#db3f9b","#956c3c"];\n  for(let i=0;i<8;i++){\n    const x=b[i][0]*scale,y=b[i][1]*scale;\n    ctx.save();\n    ctx.font="bold 17px Arial";\n    ctx.lineWidth=3;\n    ctx.strokeStyle="rgba(255,255,255,.95)";\n    ctx.strokeText(String(i+1).padStart(2,"0"),x+8,y+21);\n    ctx.fillStyle=cellColors[i];\n    ctx.fillText(String(i+1).padStart(2,"0"),x+8,y+21);\n    ctx.restore();\n  }\n\n  updateCoords();\n}\n\nfunction updateCoords(){\n  // 座標資訊已從使用者介面移除；保留函式避免影響既有裁切流程。\n}\n\nfunction pointerPos(e){\n  const r=cv.getBoundingClientRect();\n  return {x:(e.clientX-r.left)*IW/r.width,y:(e.clientY-r.top)*IH/r.height};\n}\n\nfunction nearestGuide(p){\n  const tol=Math.max(18,18/scale);\n  let best=-1,bd=Infinity,type="";\n  const arr=p.y<g.y[1] ? g.xTop : g.xBottom;\n  const segType=p.y<g.y[1] ? "xTop" : "xBottom";\n  for(let i=0;i<3;i++){\n    const d=Math.abs(p.x-arr[i]);\n    if(d<tol&&d<bd){best=i;bd=d;type=segType;}\n  }\n  const dy=Math.abs(p.y-g.y[1]);\n  if(dy<tol&&dy<bd){best=1;bd=dy;type="y";}\n  return {index:best,type:type};\n}cv.addEventListener("pointerdown",e=>{\n  if(locked)return;\n  const p=pointerPos(e),h=nearestGuide(p);\n  if(h.index<0)return;\n  e.preventDefault();\n  try{cv.setPointerCapture(e.pointerId)}catch(_){}\n  active=h.index;startX=p.x;startY=p.y;snap={xTop:[...g.xTop],xBottom:[...g.xBottom],y:[...g.y],type:h.type};\n  statusEl.textContent="🖱️ 正在調整定位線……";\n});\n\ncv.addEventListener("pointermove",e=>{\n  if(active<0||locked)return;\n  e.preventDefault();\n  const p=pointerPos(e);\n  if(snap.type==="xTop" || snap.type==="xBottom"){\n    const arr=snap.type==="xTop" ? g.xTop : g.xBottom;\n    const snapArr=snap.type==="xTop" ? snap.xTop : snap.xBottom;\n    const min=30;\n    const lo=(active===0 ? 0 : arr[active-1])+min;\n    const hi=(active===2 ? IW : arr[active+1])-min;\n    arr[active]=clamp(snapArr[active]+(p.x-startX),lo,hi);\n  }else{\n    const min=30;\n    g.y[1]=clamp(snap.y[1]+(p.y-startY),g.y[0]+min,g.y[2]-min);\n  }\n  draw();\n});\n\ncv.addEventListener("pointerup",e=>{\n  if(active>=0){try{cv.releasePointerCapture(e.pointerId)}catch(_){}}\n  active=-1;\n  if(!locked)statusEl.textContent="✅ 定位線已更新";\n});\n\nfunction resetGuides(){\n  locked=false;\n  g=guidesDefault();\n  lockBtn.textContent="🔒 鎖定定位";\n  downloadBtn.disabled=true;\n  statusEl.textContent="↩️ 已恢復標準4×2定位";\n  draw();\n}\n\nfunction toggleLock(){\n  locked=!locked;\n  if(locked){\n    lockBtn.textContent="🔓 解鎖定位";\n    downloadBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，可以開始裁切";\n  }else{\n    lockBtn.textContent="🔒 鎖定定位";\n    downloadBtn.disabled=true;\n    statusEl.textContent="🛠️ 定位已解鎖，可以繼續微調";\n  }\n  draw();\n}\n\nfunction saveBlob(blob,name){\n  const u=URL.createObjectURL(blob),a=document.createElement("a");\n  a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();\n  setTimeout(()=>URL.revokeObjectURL(u),1000);\n}\n\n// V10 STEP 10C.6：移植 V8「邊界連通背景移除」邏輯。\n// 只移除從圖片邊緣連通、且接近背景色的區域；不整片刪除人物/文字中的白色。\nfunction removeConnectedBackground(canvas, tolerance=30){\n  const ctx2=canvas.getContext("2d",{willReadFrequently:true});\n  const W=canvas.width,H=canvas.height;\n  const img=ctx2.getImageData(0,0,W,H);\n  const px=img.data;\n\n  const pts=[\n    [0,0],[W-1,0],[0,H-1],[W-1,H-1],\n    [Math.min(4,W-1),Math.min(4,H-1)],\n    [Math.max(0,W-5),Math.min(4,H-1)],\n    [Math.min(4,W-1),Math.max(0,H-5)],\n    [Math.max(0,W-5),Math.max(0,H-5)]\n  ];\n\n  let sr=0,sg=0,sb=0,count=0;\n  for(const [x,y] of pts){\n    const k=(y*W+x)*4;\n    if(px[k+3]===0) continue;\n    sr+=px[k]; sg+=px[k+1]; sb+=px[k+2]; count++;\n  }\n  if(count===0) return;\n\n  const bg=[sr/count,sg/count,sb/count];\n  const tol2=tolerance*tolerance;\n\n  function nearBg(k){\n    if(px[k+3]===0) return true;\n    const dr=px[k]-bg[0],dg=px[k+1]-bg[1],db=px[k+2]-bg[2];\n    return dr*dr+dg*dg+db*db<=tol2;\n  }\n\n  const seen=new Uint8Array(W*H);\n  const qx=[],qy=[];\n  let head=0;\n\n  function push(x,y){\n    if(x<0||x>=W||y<0||y>=H) return;\n    const n=y*W+x;\n    if(seen[n]) return;\n    seen[n]=1;\n    qx.push(x);qy.push(y);\n  }\n\n  for(let x=0;x<W;x++){push(x,0);push(x,H-1);}\n  for(let y=0;y<H;y++){push(0,y);push(W-1,y);}\n\n  while(head<qx.length){\n    const x=qx[head],y=qy[head++];\n    const k=(y*W+x)*4;\n    if(!nearBg(k)) continue;\n    px[k+3]=0;\n    push(x-1,y);push(x+1,y);push(x,y-1);push(x,y+1);\n  }\n\n  ctx2.putImageData(img,0,0);\n}\n\nfunction makeSticker(i){\n  const b=boxes()[i].map(v=>Math.round(v));\n  const x1=clamp(b[0],0,IW-2),y1=clamp(b[1],0,IH-2);\n  const x2=clamp(b[2],x1+2,IW),y2=clamp(b[3],y1+2,IH);\n  const cw=370,ch=320,sw=x2-x1,sh=y2-y1;\n  const rat=Math.min(cw/sw,ch/sh),nw=Math.max(1,Math.round(sw*rat)),nh=Math.max(1,Math.round(sh*rat));\n\n  const o=document.createElement("canvas");\n  o.width=cw;o.height=ch;\n  const octx=o.getContext("2d",{willReadFrequently:true});\n  octx.clearRect(0,0,cw,ch);\n\n  // 保留 V10 原本的定位點裁切、等比例縮放、置中。\n  octx.drawImage(\n    image,x1,y1,sw,sh,\n    Math.round((cw-nw)/2),Math.round((ch-nh)/2),nw,nh\n  );\n\n  // 只有勾選「透明背景 PNG」時才套用 V8 邏輯。\n  if(__TRANSPARENT__){\n    removeConnectedBackground(o,30);\n  }\n\n  return new Promise(r=>o.toBlob(r,"image/png"));\n}\n\nasync function downloadAll(){\n  if(!locked)return;\n  statusEl.textContent="⏳ 正在製作01～08 PNG……";\n  for(let i=0;i<8;i++){\n    saveBlob(await makeSticker(i),String(i+1).padStart(2,"0")+".png");\n    await new Promise(r=>setTimeout(r,180));\n  }\n  statusEl.textContent="🎉 01～08 已全部裁切並下載！";\n}\n\nimage.onload=()=>{\n  resize();\n  statusEl.textContent="✅ 定位線已建立：上 3 條＋下 3 條藍色垂直線可獨立拖曳";\n};\nwindow.addEventListener("resize",resize);\n</script></body></html>'
+    _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
+        'button.lock{background:#333;color:#fff}',
+        'button.lock{background:#333;color:#fff}\\nbutton.curve{background:#6c4ad1;color:#fff}',
+    ).replace(
+        '3 條上半部＋3 條下半部垂直定位線＋1 條水平定位線。\\n上下 6 條藍色垂直線可各自獨立拖曳；按「🔒 鎖定定位」後產生 01～08 裁切框。',
+        '先用直線決定大方向；需要繞開人物、手勢或道具時，開啟「進階曲線裁切」並拖曳紫色控制點。曲線邊界由相鄰兩張貼圖共用，鎖定後會直接套用到輸出的 PNG。',
+    ).replace(
+        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>',
+        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒 鎖定定位</button>\\n<button id="curveBtn" class="curve" onclick="toggleCurve()">〰️ 開啟進階曲線裁切</button>',
+    )
+
     # 本版不在 Canvas 直接下載；裁切結果會先加入下方暫存作品籃，再一次打包。
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
         '<button id="downloadBtn" class="primary" onclick="downloadAll()" disabled>✂️ 裁切並依序下載01～08(手機下載)</button>',
         '',
     ).replace(
         'const lockBtn=document.getElementById("lockBtn"),downloadBtn=document.getElementById("downloadBtn");',
-        'const lockBtn=document.getElementById("lockBtn"),applyBtn=document.getElementById("applyBtn");',
+        'const lockBtn=document.getElementById("lockBtn"),applyBtn=document.getElementById("applyBtn"),curveBtn=document.getElementById("curveBtn");',
     ).replace(
         '  downloadBtn.disabled=true;\n',
         '  applyBtn.disabled=true;\n',
@@ -8019,7 +8153,138 @@ function guidesFromBoxes(raw){
     };
   }catch(_){return guidesDefault();}
 }
-let g=guidesFromBoxes(INITIAL_BOXES);''',
+let g=guidesFromBoxes(INITIAL_BOXES);
+function curveJunctions(){
+  return [[0,g.y[1]],...g.xTop.map((x,i)=>[(x+g.xBottom[i])/2,g.y[1]]),[IW,g.y[1]]];
+}
+function curveDefault(){
+  const joins=curveJunctions();
+  return {
+    top:g.xTop.map((x,i)=>[(x+joins[i+1][0])/2,joins[i+1][1]/2]),
+    bottom:g.xBottom.map((x,i)=>[(x+joins[i+1][0])/2,(joins[i+1][1]+IH)/2]),
+    horizontal:[0,1,2,3].map(i=>[(joins[i][0]+joins[i+1][0])/2,g.y[1]])
+  };
+}
+function validCurve(raw){
+  if(!raw||!raw.enabled||!Array.isArray(raw.top)||raw.top.length!==3||!Array.isArray(raw.bottom)||raw.bottom.length!==3||!Array.isArray(raw.horizontal)||raw.horizontal.length!==4)return null;
+  const groups=[raw.top,raw.bottom,raw.horizontal];
+  if(groups.some(group=>group.some(point=>!Array.isArray(point)||point.length!==2||point.some(value=>!Number.isFinite(Number(value))))))return null;
+  return {top:raw.top.map(point=>point.map(Number)),bottom:raw.bottom.map(point=>point.map(Number)),horizontal:raw.horizontal.map(point=>point.map(Number))};
+}
+const INITIAL_CURVE=__CURVE_GUIDES__;
+let curveMode=false,curve=curveDefault();
+const restoredCurve=validCurve(INITIAL_CURVE);
+if(restoredCurve){curveMode=true;curve=restoredCurve;}
+''',
+    )
+    _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
+        'return out;\n}\n\nfunction draw(){',
+        '''return out;
+}
+
+function quadPath(start,control,end){
+  ctx.moveTo(start[0]*scale,start[1]*scale);
+  ctx.quadraticCurveTo(control[0]*scale,control[1]*scale,end[0]*scale,end[1]*scale);
+}
+function drawCurveGuides(){
+  if(!curveMode)return;
+  const joins=curveJunctions();
+  ctx.save();
+  ctx.strokeStyle="#9b59ff";ctx.fillStyle="#9b59ff";ctx.lineWidth=3;ctx.setLineDash([9,6]);
+  for(let i=0;i<3;i++){
+    ctx.beginPath();quadPath([g.xTop[i],0],curve.top[i],joins[i+1]);ctx.stroke();
+    ctx.beginPath();quadPath(joins[i+1],curve.bottom[i],[g.xBottom[i],IH]);ctx.stroke();
+  }
+  for(let i=0;i<4;i++){
+    ctx.beginPath();quadPath(joins[i],curve.horizontal[i],joins[i+1]);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for(const group of [curve.top,curve.bottom,curve.horizontal])for(const point of group){
+    ctx.beginPath();ctx.arc(point[0]*scale,point[1]*scale,8,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.stroke();ctx.strokeStyle="#9b59ff";
+  }
+  ctx.restore();
+}
+function curveHandleAt(p){
+  if(!curveMode)return null;
+  const tol=Math.max(24,24/scale);let best=null,dist=Infinity;
+  for(const group of ["top","bottom","horizontal"])for(let i=0;i<curve[group].length;i++){
+    const point=curve[group][i],d=Math.hypot(p.x-point[0],p.y-point[1]);
+    if(d<tol&&d<dist){best={curve:true,type:group,index:i};dist=d;}
+  }
+  return best;
+}
+function moveCurveHandle(handle,p){
+  if(handle.type==="horizontal"){
+    curve.horizontal[handle.index][1]=clamp(p.y,Math.max(45,g.y[1]-190),Math.min(IH-45,g.y[1]+190));
+    return;
+  }
+  const group=curve[handle.type],i=handle.index;
+  const guide=handle.type==="top"?g.xTop:g.xBottom;
+  const left=i===0?45:(guide[i-1]+guide[i])/2+35;
+  const right=i===2?IW-45:(guide[i]+guide[i+1])/2-35;
+  const upper=handle.type==="top"?45:g.y[1]+45;
+  const lower=handle.type==="top"?g.y[1]-45:IH-45;
+  group[i]=[clamp(p.x,left,right),clamp(p.y,upper,lower)];
+}
+function toggleCurve(){
+  if(locked)return;
+  curveMode=!curveMode;
+  if(curveMode)curve=curveDefault();
+  curveBtn.textContent=curveMode?"〰️ 關閉進階曲線裁切":"〰️ 開啟進階曲線裁切";
+  statusEl.textContent=curveMode?"🟣 已開啟曲線裁切，可拖曳紫色控制點":"📍 已回到直線裁切";
+  draw();
+}
+
+function draw(){''',
+    )
+    _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
+        '  updateCoords();\n}',
+        '  drawCurveGuides();\n  updateCoords();\n}',
+        1,
+    )
+    _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
+        'let scale=1,locked=false,active=-1,startX=0,startY=0,snap=null;',
+        'let scale=1,locked=false,active=null,startX=0,startY=0,snap=null;',
+    ).replace(
+        '}cv.addEventListener("pointerdown",e=>{',
+        '''}
+const straightNearestGuide=nearestGuide;
+nearestGuide=function(p){return curveHandleAt(p)||straightNearestGuide(p);};
+cv.addEventListener("pointerdown",e=>{''',
+    ).replace(
+        '  if(h.index<0)return;',
+        '  if(!h||h.index<0)return;',
+    ).replace(
+        '  active=h.index;startX=p.x;startY=p.y;snap={xTop:[...g.xTop],xBottom:[...g.xBottom],y:[...g.y],type:h.type};',
+        '  active=h;startX=p.x;startY=p.y;snap={xTop:[...g.xTop],xBottom:[...g.xBottom],y:[...g.y],type:h.type};',
+    ).replace(
+        '  if(active<0||locked)return;',
+        '  if(!active||locked)return;',
+    ).replace(
+        '  const p=pointerPos(e);\n  if(snap.type==="xTop" || snap.type==="xBottom")',
+        '  const p=pointerPos(e);\n  if(active.curve){moveCurveHandle(active,p);draw();return;}\n  if(snap.type==="xTop" || snap.type==="xBottom")',
+    ).replace(
+        '(active===0 ? 0 : arr[active-1])+min',
+        '(active.index===0 ? 0 : arr[active.index-1])+min',
+    ).replace(
+        '(active===2 ? IW : arr[active+1])-min',
+        '(active.index===2 ? IW : arr[active.index+1])-min',
+    ).replace(
+        'arr[active]=clamp(snapArr[active]+(p.x-startX),lo,hi);',
+        'arr[active.index]=clamp(snapArr[active.index]+(p.x-startX),lo,hi);',
+    ).replace(
+        '  if(active>=0){try{cv.releasePointerCapture(e.pointerId)}catch(_){}}\n  active=-1;',
+        '  if(active){try{cv.releasePointerCapture(e.pointerId)}catch(_){}}\n  active=null;',
+    ).replace(
+        '  g=guidesDefault();\n  lockBtn.textContent="🔒 鎖定定位";',
+        '  g=guidesDefault();\n  curveMode=false;curve=curveDefault();\n  curveBtn.textContent="〰️ 開啟進階曲線裁切";\n  lockBtn.textContent="🔒 鎖定定位";',
+    ).replace(
+        '    applyBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，請套用裁切範圍後加入作品籃";',
+        '    applyBtn.disabled=false;curveBtn.disabled=true;\n    statusEl.textContent="🔒 定位已鎖定，請套用裁切範圍後加入作品籃";',
+    ).replace(
+        '    applyBtn.disabled=true;\n    statusEl.textContent="🛠️ 定位已解鎖，可以繼續微調";',
+        '    applyBtn.disabled=true;curveBtn.disabled=false;\n    statusEl.textContent="🛠️ 定位已解鎖，可以繼續微調";',
     )
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
         'function saveBlob(blob,name){',
@@ -8028,17 +8293,28 @@ let g=guidesFromBoxes(INITIAL_BOXES);''',
   statusEl.textContent="🔒 正在套用裁切範圍並加入作品籃……";
   window.parent.postMessage({
     type:"v12-crop-save",
-    value:JSON.stringify({action:"add_to_basket",gridHash:"__GRID_HASH__",boxes:boxes()})
+    value:JSON.stringify({action:"add_to_basket",gridHash:"__GRID_HASH__",boxes:boxes(),curveGuides:curveMode?{enabled:true,top:curve.top,bottom:curve.bottom,horizontal:curve.horizontal}:null})
   },"*");
 }
 
+window.addEventListener("message",event=>{
+  if(event.data && event.data.type==="v12-crop-apply-current") applyCrop();
+});
+
 function saveBlob(blob,name){''',
+    )
+    _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
+        'image.onload=()=>{\n  resize();',
+        'image.onload=()=>{\n  if(curveMode)curveBtn.textContent="〰️ 關閉進階曲線裁切";\n  resize();',
     )
     for _crop_source, _crop_translation in _v12_crop_canvas_translations().items():
         _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(_crop_source, _crop_translation)
     _image_b64 = base64.b64encode(st.session_state.generated_4x2_bytes).decode("ascii")
     _boxes_json = __import__("json").dumps(st.session_state.crop_boxes, ensure_ascii=False)
-    _crop_html = _CROP_HTML_TEMPLATE.replace("__IMAGE_B64__", _image_b64).replace("__IW__", str(int(w))).replace("__IH__", str(int(h))).replace("__BOXES__", _boxes_json).replace("__TRANSPARENT__", "true" if transparent else "false")
+    _curve_guides_json = __import__("json").dumps(
+        st.session_state.get("v12_crop_curve_guides"), ensure_ascii=False
+    )
+    _crop_html = _CROP_HTML_TEMPLATE.replace("__IMAGE_B64__", _image_b64).replace("__IW__", str(int(w))).replace("__IH__", str(int(h))).replace("__BOXES__", _boxes_json).replace("__CURVE_GUIDES__", _curve_guides_json).replace("__TRANSPARENT__", "true" if transparent else "false")
     _crop_html = _crop_html.replace(
         "__GRID_HASH__",
         hashlib.sha256(st.session_state.generated_4x2_bytes).hexdigest(),
@@ -8046,6 +8322,9 @@ function saveBlob(blob,name){''',
     _crop_saved_value = _V12_CROP_GUIDES_COMPONENT(
         html=_crop_html,
         frame_height=760,
+        apply_request_token=str(
+            st.session_state.get("v12_crop_apply_request_token", "") or ""
+        ),
         key="v12_crop_guides_component",
         default=None,
     )
@@ -8058,12 +8337,13 @@ function saveBlob(blob,name){''',
             )
             _crop_saved_hash = str(_crop_saved_payload.get("gridHash", "") or "")
             _crop_saved_boxes = _crop_saved_payload.get("boxes")
+            _crop_saved_curve_guides = _crop_saved_payload.get("curveGuides")
             _crop_saved_action = str(_crop_saved_payload.get("action", "") or "")
             _current_grid_hash = hashlib.sha256(
                 st.session_state.generated_4x2_bytes
             ).hexdigest()
             _crop_saved_token = json.dumps(
-                [_crop_saved_hash, _crop_saved_boxes],
+                [_crop_saved_hash, _crop_saved_boxes, _crop_saved_curve_guides],
                 ensure_ascii=False,
                 separators=(",", ":"),
             )
@@ -8071,9 +8351,17 @@ function saveBlob(blob,name){''',
                 _applied_crop_boxes = _v12_valid_crop_boxes(
                     _crop_saved_boxes, w, h
                 )
+                _applied_curve_guides = (
+                    _crop_saved_curve_guides
+                    if _v12_curve_polygons(
+                        _applied_crop_boxes, _crop_saved_curve_guides, w, h
+                    ) is not None
+                    else None
+                )
                 _needs_rerun = False
                 if _crop_saved_token != st.session_state.get("v12_crop_last_saved_token"):
                     st.session_state.crop_boxes = _applied_crop_boxes
+                    st.session_state["v12_crop_curve_guides"] = _applied_curve_guides
                     st.session_state["v12_crop_last_saved_token"] = _crop_saved_token
                     st.session_state["v12_crop_guides_saved"] = True
                     _needs_rerun = True
@@ -8093,6 +8381,7 @@ function saveBlob(blob,name){''',
                     _added, _message = _v12_add_current_grid_to_sticker_basket(
                         st.session_state.get("generated_4x2_bytes"),
                         _applied_crop_boxes,
+                        _applied_curve_guides,
                     )
                     st.session_state["v12_crop_basket_feedback"] = {
                         "added": _added,
@@ -8120,27 +8409,20 @@ function saveBlob(blob,name){''',
         unsafe_allow_html=True,
     )
     st.info(
-        "✂️ 若有移動上方裁切線，請先按畫布內的「✅ 套用裁切並加入暫存作品籃」。"
-        "下方按鈕只會使用上一次已套用的裁切範圍。"
+        "✂️ 下方按鈕會直接讀取上方畫布目前鎖定的定位，"
+        "與畫布內的「✅ 套用裁切並加入暫存作品籃」完全使用相同流程。"
     )
     if st.button(
-        "📥 使用目前已套用的裁切範圍加入暫存作品籃",
+        "✅ 套用目前裁切並加入暫存作品籃",
         type="primary",
         use_container_width=True,
         key="v12_add_current_grid_to_basket",
     ):
-        try:
-            added, message = _v12_add_current_grid_to_sticker_basket(
-                st.session_state.get("generated_4x2_bytes"),
-                st.session_state.get("crop_boxes"),
-            )
-            if added:
-                st.success(message)
-                st.rerun()
-            else:
-                st.info(message)
-        except Exception as error:
-            st.error(f"加入暫存作品籃失敗：{error}")
+        # The live guide positions exist only inside the browser canvas.  Ask
+        # that canvas to execute its own apply action instead of falling back
+        # to an older server-side crop_boxes value.
+        st.session_state["v12_crop_apply_request_token"] = secrets.token_urlsafe(16)
+        st.rerun()
     st.caption(t("basket_session_only"))
     _v12_render_sticker_basket_workspace()
     _basket_library_col = st.columns([1, 2, 1])[1]
