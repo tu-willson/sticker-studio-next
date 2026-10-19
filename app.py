@@ -4168,6 +4168,15 @@ def _v12_crop_grid_cell(sheet, idx, crop_boxes=None):
     return out
 
 
+def _v12_prepare_generated_grid(raw, add_crop_room=False):
+    """Validate the API image and preserve its exact bytes unless opted in."""
+    image = Image.open(BytesIO(raw)).convert("RGBA")
+    if not add_crop_room:
+        return raw, False
+    image, applied = _v12_add_grid_breathing_room(image, shrink_ratio=0.88)
+    return (_v12_png_bytes(image) if applied else raw), applied
+
+
 def _v12_add_grid_breathing_room(sheet, shrink_ratio=0.88):
     """Shrink each transparent 4×2 cell independently to create crop room.
 
@@ -7386,6 +7395,14 @@ st.markdown(f'<div class="v11-transparent-title">{t("background_transparent")}</
 with st.container(key="transparent_png_option"):
     transparent = st.checkbox(t("transparent_png"), value=False)
 
+_auto_crop_room = st.checkbox(
+    t("auto_crop_room"),
+    value=False,
+    key="v12_auto_crop_room_enabled",
+    disabled=not transparent,
+    help=t("auto_crop_room_help"),
+)
+
 v10_subsection(t("settings_review"), "#ff9f43")
 style_mode = st.session_state.get("v10_style_mode", "↓ 請選擇風格")
 
@@ -7864,18 +7881,15 @@ if st.session_state.get("v11_generation_pending", False):
                 st.caption(f"診斷資訊：失敗發生於 {_elapsed:.1f} 秒；這不是 3 分鐘逾時。")
                 raise
             raw = base64.b64decode(result.data[0].b64_json)
-            img = Image.open(BytesIO(raw)).convert("RGBA")
-            img, _grid_crop_room_applied = _v12_add_grid_breathing_room(
-                img, shrink_ratio=0.88
+            _grid_bytes, _grid_crop_room_applied = _v12_prepare_generated_grid(
+                raw, add_crop_room=bool(transparent and _auto_crop_room)
             )
             st.session_state["v12_grid_breathing_room_applied"] = bool(
                 _grid_crop_room_applied
             )
             if _grid_crop_room_applied:
                 _status.info("✂️ 正在為每張貼圖保留裁切留白……")
-            out = BytesIO()
-            img.save(out, "PNG")
-            st.session_state.generated_4x2_bytes = out.getvalue()
+            st.session_state.generated_4x2_bytes = _grid_bytes
             st.session_state.crop_boxes = None
             _generation_succeeded = True
             if _sticker_mode == "expression":

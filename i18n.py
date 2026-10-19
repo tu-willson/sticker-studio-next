@@ -267,6 +267,20 @@ CATALOG["ja"].update({
 })
 
 
+CATALOG["zh-TW"].update({
+    "auto_crop_room": "自動逐格縮小留白（測試期間預設關閉）",
+    "auto_crop_room_help": "只影響下一次生成。關閉時保留 AI 完整原圖；勾選可恢復逐格縮小 12% 的舊方式，但跨過格線的內容可能被拆開。",
+})
+CATALOG["en"].update({
+    "auto_crop_room": "Shrink each cell to add space (off by default during testing)",
+    "auto_crop_room_help": "Applies to the next generation only. Off preserves the complete AI image. On restores the previous 12% per-cell shrink, which may split content crossing cell boundaries.",
+})
+CATALOG["ja"].update({
+    "auto_crop_room": "各セルを縮小して余白を追加（テスト中は初期設定でオフ）",
+    "auto_crop_room_help": "次回の生成にのみ適用されます。オフではAIの元画像をそのまま保持します。オンでは各セルを12％縮小する従来の処理に戻りますが、境界をまたぐ内容が分断される場合があります。",
+})
+
+
 def tr(locale: str, key: str, **kwargs) -> str:
     value = CATALOG.get(locale, _ZH).get(key, _ZH.get(key, key))
     return value.format(**kwargs) if kwargs else value
