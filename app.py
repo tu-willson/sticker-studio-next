@@ -4878,6 +4878,9 @@ def _v12_load_history_record(record):
     loaded_style_mode = str(metadata.get("style_mode", "") or "")
     if loaded_style_mode:
         st.session_state["v10_style_mode"] = loaded_style_mode
+    st.session_state["v12_use_custom_style"] = (
+        loaded_style_mode == V8_STYLE_CUSTOM_OPTION
+    )
     loaded_custom_style = metadata.get("custom_style_snapshot")
     if (
         loaded_style_mode == "⭐ 自定義風格"
@@ -6082,6 +6085,7 @@ def _v12_style_reference_upload_changed():
     if st.session_state.get("v12_style_reference_upload") is not None:
         st.session_state["v12_style_source_mode"] = V12_STYLE_REFERENCE_MODE
         st.session_state["v10_style_mode"] = "↓ 請選擇風格"
+        st.session_state["v12_use_custom_style"] = False
         st.session_state.pop("v12_loaded_project_custom_style", None)
     else:
         # This callback is only invoked when the user clears the uploader.
@@ -6625,6 +6629,7 @@ def _v12_set_style_source_mode(mode):
     st.session_state["v12_style_source_mode"] = mode
     if mode == V12_STYLE_REFERENCE_MODE:
         st.session_state["v10_style_mode"] = "↓ 請選擇風格"
+        st.session_state["v12_use_custom_style"] = False
         st.session_state.pop("v12_loaded_project_custom_style", None)
 
 
@@ -6657,9 +6662,9 @@ with _style_reference_col:
         args=(V12_STYLE_REFERENCE_MODE,),
     )
 
-# 自定義風格放在第 2 個位置，方便快速選擇。
+# 自定義風格改由獨立勾選啟用，預設風格下拉只保留預設選項。
 _v8_style_items = [x for x in V8_STYLES if not x.startswith("⭐ 自訂")]
-_style_options = ["↓ 請選擇風格", "⭐ 自定義風格"] + _v8_style_items
+_style_options = ["↓ 請選擇風格"] + _v8_style_items
 style_mode = str(st.session_state.get("v10_style_mode", "↓ 請選擇風格"))
 style = style_mode
 custom_style = ""
@@ -6667,11 +6672,34 @@ _style_reference_active = False
 
 if _style_source_mode == V12_STYLE_PRESET_MODE:
     st.caption(t("style_preset_caption"))
-    style_mode = st.selectbox(
-        t("style_label"),
-        _style_options,
-        key="v10_style_mode",
+    st.session_state.setdefault(
+        "v12_use_custom_style", style_mode == V8_STYLE_CUSTOM_OPTION
     )
+    _use_custom_style = st.checkbox(
+        t("custom_style_enable"),
+        key="v12_use_custom_style",
+    )
+    if _use_custom_style:
+        # Keep the canonical mode explicit so prompts and saved projects retain
+        # the exact custom-style behavior.
+        st.session_state["v10_style_mode"] = V8_STYLE_CUSTOM_OPTION
+        style_mode = V8_STYLE_CUSTOM_OPTION
+    else:
+        if style_mode == V8_STYLE_CUSTOM_OPTION:
+            _last_preset_style = str(st.session_state.get(
+                "v12_last_preset_style_mode", "↓ 請選擇風格"
+            ))
+            st.session_state["v10_style_mode"] = (
+                _last_preset_style
+                if _last_preset_style in _style_options
+                else "↓ 請選擇風格"
+            )
+        style_mode = st.selectbox(
+            t("style_label"),
+            _style_options,
+            key="v10_style_mode",
+        )
+        st.session_state["v12_last_preset_style_mode"] = style_mode
 
     if style_mode == "⭐ 自定義風格":
         style = "↓ 請選擇風格"
@@ -6775,7 +6803,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
         style = style_mode
         st.session_state.pop("v12_loaded_project_custom_style", None)
     with st.expander("📚 查看全部預設風格", expanded=False):
-        st.write("、".join(_style_options[2:]))
+        st.write("、".join(_style_options[1:]))
 else:
     style_mode = "↓ 請選擇風格"
     style = style_mode
