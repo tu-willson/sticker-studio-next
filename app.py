@@ -1022,19 +1022,24 @@ st.markdown("""
   font-weight:850;
 }
 /* 已選檔案旁的原生移除鍵不可再被「上傳」覆蓋；明確顯示為刪除 X。 */
-.st-key-v12_person_photo_upload [data-testid="stFileUploaderFile"] button,
-.st-key-v12_style_reference_upload [data-testid="stFileUploaderFile"] button{
+.st-key-v12_person_photo_upload [data-testid="stFileChipDeleteBtn"] button,
+.st-key-v12_style_reference_upload [data-testid="stFileChipDeleteBtn"] button{
   min-width:42px !important;
   background:#b93650 !important;
   border-color:#d65a70 !important;
   box-shadow:none !important;
 }
-.st-key-v12_person_photo_upload [data-testid="stFileUploaderFile"] button::after,
-.st-key-v12_style_reference_upload [data-testid="stFileUploaderFile"] button::after{
+.st-key-v12_person_photo_upload [data-testid="stFileChipDeleteBtn"] button::after,
+.st-key-v12_style_reference_upload [data-testid="stFileChipDeleteBtn"] button::after{
   content:"✕" !important;
   color:#fff !important;
   font-size:1.35rem !important;
   font-weight:900 !important;
+}
+/* 檔案已存在時，右側加號鍵是換檔用途，不要和刪除鍵同樣寫成上傳。 */
+.st-key-v12_person_photo_upload [data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChipDeleteBtn"]) button[aria-label="Add files"]::after,
+.st-key-v12_style_reference_upload [data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChipDeleteBtn"]) button[aria-label="Add files"]::after{
+  content:"更換" !important;
 }
 .st-key-v12_person_photo_upload [data-testid="stFileUploaderDropzone"] button:hover,
 .st-key-v12_style_reference_upload [data-testid="stFileUploaderDropzone"] button:hover{
