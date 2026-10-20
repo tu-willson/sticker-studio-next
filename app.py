@@ -7064,6 +7064,39 @@ def _v12_set_sticker_content_mode(mode):
         _v12_restore_sticker_action_widgets()
     st.session_state["v12_sticker_content_mode"] = mode
 
+
+_sticker_content_choice = str(st.session_state.get(
+    "v12_sticker_content_mode", V12_STICKER_TEXT_MODE
+))
+_mode_text_col, _mode_expression_col = st.columns(2)
+with _mode_text_col:
+    st.button(
+        ("✓ " if _sticker_content_choice == V12_STICKER_TEXT_MODE else "")
+        + t("content_text_mode"),
+        key="v12_select_text_sticker_mode",
+        use_container_width=True,
+        type="primary" if _sticker_content_choice == V12_STICKER_TEXT_MODE else "secondary",
+        on_click=_v12_set_sticker_content_mode,
+        args=(V12_STICKER_TEXT_MODE,),
+    )
+with _mode_expression_col:
+    st.button(
+        ("✓ " if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "")
+        + t("content_expression_mode"),
+        key="v12_select_expression_sticker_mode",
+        use_container_width=True,
+        type="primary" if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "secondary",
+        on_click=_v12_set_sticker_content_mode,
+        args=(V12_STICKER_EXPRESSION_MODE,),
+    )
+_sticker_mode = _v12_sticker_mode_value(_sticker_content_choice)
+if _sticker_mode == "text":
+    v12_mode_panel_heading(t("text_source_heading"), '#3498db')
+    st.caption(t("text_source_caption"))
+else:
+    v12_mode_panel_heading(t("expression_heading"), "#3498db")
+    st.caption(t("expression_caption"))
+
 # V12｜文字來源面板：只有使用者主動點選後，才展開對應功能，
 # 避免 AI 文案與隨機用語區塊同時堆在畫面上。
 st.session_state.setdefault("v12_text_source_panel", "")
@@ -7073,6 +7106,27 @@ def _v12_toggle_text_source(_panel):
         st.session_state["v12_text_source_panel"] = ""
     else:
         st.session_state["v12_text_source_panel"] = _panel
+
+if _sticker_mode == "text":
+    _src_a, _src_b = st.columns(2)
+    with _src_a:
+        st.button(
+            t("ai_copy_button"),
+            key="v12_open_ai_copy_panel",
+            use_container_width=True,
+            type="primary" if st.session_state.get("v12_text_source_panel") == "ai" else "secondary",
+            on_click=_v12_toggle_text_source,
+            args=("ai",),
+        )
+    with _src_b:
+        st.button(
+            t("random_phrases_button"),
+            key="v12_open_random_panel",
+            use_container_width=True,
+            type="primary" if st.session_state.get("v12_text_source_panel") == "random" else "secondary",
+            on_click=_v12_toggle_text_source,
+            args=("random",),
+        )
 
 # V12｜AI 貼圖文案助手 V1：只負責文字，不碰原本圖片生成流程。
 #
@@ -7407,6 +7461,11 @@ def _v12_render_expression_sticker_slots():
     st.info(t("expression_configured", configured=configured))
 
 
+if _sticker_mode == "text" and st.session_state.get("v12_text_source_panel") == "ai":
+    st.caption(t("ai_result_intro"))
+    _v12_render_ai_copy_assistant()
+
+
 @st.fragment
 def _v12_render_random_phrase_panel():
     _pool_names=list(V8_RANDOM_POOLS.keys())
@@ -7508,91 +7567,16 @@ def _v12_render_random_phrase_panel():
             st.rerun()
 
 
-@st.fragment
-def _v12_render_sticker_content_workspace():
-    """Render STEP 04 as one local workspace while testing faster mode changes.
+if _sticker_mode == "text" and st.session_state.get("v12_text_source_panel") == "random":
+    _v12_render_random_phrase_panel()
 
-    A mode click now re-runs this workspace instead of rebuilding the complete
-    page.  The editor data still lives in the existing canonical drafts, so a
-    later full rerun (including Generate) receives exactly the same payload.
-    """
-    _sticker_content_choice = str(st.session_state.get(
-        "v12_sticker_content_mode", V12_STICKER_TEXT_MODE
-    ))
-    _mode_text_col, _mode_expression_col = st.columns(2)
-    with _mode_text_col:
-        st.button(
-            ("✓ " if _sticker_content_choice == V12_STICKER_TEXT_MODE else "")
-            + t("content_text_mode"),
-            key="v12_select_text_sticker_mode",
-            use_container_width=True,
-            type=(
-                "primary" if _sticker_content_choice == V12_STICKER_TEXT_MODE
-                else "secondary"
-            ),
-            on_click=_v12_set_sticker_content_mode,
-            args=(V12_STICKER_TEXT_MODE,),
-        )
-    with _mode_expression_col:
-        st.button(
-            ("✓ " if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "")
-            + t("content_expression_mode"),
-            key="v12_select_expression_sticker_mode",
-            use_container_width=True,
-            type=(
-                "primary" if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE
-                else "secondary"
-            ),
-            on_click=_v12_set_sticker_content_mode,
-            args=(V12_STICKER_EXPRESSION_MODE,),
-        )
-
-    _sticker_mode = _v12_sticker_mode_value(_sticker_content_choice)
-    if _sticker_mode == "text":
-        v12_mode_panel_heading(t("text_source_heading"), "#3498db")
-        st.caption(t("text_source_caption"))
-        _src_a, _src_b = st.columns(2)
-        with _src_a:
-            st.button(
-                t("ai_copy_button"),
-                key="v12_open_ai_copy_panel",
-                use_container_width=True,
-                type=(
-                    "primary" if st.session_state.get("v12_text_source_panel") == "ai"
-                    else "secondary"
-                ),
-                on_click=_v12_toggle_text_source,
-                args=("ai",),
-            )
-        with _src_b:
-            st.button(
-                t("random_phrases_button"),
-                key="v12_open_random_panel",
-                use_container_width=True,
-                type=(
-                    "primary" if st.session_state.get("v12_text_source_panel") == "random"
-                    else "secondary"
-                ),
-                on_click=_v12_toggle_text_source,
-                args=("random",),
-            )
-        if st.session_state.get("v12_text_source_panel") == "ai":
-            st.caption(t("ai_result_intro"))
-            _v12_render_ai_copy_assistant()
-        if st.session_state.get("v12_text_source_panel") == "random":
-            _v12_render_random_phrase_panel()
-        _v12_render_text_slots()
-    else:
-        v12_mode_panel_heading(t("expression_heading"), "#3498db")
-        st.caption(t("expression_caption"))
-        _v12_render_expression_sticker_slots()
-        # 表情欄位在局部 workspace 內編輯；只在模式切換或完整頁面流程
-        # （例如按下生成）時彙整成 persistent draft，減少不必要的更新。
-        _v12_capture_expression_draft()
-
-
-_v12_render_sticker_content_workspace()
-_sticker_mode = _v12_sticker_mode_value()
+if _sticker_mode == "text":
+    _v12_render_text_slots()
+else:
+    _v12_render_expression_sticker_slots()
+    # 表情欄位在局部 fragment 內編輯；只在模式切換或完整頁面流程
+    # （例如按下生成）時彙整成 persistent draft，減少不必要的更新。
+    _v12_capture_expression_draft()
 texts = get_texts()
 expression_specs = _v12_get_expression_specs()
 _prepared_expression_specs = st.session_state.get("v12_expression_generation_specs")
