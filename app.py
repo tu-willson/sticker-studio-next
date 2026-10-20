@@ -5560,6 +5560,9 @@ def _v12_step04_frontend_snapshot():
             "tone": str(st.session_state.get("v12_ai_copy_tone", "") or ""),
             "candidates": list(st.session_state.get("v12_ai_copy_candidates", []) or []),
             "selected": list(st.session_state.get("v12_ai_copy_selected", []) or []),
+            # Keep a small cross-batch queue: users may like only a few lines
+            # from one AI batch and continue choosing from the next one.
+            "picked": list(st.session_state.get("v12_ai_copy_picked", []) or []),
             "themePools": dict(st.session_state.get("v12_theme_pools", {}) or {}),
             "selectedThemes": list(st.session_state.get("v12_selected_themes", []) or []),
         },
@@ -5607,7 +5610,8 @@ def _v12_step04_frontend_component_state():
         "aiTone": tone if tone in V12_AI_COPY_TONES else V12_AI_COPY_TONES[0],
         "aiCandidates": snapshot["ai"]["candidates"],
         "aiSelected": snapshot["ai"]["selected"],
-        "randomPool": pool if pool in random_pools else next(iter(random_pools), ""),
+        "aiPicked": snapshot["ai"]["picked"],
+        "randomPool": pool if pool in random_pools else "__all_builtin__",
         "randomCustomDraft": "",
         "randomCustomPhrases": snapshot["random"]["customPhrases"],
         "randomPools": random_pools,
@@ -5656,8 +5660,12 @@ def _v12_apply_step04_frontend_snapshot(payload):
             "tone": payload.get("aiTone", ""),
             "candidates": payload.get("aiCandidates", []),
             "selected": payload.get("aiSelected", []),
+            "picked": payload.get("aiPicked", []),
         }
-        payload["random"] = {"pool": payload.get("randomPool", "")}
+        payload["random"] = {
+            "pool": payload.get("randomPool", ""),
+            "customPhrases": payload.get("randomCustomPhrases", []),
+        }
 
     mode = "expression" if payload.get("mode") == "expression" else "text"
     st.session_state["v12_sticker_content_mode"] = (
@@ -5743,12 +5751,20 @@ def _v12_apply_step04_frontend_snapshot(payload):
         selected = ai.get("selected")
         if isinstance(selected, list):
             st.session_state["v12_ai_copy_selected"] = [int(item) for item in selected if isinstance(item, int) and 0 <= item < 16]
+        picked = ai.get("picked")
+        if isinstance(picked, list):
+            st.session_state["v12_ai_copy_picked"] = list(dict.fromkeys(
+                str(item).strip()[:120] for item in picked if str(item).strip()
+            ))[:8]
 
     random_state = payload.get("random")
     if isinstance(random_state, dict):
         pool = str(random_state.get("pool", "") or "")
-        if pool:
+        if pool and not pool.startswith("__"):
             st.session_state["v10_phrase_pool_choice"] = pool
+        custom_phrases = random_state.get("customPhrases")
+        if isinstance(custom_phrases, list):
+            _save_v10_phrase_pool(custom_phrases)
     return True
 
 def base_boxes(w, h):

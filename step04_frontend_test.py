@@ -99,10 +99,13 @@ export default function(component) {
   };
   const RANDOM_POOLS = initial.randomPools && typeof initial.randomPools === 'object'
     ? initial.randomPools : FALLBACK_RANDOM_POOLS;
+  const ALL_RANDOM_POOL = '__all_builtin__';
+  const CUSTOM_RANDOM_POOL = '__custom_pool__';
+  const allRandomPhrases = () => Object.values(RANDOM_POOLS).flat().map(value => String(value));
   const AI_TONES = ['😂 搞笑自然','😤 憤憤不平','😈 嘲諷吐槽','☁️ 委屈可愛','👑 霸氣有梗','💬 台灣口語','✨ 溫暖療癒'];
   const defaultState = () => ({
-    mode:'text', sourcePanel:'', aiTopic:'', aiTone:'😂 搞笑自然', aiCandidates:[], aiSelected:[],
-    randomPool:Object.keys(RANDOM_POOLS)[0] || '', randomTarget:'0', randomCustomDraft:'', randomCustomPhrases:[], message:'', slots:emptySlots(), version:2
+    mode:'text', sourcePanel:'', aiTopic:'', aiTone:'😂 搞笑自然', aiCandidates:[], aiSelected:[], aiPicked:[], aiTarget:'0',
+    randomPool:ALL_RANDOM_POOL, randomTarget:'0', randomCustomDraft:'', randomCustomPhrases:[], message:'', slots:emptySlots(), version:2
   });
   const normalize = (raw) => {
     const base = defaultState();
@@ -113,8 +116,10 @@ export default function(component) {
     base.aiTopic = String(raw.aiTopic || '');
     base.aiTone = AI_TONES.includes(raw.aiTone) ? raw.aiTone : AI_TONES[0];
     base.aiCandidates = Array.isArray(raw.aiCandidates) ? raw.aiCandidates.map(value => String(value)).slice(0, 16) : [];
-    base.aiSelected = Array.isArray(raw.aiSelected) ? [...new Set(raw.aiSelected.map(Number).filter(index => Number.isInteger(index) && index >= 0 && index < base.aiCandidates.length))].slice(0, 8) : [];
-    base.randomPool = Object.prototype.hasOwnProperty.call(RANDOM_POOLS, raw.randomPool) || raw.randomPool === '自訂' ? raw.randomPool : (Object.keys(RANDOM_POOLS)[0] || '');
+    base.aiSelected = Array.isArray(raw.aiSelected) ? [...new Set(raw.aiSelected.map(Number).filter(index => Number.isInteger(index) && index >= 0 && index < base.aiCandidates.length))] : [];
+    base.aiPicked = Array.isArray(raw.aiPicked) ? [...new Set(raw.aiPicked.map(value => String(value).trim()).filter(Boolean))].slice(0, 8) : [];
+    base.aiTarget = String(Number.isInteger(Number(raw.aiTarget)) && Number(raw.aiTarget) >= 0 && Number(raw.aiTarget) < 8 ? Number(raw.aiTarget) : 0);
+    base.randomPool = Object.prototype.hasOwnProperty.call(RANDOM_POOLS, raw.randomPool) || raw.randomPool === ALL_RANDOM_POOL || raw.randomPool === CUSTOM_RANDOM_POOL || raw.randomPool === '自訂' ? (raw.randomPool === '自訂' ? CUSTOM_RANDOM_POOL : raw.randomPool) : ALL_RANDOM_POOL;
     base.randomTarget = String(Number.isInteger(Number(raw.randomTarget)) && Number(raw.randomTarget) >= 0 && Number(raw.randomTarget) < 8 ? Number(raw.randomTarget) : 0);
     base.randomCustomDraft = String(raw.randomCustomDraft || '');
     base.randomCustomPhrases = Array.isArray(raw.randomCustomPhrases) ? raw.randomCustomPhrases.map(value => String(value).trim()).filter(Boolean).slice(0, 50) : [];
@@ -214,30 +219,39 @@ export default function(component) {
       </div>
       <div class="s4-action-row"><button class="s4-small-button" data-action="generate-ai">✨ 產生 16 句貼圖文字</button><span class="s4-local">只有按下這個按鈕時才會連線產生文案。</span></div>
       ${state.aiCandidates.length ? `
-        <div class="s4-caption">請選擇剛好 8 句（目前 ${state.aiSelected.length} / 8）。</div>
+        <div class="s4-caption">可勾選任意數量；本批已勾選 ${state.aiSelected.length} 句，待帶入清單 ${state.aiPicked.length} / 8 句。</div>
         <div class="s4-candidates">${state.aiCandidates.map((sentence, index) => `<label class="s4-candidate"><input type="checkbox" data-candidate-index="${index}" ${checked(state.aiSelected.includes(index))}> <span>${esc(sentence)}</span></label>`).join('')}</div>
-        <div class="s4-action-row"><button class="s4-small-button" data-action="apply-ai">套用選取的 8 句到 01～08</button></div>` : ''}
+        <div class="s4-action-row"><button class="s4-small-button" data-action="stash-ai">加入勾選句到待帶入清單</button><span class="s4-local">不需要湊滿 8 句；可再產生下一批繼續挑選。</span></div>` : ''}
+      ${state.aiPicked.length ? `
+        <div class="s4-caption">待帶入清單（點選句子可移除）：</div>
+        <div class="s4-random-phrases">${state.aiPicked.map((sentence, index) => `<button class="s4-phrase" data-action="remove-ai-picked" data-picked-index="${index}">${esc(sentence)} ×</button>`).join('')}</div>
+        <div class="s4-panel-grid"><select class="s4-input" data-root-field="aiTarget">${Array.from({length:8}, (_, index) => `<option value="${index}" ${Number(state.aiTarget) === index ? 'selected' : ''}>從圖片 ${String(index+1).padStart(2,'0')} 開始帶入</option>`).join('')}</select><button class="s4-small-button" data-action="apply-ai-picked">帶入已挑選的 ${state.aiPicked.length} 句</button></div>
+        <div class="s4-pool-list">會依序填入指定圖片起的欄位，不會改動其他圖片文字。</div>` : ''}
       ${state.message ? `<div class="s4-message">${esc(state.message)}</div>` : ''}
     </section>`;
   const randomPanel = () => {
-    const phrases = state.randomPool === '自訂' ? state.randomCustomPhrases : (RANDOM_POOLS[state.randomPool] || []);
+    const isAllPool = state.randomPool === ALL_RANDOM_POOL;
+    const isCustomPool = state.randomPool === CUSTOM_RANDOM_POOL;
+    const phrases = isAllPool ? allRandomPhrases() : (isCustomPool ? state.randomCustomPhrases : (RANDOM_POOLS[state.randomPool] || []));
     return `
     <section class="s4-source-panel">
       <div class="s4-panel-title">🎲 隨機用語</div>
       <div class="s4-panel-grid">
         <select class="s4-input" data-root-field="randomPool">
-          ${[...Object.keys(RANDOM_POOLS), '自訂'].map(pool => `<option value="${pool}" ${state.randomPool === pool ? 'selected' : ''}>${pool === '自訂' ? '⭐ 我的自定義語詞池' : pool}</option>`).join('')}
+          <option value="${ALL_RANDOM_POOL}" ${state.randomPool === ALL_RANDOM_POOL ? 'selected' : ''}>🎲 所有用語隨機</option>
+          <option value="${CUSTOM_RANDOM_POOL}" ${state.randomPool === CUSTOM_RANDOM_POOL ? 'selected' : ''}>⭐ 我的自定義詞語池</option>
+          ${Object.keys(RANDOM_POOLS).map(pool => `<option value="${pool}" ${state.randomPool === pool ? 'selected' : ''}>${pool}</option>`).join('')}
         </select>
         <select class="s4-input" data-root-field="randomTarget">
           ${Array.from({length:8}, (_, index) => `<option value="${index}" ${Number(state.randomTarget) === index ? 'selected' : ''}>指定圖片 ${String(index+1).padStart(2,'0')}</option>`).join('')}
         </select>
       </div>
       <div class="s4-action-row"><button class="s4-small-button" data-action="random-fill">🎲 隨機填入 8 格</button><span class="s4-local">或點選下方任一句，直接放入指定圖片。</span></div>
-      ${state.randomPool === '自訂' ? `
+      ${isCustomPool ? `
         <div class="s4-label-row"><span>新增自訂用語（一次一則）</span></div>
         <div class="s4-panel-grid"><input class="s4-input" data-root-field="randomCustomDraft" value="${esc(state.randomCustomDraft)}" placeholder="輸入後加入自訂清單"><button class="s4-small-button" data-action="add-custom-phrase">加入清單</button></div>
-        <div class="s4-pool-list">${state.randomCustomPhrases.length ? `目前 ${state.randomCustomPhrases.length} 則` : '尚未新增自訂用語。'}</div>` : `<div class="s4-pool-list">「${esc(state.randomPool)}」目前共有 ${phrases.length} 則用語。</div>`}
-      ${phrases.length ? `<div class="s4-random-phrases">${phrases.map((phrase, index) => `<button class="s4-phrase" data-action="insert-random-phrase" data-phrase-index="${index}">${esc(phrase)}</button>`).join('')}</div>` : ''}
+        <div class="s4-pool-list">${state.randomCustomPhrases.length ? `目前 ${state.randomCustomPhrases.length} 則` : '尚未新增自訂用語。'}</div>` : `<div class="s4-pool-list">${isAllPool ? `所有內建用語共 ${phrases.length} 則；此模式只供隨機填入，不展開全部內容。` : `「${esc(state.randomPool)}」目前共有 ${phrases.length} 則用語。`}</div>`}
+      ${phrases.length && !isAllPool ? `<div class="s4-random-phrases">${phrases.map((phrase, index) => `<button class="s4-phrase" data-action="insert-random-phrase" data-phrase-index="${index}">${esc(phrase)}</button>`).join('')}</div>` : ''}
       ${state.message ? `<div class="s4-message">${esc(state.message)}</div>` : ''}
     </section>`;
   };
@@ -333,9 +347,7 @@ export default function(component) {
     const candidateIndex = Number(element.dataset.candidateIndex);
     if (Number.isInteger(candidateIndex) && candidateIndex >= 0 && candidateIndex < state.aiCandidates.length) {
       const selected = new Set(state.aiSelected);
-      if (element.checked && selected.size >= 8) {
-        state.message = '一次只能選擇 8 句；請先取消其中一句。';
-      } else if (element.checked) {
+      if (element.checked) {
         selected.add(candidateIndex);
         state.message = '';
       } else {
@@ -376,12 +388,44 @@ export default function(component) {
       setTriggerValue('event', {kind:'generate-ai', state});
       return;
     }
-    if (button.dataset.action === 'apply-ai') {
-      if (state.aiSelected.length !== 8) {
-        state.message = `請選擇剛好 8 句後再套用（目前 ${state.aiSelected.length} 句）。`;
+    if (button.dataset.action === 'stash-ai') {
+      const selectedSentences = state.aiSelected
+        .map(index => state.aiCandidates[index])
+        .filter(Boolean);
+      const combined = [...state.aiPicked, ...selectedSentences]
+        .map(value => String(value).trim())
+        .filter(Boolean);
+      state.aiPicked = [...new Set(combined)].slice(0, 8);
+      state.aiSelected = [];
+      state.message = selectedSentences.length
+        ? `已加入 ${selectedSentences.length} 句；目前待帶入 ${state.aiPicked.length} / 8 句。`
+        : '請先勾選至少一句喜歡的文案。';
+      save();
+      render();
+      return;
+    }
+    if (button.dataset.action === 'apply-ai-picked') {
+      const start = Number(state.aiTarget);
+      const count = Math.max(0, Math.min(state.aiPicked.length, 8 - start));
+      if (!count) {
+        state.message = '沒有可帶入的句子，或指定的位置已超出範圍。';
       } else {
-        fillTextSlots(state.aiSelected.map(index => state.aiCandidates[index]));
-        state.message = '已將選取的 8 句套用到圖片 01～08。';
+        state.aiPicked.slice(0, count).forEach((sentence, offset) => {
+          state.slots[start + offset].text = sentence;
+        });
+        const used = state.aiPicked.slice(0, count);
+        state.aiPicked = state.aiPicked.slice(count);
+        state.message = `已將 ${used.length} 句依序帶入圖片 ${String(start + 1).padStart(2, '0')} 起的欄位。`;
+      }
+      save();
+      render();
+      return;
+    }
+    if (button.dataset.action === 'remove-ai-picked') {
+      const pickedIndex = Number(button.dataset.pickedIndex);
+      if (Number.isInteger(pickedIndex) && pickedIndex >= 0 && pickedIndex < state.aiPicked.length) {
+        state.aiPicked.splice(pickedIndex, 1);
+        state.message = '已從待帶入清單移除。';
       }
       save();
       render();
@@ -403,19 +447,19 @@ export default function(component) {
       return;
     }
     if (button.dataset.action === 'random-fill') {
-      const phrases = state.randomPool === '自訂' ? state.randomCustomPhrases : RANDOM_POOLS[state.randomPool];
+      const phrases = state.randomPool === ALL_RANDOM_POOL ? allRandomPhrases() : (state.randomPool === CUSTOM_RANDOM_POOL ? state.randomCustomPhrases : (RANDOM_POOLS[state.randomPool] || []));
       if (!phrases.length) {
         state.message = '自訂清單尚未有用語，請先新增至少一則。';
       } else {
         fillTextSlots(phrases);
-        state.message = `已從「${state.randomPool}」隨機填入圖片 01～08。`;
+        state.message = `已從「${state.randomPool === ALL_RANDOM_POOL ? '所有用語' : state.randomPool === CUSTOM_RANDOM_POOL ? '我的自定義詞語池' : state.randomPool}」隨機填入圖片 01～08。`;
       }
       save();
       render();
       return;
     }
     if (button.dataset.action === 'insert-random-phrase') {
-      const phrases = state.randomPool === '自訂' ? state.randomCustomPhrases : (RANDOM_POOLS[state.randomPool] || []);
+      const phrases = state.randomPool === CUSTOM_RANDOM_POOL ? state.randomCustomPhrases : (RANDOM_POOLS[state.randomPool] || []);
       const phraseIndex = Number(button.dataset.phraseIndex);
       const target = Number(state.randomTarget);
       if (Number.isInteger(phraseIndex) && phrases[phraseIndex] && Number.isInteger(target) && state.slots[target]) {
