@@ -1021,6 +1021,21 @@ st.markdown("""
   font-size:1rem;
   font-weight:850;
 }
+/* 已選檔案旁的原生移除鍵不可再被「上傳」覆蓋；明確顯示為刪除 X。 */
+.st-key-v12_person_photo_upload [data-testid="stFileUploaderFile"] button,
+.st-key-v12_style_reference_upload [data-testid="stFileUploaderFile"] button{
+  min-width:42px !important;
+  background:#b93650 !important;
+  border-color:#d65a70 !important;
+  box-shadow:none !important;
+}
+.st-key-v12_person_photo_upload [data-testid="stFileUploaderFile"] button::after,
+.st-key-v12_style_reference_upload [data-testid="stFileUploaderFile"] button::after{
+  content:"✕" !important;
+  color:#fff !important;
+  font-size:1.35rem !important;
+  font-weight:900 !important;
+}
 .st-key-v12_person_photo_upload [data-testid="stFileUploaderDropzone"] button:hover,
 .st-key-v12_style_reference_upload [data-testid="stFileUploaderDropzone"] button:hover{
   background:#e53e57 !important;
