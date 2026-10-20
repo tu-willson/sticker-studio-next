@@ -4145,12 +4145,8 @@ def _v12_normalize_project_metadata(metadata):
     custom_character = str(
         data.get("custom_character", creative.get("custom_character", "")) or ""
     )[:2000]
-    custom_character_enabled = bool(
-        data.get(
-            "custom_character_enabled",
-            creative.get("custom_character_enabled", False),
-        )
-    )
+    # 自訂人物／場景改為有內容即啟用；保留欄位只為相容舊作品資料。
+    custom_character_enabled = bool(custom_character)
     sticker_mode = str(data.get("sticker_mode", creative.get("sticker_mode", "text")) or "text")
     if sticker_mode not in {"text", "expression"}:
         sticker_mode = "text"
@@ -4876,7 +4872,7 @@ def _v12_load_history_record(record):
         metadata.get("custom_character", "") or ""
     )
     st.session_state["v10_character_enabled_1"] = bool(
-        metadata.get("custom_character_enabled", False)
+        metadata.get("custom_character", "")
     )
 
     loaded_style_mode = str(metadata.get("style_mode", "") or "")
@@ -5034,9 +5030,7 @@ def _v12_project_snapshot():
     project["custom_character"] = str(
         st.session_state.get("v10_character_custom_1", "") or ""
     ).strip()
-    project["custom_character_enabled"] = bool(
-        st.session_state.get("v10_character_enabled_1", False)
-    )
+    project["custom_character_enabled"] = bool(project["custom_character"])
     project["custom_style_snapshot"] = _v12_current_custom_style_snapshot()
     project["style_mode"] = project["custom_style_snapshot"].get("mode", "")
     # V12｜STEP 01A③ FIX：
@@ -6862,26 +6856,20 @@ if isinstance(_saved_character_options, list):
     ]
 with st.form("v12_character_settings_form", border=False):
     selected_character=st.multiselect(t("feature_select"),CHARACTER_OPTIONS,key="v10_character_options")
-    _c1,_c2=st.columns([1,8])
-    with _c1:
-        st.checkbox(t("enable"), key="v10_character_enabled_1")
-    with _c2:
-        st.text_area(
-            t("custom_character"),
-            key="v10_character_custom_1",
-            height=70,
-        )
+    st.text_area(
+        t("custom_character"),
+        key="v10_character_custom_1",
+        height=70,
+    )
     with st.container(key="v12_character_settings_apply_button"):
         _save_character_settings = st.form_submit_button(
             t("save_character"),
             type="primary",
             use_container_width=True,
         )
-custom_character = (
-    str(st.session_state.get("v10_character_custom_1", "") or "").strip()
-    if st.session_state.get("v10_character_enabled_1", False)
-    else ""
-)
+custom_character = str(
+    st.session_state.get("v10_character_custom_1", "") or ""
+).strip()
 if _save_character_settings:
     if _save_v10_presets():
         st.success(t("character_saved"))
