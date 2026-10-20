@@ -72,6 +72,8 @@ EDITOR_CSS = r"""
 .s4-candidate input { margin-top:2px; accent-color:#ff5878; }
 .s4-message { margin-top:9px; color:#ffd4dc; font-size:13px; font-weight:700; }
 .s4-pool-list { margin:8px 0 0; color:#b8cbe0; font-size:13px; line-height:1.55; }
+.s4-color-row { display:grid; grid-template-columns:minmax(0,1fr) 105px 28px; gap:6px; margin:7px 0; align-items:center; }
+.s4-remove-color { border:0; border-radius:7px; min-height:32px; background:rgba(255,91,120,.28); color:#fff; font-size:20px; cursor:pointer; }
 .s4-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px; }
 .s4-card { min-width:0; padding:13px; border:1px solid rgba(104,136,168,.55); border-radius:12px;
   background:rgba(20,34,54,.82); }
@@ -98,8 +100,13 @@ export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
   const root = parentElement.querySelector('.step04-editor-root') || parentElement;
   const storageKey = data.storageKey;
+  const COLOR_OPTIONS = [
+    ['紅色', '#ff5c75'], ['橘色', '#ff9f43'], ['黃色', '#ffd166'], ['綠色', '#55d68b'],
+    ['藍色', '#57b7ff'], ['紫色', '#ad7dff'], ['粉色', '#ff8eb7'], ['白色', '#ffffff']
+  ];
+  const defaultColorSegments = () => [{text:'', color_name:'紅色', hex:'#ff5c75'}];
   const emptySlots = () => Array.from({length: 8}, () => ({
-    text:'', actionEnabled:false, action:'', colorEnabled:false, colorText:'',
+    text:'', actionEnabled:false, action:'', colorEnabled:false, colorSegments:defaultColorSegments(),
     emotion:'', random:false, expressionActionEnabled:false, expressionAction:''
   }));
   const AI_ENDINGS = [
@@ -131,7 +138,14 @@ export default function(component) {
     base.randomCustomDraft = String(raw.randomCustomDraft || '');
     base.randomCustomPhrases = Array.isArray(raw.randomCustomPhrases) ? raw.randomCustomPhrases.map(value => String(value).trim()).filter(Boolean).slice(0, 50) : [];
     base.message = String(raw.message || '');
-    if (Array.isArray(raw.slots)) base.slots = base.slots.map((slot, i) => ({...slot, ...(raw.slots[i] || {})}));
+    if (Array.isArray(raw.slots)) base.slots = base.slots.map((slot, i) => {
+      const saved = raw.slots[i] || {};
+      const colorSegments = Array.isArray(saved.colorSegments) ? saved.colorSegments.slice(0, 3).map(segment => {
+        const matching = COLOR_OPTIONS.find(option => option[1] === String(segment?.hex || '')) || COLOR_OPTIONS[0];
+        return {text:String(segment?.text || ''), color_name:String(segment?.color_name || matching[0]), hex:matching[1]};
+      }) : defaultColorSegments();
+      return {...slot, ...saved, colorSegments: colorSegments.length ? colorSegments : defaultColorSegments()};
+    });
     return base;
   };
   let state;
@@ -141,6 +155,14 @@ export default function(component) {
   const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const checked = value => value ? 'checked' : '';
 
+  const colorRows = (slot, index) => slot.colorSegments.map((segment, segmentIndex) => `
+    <div class="s4-color-row">
+      <input class="s4-input" data-segment-index="${segmentIndex}" data-segment-field="text" data-index="${index}" value="${esc(segment.text)}" placeholder="要上色的文字片段">
+      <select class="s4-input" data-segment-index="${segmentIndex}" data-segment-field="hex" data-index="${index}">
+        ${COLOR_OPTIONS.map(option => `<option value="${option[1]}" ${segment.hex === option[1] ? 'selected' : ''}>${option[0]}</option>`).join('')}
+      </select>
+      ${slot.colorSegments.length > 1 ? `<button class="s4-remove-color" data-action="remove-color" data-index="${index}" data-segment-index="${segmentIndex}" aria-label="移除這段上色">×</button>` : ''}
+    </div>`).join('');
   const textCard = (slot, index) => `
     <section class="s4-card">
       <div class="s4-card-title">圖片 ${String(index + 1).padStart(2, '0')}</div>
@@ -152,7 +174,7 @@ export default function(component) {
       </div>
       <div class="s4-subfield">
         <label class="s4-toggle"><input type="checkbox" data-field="colorEnabled" data-index="${index}" ${checked(slot.colorEnabled)}> 🎨 啟用局部文字上色</label>
-        ${slot.colorEnabled ? `<div class="s4-label-row"><span>要上色的文字片段</span></div><input class="s4-input" data-field="colorText" data-index="${index}" value="${esc(slot.colorText)}" placeholder="例如：加油">` : ''}
+        ${slot.colorEnabled ? `<div class="s4-label-row"><span>局部文字上色（最多 3 段）</span></div>${colorRows(slot, index)}${slot.colorSegments.length < 3 ? `<button class="s4-small-button" data-action="add-color" data-index="${index}">＋ 新增上色片段</button>` : ''}` : ''}
       </div>
     </section>`;
 
@@ -264,6 +286,13 @@ export default function(component) {
       return;
     }
     const index = Number(element.dataset.index);
+    const segmentIndex = Number(element.dataset.segmentIndex);
+    const segmentField = element.dataset.segmentField;
+    if (Number.isInteger(index) && Number.isInteger(segmentIndex) && segmentField && state.slots[index]?.colorSegments?.[segmentIndex]) {
+      state.slots[index].colorSegments[segmentIndex][segmentField] = element.value;
+      save();
+      return;
+    }
     const field = element.dataset.field;
     if (!Number.isInteger(index) || !field || !state.slots[index]) return;
     state.slots[index][field] = element.type === 'checkbox' ? element.checked : element.value;
@@ -276,6 +305,19 @@ export default function(component) {
     if (rootField) {
       state[rootField] = element.value;
       state.message = '';
+      save();
+      render();
+      return;
+    }
+    const colorSlotIndex = Number(element.dataset.index);
+    const colorSegmentIndex = Number(element.dataset.segmentIndex);
+    const colorSegmentField = element.dataset.segmentField;
+    if (Number.isInteger(colorSlotIndex) && Number.isInteger(colorSegmentIndex) && colorSegmentField && state.slots[colorSlotIndex]?.colorSegments?.[colorSegmentIndex]) {
+      const segment = state.slots[colorSlotIndex].colorSegments[colorSegmentIndex];
+      segment[colorSegmentField] = element.value;
+      if (colorSegmentField === 'hex') {
+        segment.color_name = (COLOR_OPTIONS.find(option => option[1] === element.value) || COLOR_OPTIONS[0])[0];
+      }
       save();
       render();
       return;
@@ -359,6 +401,25 @@ export default function(component) {
       } else {
         fillTextSlots(phrases);
         state.message = `已從「${state.randomPool}」測試用語隨機填入圖片 01～08。`;
+      }
+      save();
+      render();
+      return;
+    }
+    if (button.dataset.action === 'add-color') {
+      const index = Number(button.dataset.index);
+      if (state.slots[index] && state.slots[index].colorSegments.length < 3) {
+        state.slots[index].colorSegments.push({text:'', color_name:'紅色', hex:'#ff5c75'});
+      }
+      save();
+      render();
+      return;
+    }
+    if (button.dataset.action === 'remove-color') {
+      const index = Number(button.dataset.index);
+      const segmentIndex = Number(button.dataset.segmentIndex);
+      if (state.slots[index]?.colorSegments?.length > 1) {
+        state.slots[index].colorSegments.splice(segmentIndex, 1);
       }
       save();
       render();
