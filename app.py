@@ -1078,16 +1078,6 @@ st.markdown("""
   background:#c62828 !important;
   border-color:#c62828 !important;
 }
-/* 雲端保存是影響打包等待時間的重要選項，放大以提高可見度。 */
-.st-key-v12_save_to_cloud_on_package [data-testid="stCheckbox"] label p{
-  font-size:19px !important;
-  font-weight:800 !important;
-}
-@media (max-width:640px){
-  .st-key-v12_save_to_cloud_on_package [data-testid="stCheckbox"] label p{
-    font-size:17px !important;
-  }
-}
 :root{
   --v10-max: 1180px;
   --v10-control: 820px;
@@ -4695,17 +4685,8 @@ def _v12_render_sticker_basket_workspace():
     if not name_preview:
         st.caption(t("project_default", name=_v12_default_project_name()))
 
+    # 雲端保存僅由上方「存入我的作品」按鈕執行；ZIP 打包不再附帶同步。
     cloud_session = _beta_current_user() if _beta_config() else None
-    save_to_cloud = st.checkbox(
-        t("save_cloud"),
-        value=False,
-        key="v12_save_to_cloud_on_package",
-        disabled=not bool(cloud_session),
-    )
-    if cloud_session:
-        st.caption(t("cloud_sync_wait"))
-    else:
-        st.caption(t("cloud_login_notice"))
 
     _active_style_reference_for_save = (
         st.session_state.get("v12_style_source_mode") == V12_STYLE_REFERENCE_MODE
@@ -4858,36 +4839,6 @@ def _v12_render_sticker_basket_workspace():
             st.session_state["v12_basket_last_zip_name"] = download_name
             st.success(t("package_complete", count=len(selected)))
 
-            active_cloud_session = _beta_current_user() if save_to_cloud and _beta_config() else None
-            if save_to_cloud and active_cloud_session:
-                try:
-                    cloud_record = dict(history_record)
-                    if not save_creation_materials:
-                        cloud_record["source_photo_bytes"] = b""
-                        cloud_record["style_reference_bytes"] = b""
-                    cloud_progress = st.progress(
-                        0,
-                        text=t("cloud_prepare"),
-                    )
-                    cloud_save = _beta_save_library_project(
-                        active_cloud_session,
-                        cloud_record,
-                        progress_callback=lambda progress, message: cloud_progress.progress(
-                            progress, text=message + " " + t("do_not_refresh")
-                        ),
-                    )
-                    if cloud_save.get("saved"):
-                        cloud_progress.progress(100, text=t("cloud_saved", count=cloud_save["saved_count"], limit=cloud_save["library_capacity"]))
-                        st.success(t("cloud_saved", count=cloud_save["saved_count"], limit=cloud_save["library_capacity"]))
-                    else:
-                        cloud_progress.empty()
-                        st.warning(t("cloud_full", count=cloud_save["saved_count"], limit=cloud_save["library_capacity"]))
-                except Exception:
-                    st.warning(t("cloud_failed"))
-            elif save_to_cloud:
-                st.warning(t("cloud_relogin"))
-            else:
-                st.caption(t("local_only"))
         except Exception as error:
             st.error(t("package_failed", error=error))
 
