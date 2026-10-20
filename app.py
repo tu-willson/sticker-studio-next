@@ -5316,11 +5316,14 @@ _V12_CREATION_DRAFT_KEYS = (
 
 def _v12_preserve_creation_draft_for_navigation():
     """Snapshot the active creation draft before leaving the create page."""
-    st.session_state["v12_creation_draft_snapshot"] = {
-        key: copy.deepcopy(st.session_state[key])
-        for key in _V12_CREATION_DRAFT_KEYS
-        if key in st.session_state
-    }
+    durable = st.session_state.get("v12_navigation_safe_creation_draft")
+    snapshot = copy.deepcopy(durable) if isinstance(durable, dict) else {}
+    # 正常創作頁已把這些值同步到 durable；這裡只補上尚未同步的新 Session。
+    # 不讓檔案上傳元件被 Streamlit 重建後的空值覆蓋掉有效畫風參考圖。
+    for key in _V12_CREATION_DRAFT_KEYS:
+        if key not in snapshot and key in st.session_state:
+            snapshot[key] = copy.deepcopy(st.session_state[key])
+    st.session_state["v12_creation_draft_snapshot"] = snapshot
     st.session_state["v12_restore_creation_draft"] = True
 
 
@@ -5333,6 +5336,16 @@ def _v12_restore_creation_draft_after_navigation():
         return
     for key, value in snapshot.items():
         st.session_state[key] = copy.deepcopy(value)
+
+
+def _v12_update_navigation_safe_creation_draft(**values):
+    """Update only deliberate create-page values in a widget-independent store."""
+    current = st.session_state.get("v12_navigation_safe_creation_draft")
+    current = copy.deepcopy(current) if isinstance(current, dict) else {}
+    for key, value in values.items():
+        if key in _V12_CREATION_DRAFT_KEYS:
+            current[key] = copy.deepcopy(value)
+    st.session_state["v12_navigation_safe_creation_draft"] = current
 
 # ============================================================
 # V12 試作版｜局部文字上色
@@ -6563,6 +6576,14 @@ def _v12_set_style_reference_from_upload(uploaded_file):
         str(getattr(uploaded_file, "name", "") or "參考畫風圖片")[:120]
     )
     st.session_state["v12_style_reference_fingerprint"] = fingerprint
+    _v12_update_navigation_safe_creation_draft(
+        v12_style_source_mode=V12_STYLE_REFERENCE_MODE,
+        v10_style_mode="↓ 請選擇風格",
+        v12_use_custom_style=False,
+        v12_style_reference_image_bytes=buffer.getvalue(),
+        v12_style_reference_filename=st.session_state["v12_style_reference_filename"],
+        v12_style_reference_fingerprint=fingerprint,
+    )
 
 
 def _v12_style_reference_upload_changed():
@@ -6573,10 +6594,27 @@ def _v12_style_reference_upload_changed():
         st.session_state["v12_use_custom_style"] = False
         st.session_state.pop("v12_loaded_project_custom_style", None)
     else:
-        # This callback is only invoked when the user clears the uploader.
-        st.session_state["v12_style_reference_image_bytes"] = None
-        st.session_state["v12_style_reference_filename"] = ""
-        st.session_state["v12_style_reference_fingerprint"] = ""
+        # 在作品頁來回時，Streamlit 也可能以 None 重建 file_uploader。
+        # 因此不能把這個事件直接當成「使用者確定刪除參考圖」；保留已載入的
+        # 圖片，真正清除改由畫面上的明確按鈕處理。
+        return
+
+
+def _v12_clear_style_reference():
+    """Explicitly remove the active style reference without confusing navigation resets."""
+    # 下一次 rerun 時、file_uploader 建立之前再清掉 widget key，避免 Streamlit
+    # 的「widget 已建立後不可直接修改」限制。
+    st.session_state["v12_style_reference_clear_upload_control"] = True
+    st.session_state["v12_style_reference_image_bytes"] = None
+    st.session_state["v12_style_reference_filename"] = ""
+    st.session_state["v12_style_reference_fingerprint"] = ""
+    st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
+    _v12_update_navigation_safe_creation_draft(
+        v12_style_source_mode=V12_STYLE_PRESET_MODE,
+        v12_style_reference_image_bytes=None,
+        v12_style_reference_filename="",
+        v12_style_reference_fingerprint="",
+    )
 
 
 def _v12_render_pricing_page():
@@ -7111,6 +7149,10 @@ elif st.session_state.get("uploaded_image_bytes"):
     except Exception:
         st.warning(t("photo_restore_failed"))
 
+_v12_update_navigation_safe_creation_draft(
+    uploaded_image_bytes=st.session_state.get("uploaded_image_bytes"),
+)
+
 st.divider()
 V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
 
@@ -7132,6 +7174,9 @@ _style_source_mode = str(st.session_state.get(
 if _style_source_mode not in {V12_STYLE_PRESET_MODE, V12_STYLE_REFERENCE_MODE}:
     _style_source_mode = V12_STYLE_PRESET_MODE
     st.session_state["v12_style_source_mode"] = _style_source_mode
+
+if st.session_state.pop("v12_style_reference_clear_upload_control", False):
+    st.session_state.pop("v12_style_reference_upload", None)
 
 _style_preset_col, _style_reference_col = st.columns(2)
 with _style_preset_col:
@@ -7347,6 +7392,13 @@ else:
             )
         st.success(t("style_reference_enabled"))
         st.info(t("style_identity_priority"))
+        if st.button(
+            "🗑️ 清除這張畫風參考",
+            key="v12_clear_style_reference",
+            help="明確移除目前畫風參考圖，避免切換頁面時誤刪。",
+        ):
+            _v12_clear_style_reference()
+            st.rerun()
         st.caption(t("style_settings_caption"))
         _normalized_style_strength = _v12_normalize_style_reference_strength(
             st.session_state.get("v12_style_reference_strength")
@@ -7382,6 +7434,18 @@ else:
         st.caption(t("style_elements_help"))
         st.caption(t("style_materials_caption"))
 
+_v12_update_navigation_safe_creation_draft(
+    v12_style_source_mode=st.session_state.get("v12_style_source_mode"),
+    v10_style_mode=st.session_state.get("v10_style_mode"),
+    v12_last_preset_style_mode=st.session_state.get("v12_last_preset_style_mode"),
+    v12_use_custom_style=st.session_state.get("v12_use_custom_style"),
+    v12_style_reference_image_bytes=st.session_state.get("v12_style_reference_image_bytes"),
+    v12_style_reference_filename=st.session_state.get("v12_style_reference_filename"),
+    v12_style_reference_fingerprint=st.session_state.get("v12_style_reference_fingerprint"),
+    v12_style_reference_strength=st.session_state.get("v12_style_reference_strength"),
+    v12_style_reference_custom_elements=st.session_state.get("v12_style_reference_custom_elements"),
+)
+
 v10_section(t("section_features"), "#2ecc71")
 st.caption(t("features_intro"))
 # Clean up selections retired from the feature menu so an older session can
@@ -7412,6 +7476,12 @@ if _save_character_settings:
         st.success(t("character_saved"))
     else:
         st.error(t("save_failed"))
+
+_v12_update_navigation_safe_creation_draft(
+    v10_character_options=list(st.session_state.get("v10_character_options", []) or []),
+    v10_character_custom_1=str(st.session_state.get("v10_character_custom_1", "") or ""),
+    v10_character_enabled_1=bool(st.session_state.get("v10_character_enabled_1", False)),
+)
 
 st.session_state.setdefault("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
 st.session_state.setdefault("v12_step04_frontend_revision", 1)
