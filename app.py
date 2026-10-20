@@ -962,13 +962,15 @@ st.markdown("""
   box-shadow:0 1px 5px rgba(148,206,255,.14);
 }
 /* 畫風參考的自訂元素需明確儲存，以紅色按鈕提高辨識度。 */
-.st-key-v12_style_reference_save_button button{
+.st-key-v12_style_reference_save_button button,
+.st-key-v12_character_settings_apply_button button{
   background:#ff4f67 !important;
   border-color:#ff4f67 !important;
   color:#fff !important;
   font-weight:800 !important;
 }
-.st-key-v12_style_reference_save_button button:hover{
+.st-key-v12_style_reference_save_button button:hover,
+.st-key-v12_character_settings_apply_button button:hover{
   background:#e53e57 !important;
   border-color:#e53e57 !important;
 }
@@ -6869,7 +6871,12 @@ with st.form("v12_character_settings_form", border=False):
             key="v10_character_custom_1",
             height=70,
         )
-    _save_character_settings = st.form_submit_button(t("save_character"), use_container_width=True)
+    with st.container(key="v12_character_settings_apply_button"):
+        _save_character_settings = st.form_submit_button(
+            t("save_character"),
+            type="primary",
+            use_container_width=True,
+        )
 custom_character = (
     str(st.session_state.get("v10_character_custom_1", "") or "").strip()
     if st.session_state.get("v10_character_enabled_1", False)
