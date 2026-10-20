@@ -7515,13 +7515,12 @@ if isinstance(_saved_character_options, list):
     st.session_state["v10_character_options"] = [
         option for option in _saved_character_options if option in CHARACTER_OPTIONS
     ]
-selected_character = st.multiselect(
-    t("feature_select"),
-    CHARACTER_OPTIONS,
-    key="v10_character_options",
-    on_change=_v12_capture_character_settings_draft,
-)
 with st.form("v12_character_settings_form", border=False):
+    selected_character = st.multiselect(
+        t("feature_select"),
+        CHARACTER_OPTIONS,
+        key="v10_character_options",
+    )
     st.text_area(
         t("custom_character"),
         key="v10_character_custom_1",
