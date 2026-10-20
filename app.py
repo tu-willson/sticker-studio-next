@@ -5601,6 +5601,19 @@ def _v12_step04_frontend_component_state():
         for name, values in V8_RANDOM_POOLS.items()
         if isinstance(values, list)
     }
+    ai_quota_text = "AI幫想 今日額度（台灣時間）：登入後可查看"
+    ai_login_notice = "需登入Google才能使用"
+    ai_session = _beta_current_user()
+    if ai_session:
+        ai_login_notice = ""
+        try:
+            ai_usage = _beta_copy_usage_status_cached(ai_session)
+            ai_quota_text = (
+                "AI幫想 今日額度（台灣時間）：剩 "
+                f"{ai_usage['remaining_count']} / {ai_usage['daily_limit']} 次"
+            )
+        except Exception:
+            ai_quota_text = "AI幫想 今日額度（台灣時間）：暫時無法確認"
     return {
         "mode": snapshot["mode"],
         "sourcePanel": str(
@@ -5615,6 +5628,8 @@ def _v12_step04_frontend_component_state():
         "randomCustomDraft": "",
         "randomCustomPhrases": snapshot["random"]["customPhrases"],
         "randomPools": random_pools,
+        "aiQuotaText": ai_quota_text,
+        "aiLoginNotice": ai_login_notice,
         "message": "",
         "slots": slots,
         "version": 3,

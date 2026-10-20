@@ -29,6 +29,8 @@ EDITOR_CSS = r"""
 .s4-source-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0 10px; }
 .s4-source { border:1px solid #54708c; border-radius:10px; min-height:45px; background:#24354b; color:#dceafa; font:inherit; font-weight:800; cursor:pointer; }
 .s4-source.active { border-color:#65c7ff; background:rgba(37,124,186,.48); color:#fff; }
+.s4-ai-status { margin:0 0 14px; padding:10px 12px; border:1px solid rgba(104,177,231,.4); border-radius:9px; background:rgba(26,78,120,.25); color:#d8eeff; font-size:14px; font-weight:750; }
+.s4-ai-login { margin-top:5px; color:#ffd4a3; font-size:13px; }
 .s4-source-panel { margin:0 0 22px; padding:14px; border:1px solid rgba(96,169,220,.35); border-radius:10px; background:rgba(21,44,70,.32); }
 .s4-panel-title { color:#e9f7ff; font-size:16px; font-weight:850; margin-bottom:9px; }
 .s4-panel-grid { display:grid; grid-template-columns:1.3fr 1fr; gap:10px; }
@@ -40,6 +42,11 @@ EDITOR_CSS = r"""
 .s4-phrase { min-height:37px; padding:7px 8px; border:1px solid rgba(111,148,181,.38); border-radius:8px;
   background:rgba(30,53,79,.54); color:#e5f2ff; font:inherit; font-size:13px; text-align:left; cursor:pointer; }
 .s4-phrase:hover { border-color:#6dbcf0; background:rgba(54,111,157,.43); }
+.s4-picked-list { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:7px; margin-top:10px; }
+.s4-picked-item { display:flex; min-width:0; align-items:center; gap:6px; padding:5px 5px 5px 9px; border:1px solid rgba(111,148,181,.38); border-radius:8px; background:rgba(30,53,79,.54); color:#e5f2ff; font-size:13px; }
+.s4-picked-text { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.s4-picked-remove { flex:0 0 auto; width:29px; height:29px; border:1px solid #ff7893; border-radius:7px; background:#d84262; color:#fff; font:inherit; font-size:18px; font-weight:900; line-height:1; cursor:pointer; }
+.s4-picked-remove:hover { background:#ff5878; transform:scale(1.04); }
 .s4-message { margin-top:9px; color:#ffd4dc; font-size:13px; font-weight:700; }
 .s4-pool-list { margin:8px 0 0; color:#b8cbe0; font-size:13px; line-height:1.55; }
 .s4-color-row { display:grid; grid-template-columns:minmax(0,1fr) 105px 28px; gap:6px; margin:7px 0; align-items:center; }
@@ -65,7 +72,7 @@ EDITOR_CSS = r"""
 .s4-reset { border:1px solid #667c96; background:#27374d; color:#dce8f4; }
 .s4-local { color:#9fb2c9; font-size:13px; }
 .s4-count { margin-top:15px; border-radius:10px; padding:10px 12px; background:rgba(57,136,205,.15); color:#9fd8ff; font-weight:750; }
-@media (max-width: 820px) { .s4-mode-row { gap:12px; margin:0 0 20px; } .s4-grid, .s4-candidates, .s4-random-phrases { grid-template-columns:repeat(2, minmax(0,1fr)); } .s4-panel-grid { grid-template-columns:1fr; } }
+@media (max-width: 820px) { .s4-mode-row { gap:12px; margin:0 0 20px; } .s4-grid, .s4-candidates, .s4-random-phrases, .s4-picked-list { grid-template-columns:repeat(2, minmax(0,1fr)); } .s4-panel-grid { grid-template-columns:1fr; } }
 @media (max-width: 520px) { .s4-grid { grid-template-columns:1fr; } .s4-mode { font-size:14px; } }
 """
 
@@ -77,6 +84,8 @@ export default function(component) {
   const formal = Boolean(data.formal);
   const revision = String(data.revision || '');
   const initial = data.initial && typeof data.initial === 'object' ? data.initial : {};
+  const aiQuotaText = String(initial.aiQuotaText || 'AI幫想 今日額度（台灣時間）：登入後可查看');
+  const aiLoginNotice = String(initial.aiLoginNotice || '');
   const COLOR_OPTIONS = [
     ['紅色', '#ff5c75'], ['橘色', '#ff9f43'], ['黃色', '#ffd166'], ['綠色', '#55d68b'],
     ['藍色', '#57b7ff'], ['紫色', '#ad7dff'], ['粉色', '#ff8eb7'], ['白色', '#ffffff']
@@ -224,7 +233,7 @@ export default function(component) {
         <div class="s4-action-row"><button class="s4-small-button" data-action="stash-ai">加入勾選句到待帶入清單</button><span class="s4-local">不需要湊滿 8 句；可再產生下一批繼續挑選。</span></div>` : ''}
       ${state.aiPicked.length ? `
         <div class="s4-caption">待帶入清單（點選句子可移除）：</div>
-        <div class="s4-random-phrases">${state.aiPicked.map((sentence, index) => `<button class="s4-phrase" data-action="remove-ai-picked" data-picked-index="${index}">${esc(sentence)} ×</button>`).join('')}</div>
+        <div class="s4-picked-list">${state.aiPicked.map((sentence, index) => `<div class="s4-picked-item"><span class="s4-picked-text">${esc(sentence)}</span><button class="s4-picked-remove" data-action="remove-ai-picked" data-picked-index="${index}" aria-label="移除：${esc(sentence)}">×</button></div>`).join('')}</div>
         <div class="s4-panel-grid"><select class="s4-input" data-root-field="aiTarget">${Array.from({length:8}, (_, index) => `<option value="${index}" ${Number(state.aiTarget) === index ? 'selected' : ''}>從圖片 ${String(index+1).padStart(2,'0')} 開始帶入</option>`).join('')}</select><button class="s4-small-button" data-action="apply-ai-picked">帶入已挑選的 ${state.aiPicked.length} 句</button></div>
         <div class="s4-pool-list">會依序填入指定圖片起的欄位，不會改動其他圖片文字。</div>` : ''}
       ${state.message ? `<div class="s4-message">${esc(state.message)}</div>` : ''}
@@ -260,6 +269,7 @@ export default function(component) {
       <button class="s4-source ${state.sourcePanel === 'ai' ? 'active' : ''}" data-source="ai">✨ 主題 AI 幫想</button>
       <button class="s4-source ${state.sourcePanel === 'random' ? 'active' : ''}" data-source="random">🎲 隨機用語</button>
     </div>
+    <div class="s4-ai-status">${esc(aiQuotaText)}${aiLoginNotice ? `<div class="s4-ai-login">${esc(aiLoginNotice)}</div>` : ''}</div>
     ${state.sourcePanel === 'ai' ? aiPanel() : state.sourcePanel === 'random' ? randomPanel() : ''}`;
 
   const updateCounter = () => {
@@ -284,8 +294,7 @@ export default function(component) {
           <button class="s4-mode ${!textMode ? 'active' : ''}" data-mode="expression">${!textMode ? '✓ ' : ''}😶 使用表情貼圖（無文字）</button>
         </div>
         <div class="s4-heading">${textMode ? '💬 使用文字貼圖' : '😶 使用表情貼圖（無文字）'}</div>
-        <p class="s4-caption">${textMode ? '切換模式與輸入文字不會讀取頁面。動作指令與局部上色會跟著各自的文字草稿保留。' : '切換模式與設定表情不會讀取頁面。回到文字模式後，先前的 01～08 文字仍會保留。'}</p>
-        ${textMode ? sourcePanel() : ''}
+        ${textMode ? sourcePanel() : '<p class="s4-caption">切換模式與設定表情不會讀取頁面。回到文字模式後，先前的 01～08 文字仍會保留。</p>'}
         <div class="s4-grid">${firstRow}</div>
         <div class="s4-row-divider"></div>
         <div class="s4-grid">${secondRow}</div>
