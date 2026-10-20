@@ -172,12 +172,12 @@ def _v12_crop_canvas_translations():
             "🔴 固定外框　🔵 上下 6 條獨立垂直分隔線　🟠 水平分隔線　｜　🔒 鎖定後可進行裁切": "🔴 Fixed outer frame　🔵 6 independent vertical guides　🟠 Horizontal guide　｜　🔒 Lock, then crop",
             "↩️ 恢復分隔線位置": "↩️ Reset guides",
             "🔒（第一步）鎖定定位": "🔒 Step 1: Lock guides",
-            "✅（第二步）套用裁切並加入暫存作品籃": "✅ Step 2: Apply crops and add to workspace",
+            "✅（第二步）套用裁切並加入暫存作品區": "✅ Step 2: Apply crops and add to workspace",
             "🖱️ 正在調整定位線……": "🖱️ Adjusting guides…",
             "✅ 定位線已更新": "✅ Guides updated",
             "↩️ 已恢復標準4×2定位": "↩️ Standard 4×2 guides restored",
             "🔓 解鎖定位": "🔓 Unlock guides",
-            "🔒 定位已鎖定，可以加入下方暫存作品籃": "🔒 Guides locked. You can add this batch to the workspace below.",
+            "🔒 定位已鎖定，可以加入下方暫存作品區": "🔒 Guides locked. You can add this batch to the workspace below.",
             "🔒 定位已鎖定，正在儲存裁切範圍……": "🔒 Guides locked. Saving the crop areas…",
             "⚠️ 無法儲存裁切範圍，請重新整理後再試": "⚠️ The crop areas could not be saved. Please refresh and try again.",
             "🛠️ 定位已解鎖，可以繼續微調": "🛠️ Guides unlocked. You can keep fine-tuning.",
@@ -194,12 +194,12 @@ def _v12_crop_canvas_translations():
             "🔴 固定外框　🔵 上下 6 條獨立垂直分隔線　🟠 水平分隔線　｜　🔒 鎖定後可進行裁切": "🔴 固定外枠　🔵 6本の独立した垂直ガイド　🟠 水平ガイド　｜　🔒 ロック後に切り抜き可能",
             "↩️ 恢復分隔線位置": "↩️ ガイドをリセット",
             "🔒（第一步）鎖定定位": "🔒 手順1：ガイドをロック",
-            "✅（第二步）套用裁切並加入暫存作品籃": "✅ 手順2：切り抜きを適用して作業かごに追加",
+            "✅（第二步）套用裁切並加入暫存作品區": "✅ 手順2：切り抜きを適用して作業かごに追加",
             "🖱️ 正在調整定位線……": "🖱️ ガイドを調整中…",
             "✅ 定位線已更新": "✅ ガイドを更新しました",
             "↩️ 已恢復標準4×2定位": "↩️ 標準4×2ガイドに戻しました",
             "🔓 解鎖定位": "🔓 ガイドをロック解除",
-            "🔒 定位已鎖定，可以加入下方暫存作品籃": "🔒 ガイドをロックしました。下の作業かごにこのバッチを追加できます。",
+            "🔒 定位已鎖定，可以加入下方暫存作品區": "🔒 ガイドをロックしました。下の作業かごにこのバッチを追加できます。",
             "🔒 定位已鎖定，正在儲存裁切範圍……": "🔒 ガイドをロックしました。切り抜き範囲を保存中…",
             "⚠️ 無法儲存裁切範圍，請重新整理後再試": "⚠️ 切り抜き範囲を保存できませんでした。更新してもう一度お試しください。",
             "🛠️ 定位已解鎖，可以繼續微調": "🛠️ ガイドのロックを解除しました。引き続き微調整できます。",
@@ -4470,7 +4470,7 @@ def _v12_add_current_grid_to_sticker_basket(grid_bytes, crop_boxes=None):
     ).hexdigest()
     basket = _v12_get_sticker_basket()
     if any(item.get("source_grid_hash") == source_hash for item in basket):
-        return False, "這組原始圖與目前裁切範圍已加入暫存作品籃。"
+        return False, "這組原始圖與目前裁切範圍已加入暫存作品區。"
 
     batch_number = int(st.session_state.get("v12_sticker_basket_batch_number", 0)) + 1
     batch_label = f"批次 {batch_number:02d}"
@@ -4490,7 +4490,7 @@ def _v12_add_current_grid_to_sticker_basket(grid_bytes, crop_boxes=None):
 
     st.session_state["v12_sticker_basket"] = basket + additions
     st.session_state["v12_sticker_basket_batch_number"] = batch_number
-    return True, f"已將 {batch_label} 的 8 張貼圖加入暫存作品籃。"
+    return True, f"已將 {batch_label} 的 8 張貼圖加入暫存作品區。"
 
 
 def _v12_remove_sticker_basket_item(item_id):
@@ -8337,7 +8337,7 @@ if st.session_state.generated_4x2_bytes:
         )
     )
 
-    # 本版不在 Canvas 直接下載；裁切結果會先加入下方暫存作品籃，再一次打包。
+    # 本版不在 Canvas 直接下載；裁切結果會先加入下方暫存作品區，再一次打包。
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
         '<button id="downloadBtn" class="primary" onclick="downloadAll()" disabled>✂️ 裁切並依序下載01～08(手機下載)</button>',
         '',
@@ -8352,7 +8352,7 @@ if st.session_state.generated_4x2_bytes:
         '    applyBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，請套用裁切範圍後加入作品籃";',
     ).replace(
         '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒（第一步）鎖定定位</button>',
-        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒（第一步）鎖定定位</button>\n<button id="applyBtn" class="primary" onclick="applyCrop()" disabled>✅（第二步）套用裁切並加入暫存作品籃</button>',
+        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒（第一步）鎖定定位</button>\n<button id="applyBtn" class="primary" onclick="applyCrop()" disabled>✅（第二步）套用裁切並加入暫存作品區</button>',
     )
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
         'let g=guidesDefault();',
@@ -8506,7 +8506,7 @@ function saveBlob(blob,name){''',
             st.rerun()
 
     # 舊版 01～08 立即打包區保留在原始碼中作為回溯參考，但不再執行。
-    # 新版以暫存作品籃作為唯一的裁切後工作流程。
+    # 新版以暫存作品區作為唯一的裁切後工作流程。
     st.stop()
 
 
