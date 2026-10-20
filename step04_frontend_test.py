@@ -116,8 +116,11 @@ export default function(component) {
     return base;
   };
   let state;
-  try { state = normalize(JSON.parse(localStorage.getItem(storageKey) || 'null')); }
-  catch (_) { state = defaultState(); }
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+    state = saved ? normalize(saved) : normalize(data.initial || null);
+  }
+  catch (_) { state = normalize(data.initial || null); }
   const save = () => localStorage.setItem(storageKey, JSON.stringify(state));
   const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const checked = value => value ? 'checked' : '';

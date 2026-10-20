@@ -18,6 +18,7 @@ import secrets
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from i18n import LANGUAGES, tr
+from step04_frontend_test import render_frontend_editor
 
 
 def _v12_ui_locale():
@@ -5566,6 +5567,50 @@ def _v12_step04_frontend_snapshot():
     }
 
 
+def _v12_step04_frontend_component_state():
+    """Adapt the canonical STEP 04 draft for the browser-side preview editor."""
+    snapshot = _v12_step04_frontend_snapshot()
+    text_slots = snapshot["textSlots"]
+    expression_slots = snapshot["expressionSlots"]
+    slots = []
+    for index in range(8):
+        text_slot = text_slots[index]
+        expression_slot = expression_slots[index]
+        slots.append({
+            "text": text_slot["text"],
+            "actionEnabled": text_slot["actionEnabled"],
+            "action": text_slot["action"],
+            "colorEnabled": text_slot["colorEnabled"],
+            "colorSegments": text_slot["colorSegments"],
+            "emotion": expression_slot["emotion"],
+            "random": expression_slot["random"],
+            "expressionActionEnabled": expression_slot["actionEnabled"],
+            "expressionAction": expression_slot["action"],
+        })
+    tone = snapshot["ai"]["tone"]
+    tone_map = {
+        "✨ 溫暖療癒": "溫暖鼓勵",
+        "💬 台灣口語": "自然日常",
+        "😂 搞笑自然": "輕鬆搞笑",
+    }
+    pool = snapshot["random"]["pool"]
+    pool_map = {"": "日常", "日常對話": "日常", "歡樂笑聲": "搞笑", "溫暖關愛": "療癒"}
+    return {
+        "mode": snapshot["mode"],
+        "sourcePanel": "",
+        "aiTopic": snapshot["ai"]["topic"],
+        "aiTone": tone_map.get(tone, "溫暖鼓勵"),
+        "aiCandidates": snapshot["ai"]["candidates"],
+        "aiSelected": snapshot["ai"]["selected"],
+        "randomPool": pool_map.get(pool, "日常"),
+        "randomCustomDraft": "",
+        "randomCustomPhrases": snapshot["random"]["customPhrases"],
+        "message": "",
+        "slots": slots,
+        "version": 3,
+    }
+
+
 def _v12_apply_step04_frontend_snapshot(payload):
     """Apply a validated frontend STEP 04 draft to the existing canonical state.
 
@@ -5576,6 +5621,36 @@ def _v12_apply_step04_frontend_snapshot(payload):
     """
     if not isinstance(payload, dict):
         return False
+
+    # The frontend test editor keeps text and expression values in one 8-slot
+    # array. Convert it into the production compatibility shape first.
+    if isinstance(payload.get("slots"), list):
+        payload = dict(payload)
+        payload["textSlots"] = [
+            {
+                "text": item.get("text", "") if isinstance(item, dict) else "",
+                "actionEnabled": item.get("actionEnabled", False) if isinstance(item, dict) else False,
+                "action": item.get("action", "") if isinstance(item, dict) else "",
+                "colorEnabled": item.get("colorEnabled", False) if isinstance(item, dict) else False,
+                "colorSegments": item.get("colorSegments", []) if isinstance(item, dict) else [],
+            }
+            for item in payload["slots"][:8]
+        ]
+        payload["expressionSlots"] = [
+            {
+                "emotion": item.get("emotion", "") if isinstance(item, dict) else "",
+                "random": item.get("random", False) if isinstance(item, dict) else False,
+                "actionEnabled": item.get("expressionActionEnabled", False) if isinstance(item, dict) else False,
+                "action": item.get("expressionAction", "") if isinstance(item, dict) else "",
+            }
+            for item in payload["slots"][:8]
+        ]
+        payload["ai"] = {
+            "topic": payload.get("aiTopic", ""),
+            "candidates": payload.get("aiCandidates", []),
+            "selected": payload.get("aiSelected", []),
+        }
+        payload["random"] = {"pool": payload.get("randomPool", "")}
 
     mode = "expression" if payload.get("mode") == "expression" else "text"
     st.session_state["v12_sticker_content_mode"] = (
@@ -7200,6 +7275,31 @@ if _save_character_settings:
 st.session_state.setdefault("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
 v10_section(t("section_content"), "#3498db")
 st.caption(t("content_intro"))
+
+# A protected, local-only integration preview.  It is enabled only by the
+# explicit query string below, so the deployed production page keeps using the
+# current STEP 04 UI until the full replacement has passed user verification.
+_v12_step04_frontend_preview = str(
+    st.query_params.get("step04_frontend_preview", "")
+) == "1"
+if _v12_step04_frontend_preview:
+    st.info(
+        "🧪 STEP 04 前端整合預覽：這裡的切換與輸入會留在瀏覽器；"
+        "按「同步測試設定」才會套回下方正式欄位。"
+    )
+    _v12_frontend_sync = render_frontend_editor(
+        data={
+            "storageKey": "sticker-studio-next.step04-integration-preview.v1",
+            "initial": _v12_step04_frontend_component_state(),
+        },
+        key="v12_step04_frontend_integration_preview",
+        component_name="v12_step04_frontend_integration_preview",
+    )
+    if isinstance(_v12_frontend_sync, dict):
+        _v12_apply_step04_frontend_snapshot(_v12_frontend_sync)
+        st.success("✅ 已同步到下方正式 STEP 04 欄位；尚未生成或儲存作品。")
+    st.caption("下方保留目前正式欄位，供你核對同步後的完整資料與既有功能。")
+    st.divider()
 
 def _v12_set_sticker_content_mode(mode):
     # 切換模式前後都以獨立草稿保存／回填，不依賴條件式 widget state。
