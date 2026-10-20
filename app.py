@@ -5324,6 +5324,8 @@ def _v12_preserve_creation_draft_for_navigation():
         if key not in snapshot and key in st.session_state:
             snapshot[key] = copy.deepcopy(st.session_state[key])
     st.session_state["v12_creation_draft_snapshot"] = snapshot
+    if snapshot.get("v12_style_reference_image_bytes"):
+        st.session_state["v12_style_reference_navigation_guard"] = True
     st.session_state["v12_restore_creation_draft"] = True
 
 
@@ -6595,9 +6597,10 @@ def _v12_style_reference_upload_changed():
         st.session_state.pop("v12_loaded_project_custom_style", None)
     else:
         # 在作品頁來回時，Streamlit 也可能以 None 重建 file_uploader。
-        # 因此不能把這個事件直接當成「使用者確定刪除參考圖」；保留已載入的
-        # 圖片，真正清除改由畫面上的明確按鈕處理。
-        return
+        # 只忽略該次換頁造成的空值；一般在創作頁按原生 X 清除時仍可正常刪除。
+        if st.session_state.pop("v12_style_reference_navigation_guard", False):
+            return
+        _v12_clear_style_reference()
 
 
 def _v12_clear_style_reference():
@@ -7392,13 +7395,6 @@ else:
             )
         st.success(t("style_reference_enabled"))
         st.info(t("style_identity_priority"))
-        if st.button(
-            "🗑️ 清除這張畫風參考",
-            key="v12_clear_style_reference",
-            help="明確移除目前畫風參考圖，避免切換頁面時誤刪。",
-        ):
-            _v12_clear_style_reference()
-            st.rerun()
         st.caption(t("style_settings_caption"))
         _normalized_style_strength = _v12_normalize_style_reference_strength(
             st.session_state.get("v12_style_reference_strength")
@@ -7433,6 +7429,10 @@ else:
             st.success(t("style_applied"))
         st.caption(t("style_elements_help"))
         st.caption(t("style_materials_caption"))
+
+# 檔案上傳控制項已在這次 create rerun 建立完成；若剛才沒有觸發 on_change，
+# 也不讓換頁保護旗標殘留到使用者下一次真正按下原生 X 的操作。
+st.session_state.pop("v12_style_reference_navigation_guard", None)
 
 _v12_update_navigation_safe_creation_draft(
     v12_style_source_mode=st.session_state.get("v12_style_source_mode"),
