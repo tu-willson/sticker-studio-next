@@ -13,39 +13,6 @@ import streamlit as st
 import streamlit.components.v2 as components
 
 
-st.set_page_config(
-    page_title="STEP 04 前端互動測試｜貼圖工作室",
-    page_icon="🧪",
-    layout="wide",
-)
-
-st.markdown(
-    """
-    <style>
-      .block-container { max-width: 1180px; padding-top: 2.3rem; }
-      .step04-test-note {
-        padding: .9rem 1rem; border-radius: 12px;
-        border: 1px solid rgba(87, 182, 255, .42);
-        background: rgba(53, 139, 205, .13); color: #d9efff;
-      }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.title("🧪 STEP 04 前端互動測試版")
-st.markdown(
-    """
-    <div class="step04-test-note">
-      這是獨立測試頁。文字／表情模式切換、欄位輸入與勾選都只保存在目前瀏覽器；
-      不會登入、不會生成、不會扣額度，也不會寫入「我的作品」。<br>
-      只有按下「同步測試設定」時，才會將目前草稿回傳給這個測試頁顯示。
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-
 EDITOR_HTML = '<div class="step04-editor-root"></div>'
 
 EDITOR_CSS = r"""
@@ -440,26 +407,60 @@ export default function(component) {
 }
 """
 
-step04_editor = components.component(
-    "step04_frontend_editor_test",
-    html=EDITOR_HTML,
-    css=EDITOR_CSS,
-    js=EDITOR_JS,
-    isolate_styles=False,
-)
-
-result = step04_editor(
-    data={"storageKey": "sticker-studio-next.step04-frontend-test.v2"},
-    key="step04_frontend_editor_test",
-)
-
-sync_payload = getattr(result, "sync", None)
-if isinstance(sync_payload, dict):
-    st.success("✅ 已收到測試草稿。這只是驗證資料，沒有送去生成或保存。")
-    st.caption(
-        "最後同步時間："
-        + datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+def render_frontend_editor(*, data, key, component_name="step04_frontend_editor_test"):
+    """Render the browser-side editor and return its explicit sync payload."""
+    editor = components.component(
+        component_name,
+        html=EDITOR_HTML,
+        css=EDITOR_CSS,
+        js=EDITOR_JS,
+        isolate_styles=False,
     )
-    st.json(sync_payload, expanded=False)
-else:
-    st.info("請在上方任意切換、輸入與勾選；完成後按「同步測試設定」檢查資料。")
+    result = editor(data=data, key=key)
+    return getattr(result, "sync", None)
+
+
+def run_test_page():
+    st.set_page_config(
+        page_title="STEP 04 前端互動測試｜貼圖工作室",
+        page_icon="🧪",
+        layout="wide",
+    )
+    st.markdown(
+        """
+        <style>
+          .block-container { max-width: 1180px; padding-top: 2.3rem; }
+          .step04-test-note {
+            padding: .9rem 1rem; border-radius: 12px;
+            border: 1px solid rgba(87, 182, 255, .42);
+            background: rgba(53, 139, 205, .13); color: #d9efff;
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.title("🧪 STEP 04 前端互動測試版")
+    st.markdown(
+        """
+        <div class="step04-test-note">
+          這是獨立測試頁。文字／表情模式切換、欄位輸入與勾選都只保存在目前瀏覽器；
+          不會登入、不會生成、不會扣額度，也不會寫入「我的作品」。<br>
+          只有按下「同步測試設定」時，才會將目前草稿回傳給這個測試頁顯示。
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    sync_payload = render_frontend_editor(
+        data={"storageKey": "sticker-studio-next.step04-frontend-test.v3"},
+        key="step04_frontend_editor_test",
+    )
+    if isinstance(sync_payload, dict):
+        st.success("✅ 已收到測試草稿。這只是驗證資料，沒有送去生成或保存。")
+        st.caption("最後同步時間：" + datetime.now().strftime("%Y/%m/%d %H:%M:%S"))
+        st.json(sync_payload, expanded=False)
+    else:
+        st.info("請在上方任意切換、輸入與勾選；完成後按「同步測試設定」檢查資料。")
+
+
+if __name__ == "__main__":
+    run_test_page()
