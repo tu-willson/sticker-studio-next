@@ -961,6 +961,8 @@ st.markdown("""
   background:linear-gradient(90deg, transparent, rgba(183,220,255,.55), transparent);
   box-shadow:0 1px 5px rgba(148,206,255,.14);
 }
+/* 將表情模式的「隨機」與輸入欄排成同列，避免上下閱讀跳動。 */
+.v12-expression-random-aligner{height:31px;}
 /* 畫風參考的自訂元素需明確儲存，以紅色按鈕提高辨識度。 */
 .st-key-v12_style_reference_save_button button{
   background:#ff4f67 !important;
@@ -7207,16 +7209,25 @@ def _v12_render_expression_sticker_slots():
                 st.session_state.setdefault(
                     f"v12_expression_emotion_random_{i}", False
                 )
-                emotion_random = st.checkbox(
-                    t("random"),
-                    key=f"v12_expression_emotion_random_{i}",
-                )
-                st.text_input(
-                    t("expression_field"),
-                    key=f"v12_expression_emotion_{i}",
-                    placeholder=t("expression_placeholder"),
-                    disabled=emotion_random,
-                )
+                _emotion_input, _emotion_random = st.columns([4, 1])
+                with _emotion_input:
+                    st.text_input(
+                        t("expression_field"),
+                        key=f"v12_expression_emotion_{i}",
+                        placeholder=t("expression_placeholder"),
+                        disabled=st.session_state.get(
+                            f"v12_expression_emotion_random_{i}", False
+                        ),
+                    )
+                with _emotion_random:
+                    st.markdown(
+                        '<div class="v12-expression-random-aligner"></div>',
+                        unsafe_allow_html=True,
+                    )
+                    emotion_random = st.checkbox(
+                        t("random"),
+                        key=f"v12_expression_emotion_random_{i}",
+                    )
                 _expression_draft_item = _v12_expression_draft()[i]
                 st.session_state.setdefault(
                     f"v12_expression_action_enabled_{i}",
