@@ -1,6 +1,7 @@
 # V11｜STEP 02D-3｜公開版最後操作細節整理
 import re
 import zipfile
+import copy
 import streamlit as st
 from openai import OpenAI
 import base64
@@ -1194,6 +1195,49 @@ st.markdown("""
   font-size:.96rem;
   line-height:1.55;
 }
+/* STEP 06｜用「貼圖小劇場」呈現等待階段；這是流程提示，不宣稱 AI 的精準完成百分比。 */
+.v12-generation-showtime{
+  width:min(860px,100%);
+  margin:.85rem auto;
+  padding:.85rem 1rem;
+  border:1px solid rgba(255,183,91,.62);
+  border-radius:15px;
+  background:linear-gradient(110deg, rgba(107,51,23,.56), rgba(62,42,99,.55), rgba(21,80,107,.48));
+  box-shadow:0 7px 22px rgba(255,143,63,.16);
+}
+.v12-generation-showtime-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.8rem;
+  color:#fff0d4;
+  font-size:1.03rem;
+  font-weight:850;
+}
+.v12-generation-showtime-scene{
+  flex:0 0 auto;
+  padding:.18rem .54rem;
+  border-radius:999px;
+  background:rgba(255,184,89,.20);
+  color:#ffe3ae;
+  font-size:.8rem;
+}
+.v12-generation-showtime-track{
+  height:10px;
+  overflow:hidden;
+  margin:.65rem 0 .5rem;
+  border-radius:999px;
+  background:rgba(9,18,35,.62);
+  box-shadow:inset 0 0 0 1px rgba(255,220,163,.23);
+}
+.v12-generation-showtime-fill{
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#ff9f43,#ffcf5a,#ff6e91,#9d7dff);
+  box-shadow:0 0 14px rgba(255,180,83,.76);
+  transition:width .35s ease;
+}
+.v12-generation-showtime-note{ color:#d8eaf7; font-size:.88rem; }
 .v11-success-next{
   width:min(900px,100%);
   margin:.8rem auto 1rem;
@@ -4925,6 +4969,8 @@ def _v12_load_history_record(record):
     record = dict(record or {})
     metadata = _v12_normalize_project_metadata(record)
 
+    # 使用者主動載入另一組作品時，以該作品為準，不能再套回離開前的草稿。
+    st.session_state.pop("v12_restore_creation_draft", None)
     st.session_state["v12_current_project"] = metadata
     # A saved project must replace the browser draft, never merge with it.
     st.session_state["v12_step04_frontend_revision"] = (
@@ -5246,6 +5292,47 @@ st.session_state.setdefault("v12_ai_copy_candidates", [])
 st.session_state.setdefault("v12_ai_copy_topic", "")
 st.session_state.setdefault("v12_ai_copy_tone", "😂 搞笑自然")
 st.session_state.setdefault("v12_ai_copy_selected", [])
+
+# 「我的作品」頁不會建立 STEP 01～03 的 Streamlit widgets；而 Streamlit
+# 會在該次 rerun 結束時清除未渲染 widget 的值。把創作中的關鍵資料先放到
+# 非 widget 的草稿快照，回到「開始製作」時再提前還原，避免照片、畫風、
+# 預設風格與人物設定因為單純換頁而消失。
+_V12_CREATION_DRAFT_KEYS = (
+    "uploaded_image_bytes",
+    "v12_style_source_mode",
+    "v10_style_mode",
+    "v12_last_preset_style_mode",
+    "v12_use_custom_style",
+    "v12_style_reference_image_bytes",
+    "v12_style_reference_filename",
+    "v12_style_reference_fingerprint",
+    "v12_style_reference_strength",
+    "v12_style_reference_custom_elements",
+    "v10_character_options",
+    "v10_character_custom_1",
+    "v10_character_enabled_1",
+)
+
+
+def _v12_preserve_creation_draft_for_navigation():
+    """Snapshot the active creation draft before leaving the create page."""
+    st.session_state["v12_creation_draft_snapshot"] = {
+        key: copy.deepcopy(st.session_state[key])
+        for key in _V12_CREATION_DRAFT_KEYS
+        if key in st.session_state
+    }
+    st.session_state["v12_restore_creation_draft"] = True
+
+
+def _v12_restore_creation_draft_after_navigation():
+    """Restore the saved draft before STEP 01～03 widgets are created again."""
+    if not st.session_state.pop("v12_restore_creation_draft", False):
+        return
+    snapshot = st.session_state.get("v12_creation_draft_snapshot")
+    if not isinstance(snapshot, dict):
+        return
+    for key, value in snapshot.items():
+        st.session_state[key] = copy.deepcopy(value)
 
 # ============================================================
 # V12 試作版｜局部文字上色
@@ -6718,6 +6805,7 @@ with _v12_nav_cols[0]:
         )
 with _v12_nav_cols[1]:
     if st.button(t("nav_pricing"), key="v12_nav_pricing", use_container_width=True):
+        _v12_preserve_creation_draft_for_navigation()
         _public02a_sync_style_bank_from_widgets()
         _save_v10_presets()
         st.session_state["v12_view"] = "pricing"
@@ -6726,6 +6814,7 @@ with _v12_nav_cols[2]:
     if st.button(t("nav_library"), key="v12_nav_library", use_container_width=True):
         # FIX11: leave-create navigation explicitly commits the dedicated style bank
         # before conditional editor widgets disappear.
+        _v12_preserve_creation_draft_for_navigation()
         _public02a_sync_style_bank_from_widgets()
         _save_v10_presets()
         st.session_state["v12_view"] = "library"
@@ -6734,6 +6823,7 @@ with _v12_nav_cols[2]:
 # This is a real Streamlit button, visually placed in the expanded floating
 # menu so it follows the exact same in-page navigation as "My Works" above.
 if st.button(t("quick_nav_library_button"), key="v12_quick_library", help=t("quick_nav_library_title")):
+    _v12_preserve_creation_draft_for_navigation()
     _public02a_sync_style_bank_from_widgets()
     _save_v10_presets()
     st.session_state["v12_view"] = "library"
@@ -6754,6 +6844,11 @@ if st.session_state.get("v12_view") == "library":
             st.rerun()
 
 st.session_state.setdefault("v12_view", "create")
+
+# 必須在 create 頁面的 widgets 被重新建立前執行，否則 Streamlit 會以空白的
+# widget state 蓋掉原本草稿。
+if st.session_state["v12_view"] == "create":
+    _v12_restore_creation_draft_after_navigation()
 
 if st.session_state["v12_view"] == "pricing":
     _v12_render_pricing_page()
@@ -8604,19 +8699,39 @@ if st.session_state.get("v11_generation_pending", False):
             raise RuntimeError("beta_generation_not_enabled")
         _generation_client = OpenAI(api_key=_server_openai_key)
 
-        with st.spinner("AI 正在生成 4×2 原始總圖……"):
+        with st.spinner("🎬 貼圖小劇場開拍中，請稍候……"):
             ib = BytesIO(st.session_state.uploaded_image_bytes)
-            # V11｜STEP 02C-4②
-            # 等待提示是「等待體驗」，不代表 OpenAI 真實完成百分比。
+            # 這是使用者可理解的製作階段提示，不假裝是 AI 的精準完成百分比。
             # 180 秒後逾時；不自動 retry，沿用原本的例外／退款路徑。
-            _progress = st.progress(0)
+            _showtime = st.empty()
             _status = st.empty()
             _started_at = time.monotonic()
-            _progress.progress(0.05)
+
+            def _show_generation_scene(scene, title, note, percent):
+                _showtime.markdown(
+                    f"""
+                    <div class="v12-generation-showtime">
+                      <div class="v12-generation-showtime-top">
+                        <span>{title}</span><span class="v12-generation-showtime-scene">{scene}</span>
+                      </div>
+                      <div class="v12-generation-showtime-track"><div class="v12-generation-showtime-fill" style="width:{percent}%"></div></div>
+                      <div class="v12-generation-showtime-note">{note}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            _show_generation_scene(
+                "第 1 幕／5", "🎬 導演正在替八格貼圖排戲",
+                "先把人物、文字和動作指令排成一場小劇場。", 8,
+            )
             _status.info("🎨 正在分析你的照片……")
 
             try:
-                _progress.progress(0.18)
+                _show_generation_scene(
+                    "第 2 幕／5", "🎨 美術組正在調配這次的貼圖畫風",
+                    "畫面已送進 AI 畫室，這一幕會需要稍微等候。", 31,
+                )
                 _status.info("🖌️ 正在準備貼圖構圖……")
 
                 # OpenAI SDK timeout：最長等待 180 秒。
@@ -8643,6 +8758,10 @@ if st.session_state.get("v11_generation_pending", False):
                         ("person.png", ib, "image/png"),
                         ("style-reference.jpg", BytesIO(_style_reference_bytes), "image/jpeg"),
                     ]
+                    _show_generation_scene(
+                        "第 2 幕／5", "🖼️ 美術組正在對照人物與畫風參考",
+                        "人物身份以你的照片為準，畫風只負責幫這場戲上色。", 38,
+                    )
                     _status.info("🖼️ 正在分析人物照片與畫風參考圖……")
 
                 if transparent:
@@ -8656,6 +8775,10 @@ if st.session_state.get("v11_generation_pending", False):
                     _image_edit_kwargs["background"] = "transparent"
 
                 _image_edit_kwargs["prompt"] = _generation_prompt
+                _show_generation_scene(
+                    "第 3 幕／5", "🪄 AI 正在畫布上施展貼圖魔法",
+                    "角色、表情與小動作正在合成為 4×2 的完整畫面。", 57,
+                )
                 result = _generation_client.with_options(timeout=180).images.edit(
                     **_image_edit_kwargs
                 )
@@ -8676,11 +8799,20 @@ if st.session_state.get("v11_generation_pending", False):
                 # into an automatic refund for an image the member received.
                 _beta_generation_returned = _using_beta_credit
 
-                _progress.progress(0.88)
+                _show_generation_scene(
+                    "第 4 幕／5", "📦 圖片快遞抵達，正在小心拆封",
+                    "八格原始總圖已送回，正在確認每一格都完整到位。", 82,
+                )
                 _status.info("🖼️ 原始總圖處理中……")
-                _progress.progress(0.96)
+                _show_generation_scene(
+                    "第 5 幕／5", "✂️ 剪刀手正在幫每格安排裁切空間",
+                    "最後整理完成後，就能直接進入裁切確認。", 96,
+                )
                 _status.info("✂️ 正在準備 8 張貼圖……")
-                _progress.progress(1.0)
+                _show_generation_scene(
+                    "殺青！", "🎉 八格貼圖小劇場完成",
+                    "原始總圖已準備好，下一步可以檢視並微調裁切線。", 100,
+                )
                 _status.success("🎉 AI 生成完成，正在進行最後圖片處理……")
             except Exception as _gen_exc:
                 _elapsed = time.monotonic() - _started_at
@@ -8712,6 +8844,10 @@ if st.session_state.get("v11_generation_pending", False):
                 14 if _grid_crop_room_applied else 0
             )
             if _grid_crop_room_applied:
+                _show_generation_scene(
+                    "收工整理", "✂️ 剪刀手正在保留每格裁切空間",
+                    "已替透明貼圖安排好後續手動微調所需的安全位置。", 100,
+                )
                 _status.info("✂️ 正在為每張貼圖保留裁切留白……")
             st.session_state.generated_4x2_bytes = _grid_bytes
             st.session_state.crop_boxes = None
@@ -9006,6 +9142,7 @@ function saveBlob(blob,name){''',
             type="primary",
             use_container_width=True,
         ):
+            _v12_preserve_creation_draft_for_navigation()
             _public02a_sync_style_bank_from_widgets()
             _save_v10_presets()
             st.session_state["v12_view"] = "library"
@@ -9323,6 +9460,7 @@ with _link_col:
         key="v12_footer_library",
         use_container_width=True,
     ):
+        _v12_preserve_creation_draft_for_navigation()
         _public02a_sync_style_bank_from_widgets()
         _save_v10_presets()
         st.session_state["v12_view"] = "library"
