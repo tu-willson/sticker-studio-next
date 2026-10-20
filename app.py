@@ -920,6 +920,38 @@ st.markdown("""
   font-size:18px !important;
   font-weight:800 !important;
 }
+/* 文字貼圖每格的清空操作維持低干擾：只容納兩字、採淡透明藍色。 */
+.st-key-v12_clear_sticker_slot_0 button,
+.st-key-v12_clear_sticker_slot_1 button,
+.st-key-v12_clear_sticker_slot_2 button,
+.st-key-v12_clear_sticker_slot_3 button,
+.st-key-v12_clear_sticker_slot_4 button,
+.st-key-v12_clear_sticker_slot_5 button,
+.st-key-v12_clear_sticker_slot_6 button,
+.st-key-v12_clear_sticker_slot_7 button{
+  min-height:34px !important;
+  min-width:44px !important;
+  padding:0 5px !important;
+  border:1px solid rgba(104,190,255,.42) !important;
+  border-radius:8px !important;
+  background:rgba(76,165,232,.16) !important;
+  color:#a9dcff !important;
+  font-size:13px !important;
+  font-weight:800 !important;
+  white-space:nowrap !important;
+  box-shadow:none !important;
+}
+.st-key-v12_clear_sticker_slot_0 button:hover,
+.st-key-v12_clear_sticker_slot_1 button:hover,
+.st-key-v12_clear_sticker_slot_2 button:hover,
+.st-key-v12_clear_sticker_slot_3 button:hover,
+.st-key-v12_clear_sticker_slot_4 button:hover,
+.st-key-v12_clear_sticker_slot_5 button:hover,
+.st-key-v12_clear_sticker_slot_6 button:hover,
+.st-key-v12_clear_sticker_slot_7 button:hover{
+  background:rgba(76,165,232,.28) !important;
+  border-color:rgba(146,212,255,.7) !important;
+}
 /* 畫風參考的自訂元素需明確儲存，以紅色按鈕提高辨識度。 */
 .st-key-v12_style_reference_save_button button{
   background:#ff4f67 !important;
@@ -3778,6 +3810,7 @@ def _v12_default_expression_specs():
         {
             "emotion": "",
             "emotion_random": False,
+            "action_enabled": False,
             "effect": V12_EXPRESSION_EFFECTS[0],
             "effect_action_prompt": "",
         }
@@ -3797,6 +3830,11 @@ def _v12_normalize_expression_specs(value):
         normalized.append({
             "emotion": str(item.get("emotion", "") or "").strip()[:160],
             "emotion_random": bool(item.get("emotion_random", False)),
+            # Keep saved pre-checkbox action directions visible after the UI
+            # migration.  The retired visual-effect selector itself is ignored.
+            "action_enabled": bool(item.get(
+                "action_enabled", bool(str(item.get("effect_action_prompt", "") or "").strip())
+            )),
             "effect": effect,
             "effect_action_prompt": str(
                 item.get("effect_action_prompt", "") or ""
@@ -3842,6 +3880,13 @@ def _v12_expression_draft():
                 "emotion_random",
                 st.session_state.get(f"v12_expression_emotion_random_{i}", False),
             )),
+            "action_enabled": bool(item.get(
+                "action_enabled",
+                st.session_state.get(
+                    f"v12_expression_action_enabled_{i}",
+                    bool(str(item.get("effect_action_prompt", "") or "").strip()),
+                ),
+            )),
             "effect": item.get(
                 "effect", st.session_state.get(
                     f"v12_expression_effect_{i}", V12_EXPRESSION_EFFECTS[0]
@@ -3858,7 +3903,8 @@ def _v12_expression_draft():
 
 
 def _v12_write_expression_draft_slot(
-    i, emotion=None, emotion_random=None, effect=None, effect_action_prompt=None
+    i, emotion=None, emotion_random=None, action_enabled=None, effect=None,
+    effect_action_prompt=None,
 ):
     draft = _v12_expression_draft()
     if not 0 <= i < 8:
@@ -3867,6 +3913,8 @@ def _v12_write_expression_draft_slot(
         draft[i]["emotion"] = str(emotion or "").strip()[:160]
     if emotion_random is not None:
         draft[i]["emotion_random"] = bool(emotion_random)
+    if action_enabled is not None:
+        draft[i]["action_enabled"] = bool(action_enabled)
     if effect is not None:
         draft[i]["effect"] = (
             effect if effect in V12_EXPRESSION_EFFECTS else V12_EXPRESSION_EFFECTS[0]
@@ -3885,6 +3933,9 @@ def _v12_capture_expression_draft():
             emotion_random=st.session_state.get(
                 f"v12_expression_emotion_random_{i}", item["emotion_random"]
             ),
+            action_enabled=st.session_state.get(
+                f"v12_expression_action_enabled_{i}", item["action_enabled"]
+            ),
             effect=st.session_state.get(f"v12_expression_effect_{i}", item["effect"]),
             effect_action_prompt=st.session_state.get(
                 f"v12_expression_effect_action_prompt_{i}",
@@ -3899,6 +3950,9 @@ def _v12_restore_expression_widgets():
         st.session_state[f"v12_expression_emotion_{i}"] = item["emotion"]
         st.session_state[f"v12_expression_emotion_random_{i}"] = bool(
             item["emotion_random"]
+        )
+        st.session_state[f"v12_expression_action_enabled_{i}"] = bool(
+            item["action_enabled"]
         )
         st.session_state[f"v12_expression_effect_{i}"] = item["effect"]
         st.session_state[f"v12_expression_effect_action_prompt_{i}"] = item[
@@ -4844,6 +4898,9 @@ def _v12_load_history_record(record):
         st.session_state[f"v12_expression_emotion_{i}"] = spec["emotion"]
         st.session_state[f"v12_expression_emotion_random_{i}"] = spec[
             "emotion_random"
+        ]
+        st.session_state[f"v12_expression_action_enabled_{i}"] = spec[
+            "action_enabled"
         ]
         st.session_state[f"v12_expression_effect_{i}"] = spec["effect"]
         st.session_state[f"v12_expression_effect_action_prompt_{i}"] = spec[
@@ -5930,13 +5987,13 @@ def build_prompt(style, custom_style, selected_character, custom_character,
                 else spec["emotion"] or "自然、清楚且容易辨識的情緒反應"
             )
             p.append(
-                f"第{i+1}格：表情／情緒為「{emotion}」；"
-                f"視覺特效為「{spec['effect']}」。"
+                f"第{i+1}格：表情／情緒為「{emotion}」。"
             )
-            if spec["effect_action_prompt"]:
+            if spec["action_enabled"] and spec["effect_action_prompt"]:
                 p.append(
-                    f"第{i+1}格的特效／動作補充方向："
+                    f"第{i+1}格需搭配以下人物動作／互動："
                     f"「{spec['effect_action_prompt']}」。"
+                    "請讓動作清楚、有張力，且完整保留在該格可裁切範圍內。"
                 )
     else:
         for i, t in enumerate(texts):
@@ -6887,9 +6944,8 @@ def _v12_render_text_slot(i):
         _action_enabled_widget_key,
         bool(_action_draft_item["enabled"]),
     )
-    # Keep the per-slot clear action wide enough for its full two-character
-    # label on compact/mobile layouts.
-    _action_toggle, _action_clear = st.columns([3, 2])
+    # Keep 「清空」 compact but wide enough to remain readable in each slot.
+    _action_toggle, _action_clear = st.columns([7, 3])
     with _action_toggle:
         _action_enabled = st.checkbox(
             t("action_enable"),
@@ -6901,7 +6957,7 @@ def _v12_render_text_slot(i):
         st.button(
             _v12_slot_clear_label(),
             key=f"v12_clear_sticker_slot_{i}",
-            use_container_width=True,
+            use_container_width=False,
             on_click=_v12_clear_sticker_slot,
             args=(i,),
         )
@@ -7118,9 +7174,6 @@ def _v12_render_expression_sticker_slots():
                 st.session_state.setdefault(
                     f"v12_expression_emotion_random_{i}", False
                 )
-                st.session_state.setdefault(
-                    f"v12_expression_effect_{i}", V12_EXPRESSION_EFFECTS[0]
-                )
                 emotion_random = st.checkbox(
                     t("random"),
                     key=f"v12_expression_emotion_random_{i}",
@@ -7131,25 +7184,41 @@ def _v12_render_expression_sticker_slots():
                     placeholder=t("expression_placeholder"),
                     disabled=emotion_random,
                 )
-                st.selectbox(
-                    t("effect_question"),
-                    V12_EXPRESSION_EFFECTS,
-                    key=f"v12_expression_effect_{i}",
+                _expression_draft_item = _v12_expression_draft()[i]
+                st.session_state.setdefault(
+                    f"v12_expression_action_enabled_{i}",
+                    bool(_expression_draft_item["action_enabled"]),
+                )
+                action_enabled = st.checkbox(
+                    t("action_enable"),
+                    key=f"v12_expression_action_enabled_{i}",
                 )
                 st.session_state.setdefault(
-                    f"v12_expression_effect_action_prompt_{i}", ""
+                    f"v12_expression_effect_action_prompt_{i}",
+                    str(_expression_draft_item["effect_action_prompt"] or ""),
                 )
-                st.text_input(
-                    t("effect_action"),
-                    key=f"v12_expression_effect_action_prompt_{i}",
-                    placeholder=t("effect_action_placeholder"),
+                if action_enabled:
+                    st.text_area(
+                        t("action_prompt"),
+                        key=f"v12_expression_effect_action_prompt_{i}",
+                        placeholder=t("action_placeholder"),
+                        max_chars=500,
+                        height=68,
+                    )
+                _v12_write_expression_draft_slot(
+                    i,
+                    emotion=st.session_state.get(f"v12_expression_emotion_{i}", ""),
+                    emotion_random=emotion_random,
+                    action_enabled=action_enabled,
+                    effect_action_prompt=st.session_state.get(
+                        f"v12_expression_effect_action_prompt_{i}", ""
+                    ),
                 )
     configured = sum(
         bool(
             spec["emotion"]
             or spec["emotion_random"]
-            or spec["effect"] != V12_EXPRESSION_EFFECTS[0]
-            or spec["effect_action_prompt"]
+            or spec["action_enabled"]
         )
         for spec in _v12_get_expression_specs()
     )
