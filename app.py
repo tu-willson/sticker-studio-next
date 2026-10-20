@@ -567,8 +567,13 @@ def _v12_load_style_editor_from_slot():
     try:
         slot = int(st.session_state.get("v12_style_editor_slot", 1))
     except Exception:
-        slot = 1
-    slot = max(1, min(10, slot))
+        slot = 0
+
+    # 0 是「點擊選擇」提示項，不把它偷偷當成第 01 組載入。
+    if slot not in range(1, 11):
+        st.session_state["v12_style_editor_name"] = ""
+        st.session_state["v12_style_editor_prompt"] = ""
+        return
 
     bank = _public02a_get_style_bank()
     item = bank[str(slot)]
@@ -6794,27 +6799,41 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
 
         with st.expander("✏️ 管理我的自定義風格", expanded=False):
             st.caption("選擇 01～10 的一個位置進行編輯。輸入時不會重新讀取頁面，完成後再按「儲存此風格」。")
-            st.session_state.setdefault("v12_style_editor_slot", 1)
+            # 不預設選到第 01 組；避免畫面看似正在編輯第 01 組，
+            # 但本次 session 的內容尚未載入。
+            if not st.session_state.get("v12_style_editor_choice_initialized", False):
+                st.session_state["v12_style_editor_slot"] = 0
+                st.session_state.pop("v12_style_editor_name", None)
+                st.session_state.pop("v12_style_editor_prompt", None)
+                st.session_state["v12_style_editor_choice_initialized"] = True
+            st.session_state.setdefault("v12_style_editor_slot", 0)
             if st.session_state.pop("v12_style_editor_clear_pending", False):
                 _v12_load_style_editor_from_slot()
                 st.success("🧹 此風格已清空")
-            if "v12_style_editor_name" not in st.session_state or "v12_style_editor_prompt" not in st.session_state:
-                _v12_load_style_editor_from_slot()
-            st.selectbox(
+            _editor_slot = st.selectbox(
                 "📁 編輯哪一組風格",
-                list(range(1, 11)),
-                format_func=lambda x: f"{x:02d}｜{str(_public02a_get_style_bank()[str(x)]['name']).strip() or f'使用者自定{x}'}",
+                [0, *range(1, 11)],
+                format_func=lambda x: (
+                    "↓ 點擊選擇要編輯的自定義風格"
+                    if x == 0
+                    else f"{x:02d}｜{str(_public02a_get_style_bank()[str(x)]['name']).strip() or f'使用者自定{x}'}"
+                ),
                 key="v12_style_editor_slot",
                 on_change=_v12_load_style_editor_from_slot,
             )
-            with st.form("v12_style_editor_form", border=False):
-                st.text_input("🏷️ 風格名稱", key="v12_style_editor_name", placeholder="例如：童趣手繪漫畫")
-                st.text_area("🎨 自定義風格 Prompt", key="v12_style_editor_prompt", height=180, placeholder="在這裡輸入完整的風格 Prompt…")
-                _ea, _eb = st.columns(2)
-                with _ea:
-                    _save_style_editor = st.form_submit_button("💾 儲存此風格", use_container_width=True)
-                with _eb:
-                    _clear_style_editor = st.form_submit_button("🧹 清空此風格", use_container_width=True)
+            _save_style_editor = False
+            _clear_style_editor = False
+            if _editor_slot == 0:
+                st.info("👆 請先從上方選單點選 01～10 的一組風格，才會載入可編輯的內容。")
+            else:
+                with st.form("v12_style_editor_form", border=False):
+                    st.text_input("🏷️ 風格名稱", key="v12_style_editor_name", placeholder="例如：童趣手繪漫畫")
+                    st.text_area("🎨 自定義風格 Prompt", key="v12_style_editor_prompt", height=180, placeholder="在這裡輸入完整的風格 Prompt…")
+                    _ea, _eb = st.columns(2)
+                    with _ea:
+                        _save_style_editor = st.form_submit_button("💾 儲存此風格", use_container_width=True)
+                    with _eb:
+                        _clear_style_editor = st.form_submit_button("🧹 清空此風格", use_container_width=True)
             if _save_style_editor:
                 try:
                     _saved_slot = int(st.session_state.get("v12_style_editor_slot", 1))
