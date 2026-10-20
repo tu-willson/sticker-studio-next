@@ -7289,7 +7289,7 @@ if _v12_step04_frontend_preview:
     )
     _v12_frontend_sync = render_frontend_editor(
         data={
-            "storageKey": "sticker-studio-next.step04-integration-preview.v1",
+            "storageKey": "sticker-studio-next.step04-integration-preview.v2",
             "initial": _v12_step04_frontend_component_state(),
         },
         key="v12_step04_frontend_integration_preview",

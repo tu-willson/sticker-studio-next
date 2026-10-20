@@ -18,19 +18,18 @@ EDITOR_HTML = '<div class="step04-editor-root"></div>'
 EDITOR_CSS = r"""
 :host { display:block; width:100%; }
 .step04-editor-root { color:#eef5ff; font-family:inherit; }
-.s4-shell { margin-top:18px; padding:20px; border:1px solid #365470; border-radius:18px;
-  background:linear-gradient(145deg, rgba(19,34,54,.96), rgba(25,35,56,.96)); }
-.s4-mode-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:15px; }
-.s4-mode { min-height:55px; border:1px solid #55708d; border-radius:12px; cursor:pointer;
-  background:#1d2b40; color:#d8e6f6; font-size:18px; font-weight:800; }
-.s4-mode.active { background:#ff5878; border-color:#ff9aab; color:white; box-shadow:0 5px 18px rgba(255,88,120,.24); }
-.s4-heading { padding:13px 16px; border:1px solid #258fda; border-radius:12px; color:#eaf7ff;
-  background:rgba(25,109,172,.17); font-size:20px; font-weight:850; }
-.s4-caption { color:#a9b9cd; margin:10px 2px 18px; line-height:1.55; }
+.s4-shell { margin-top:12px; padding:0; border:0; background:transparent; }
+.s4-mode-row { display:grid; grid-template-columns:1fr 1fr; gap:46px; margin:0 16px 32px; }
+.s4-mode { min-height:40px; border:1px solid #526a86; border-radius:8px; cursor:pointer;
+  background:rgba(29,43,64,.82); color:#d8e6f6; font-size:15px; font-weight:760; }
+.s4-mode.active { background:#ff5878; border-color:#ff7893; color:white; box-shadow:none; }
+.s4-heading { max-width:900px; margin:0 auto; padding:10px 16px; border:2px solid #279fe7; border-radius:11px; color:#f0f8ff;
+  background:rgba(21,52,79,.46); font-size:20px; font-weight:850; text-align:center; }
+.s4-caption { color:#a9b9cd; margin:10px 0 22px; line-height:1.55; font-size:14px; }
 .s4-source-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0 10px; }
 .s4-source { border:1px solid #54708c; border-radius:10px; min-height:45px; background:#24354b; color:#dceafa; font:inherit; font-weight:800; cursor:pointer; }
 .s4-source.active { border-color:#65c7ff; background:rgba(37,124,186,.48); color:#fff; }
-.s4-source-panel { margin:0 0 18px; padding:14px; border:1px solid rgba(96,169,220,.38); border-radius:12px; background:rgba(28,56,82,.45); }
+.s4-source-panel { margin:0 0 22px; padding:14px; border:1px solid rgba(96,169,220,.35); border-radius:10px; background:rgba(21,44,70,.32); }
 .s4-panel-title { color:#e9f7ff; font-size:16px; font-weight:850; margin-bottom:9px; }
 .s4-panel-grid { display:grid; grid-template-columns:1.3fr 1fr; gap:10px; }
 .s4-small-button { border:1px solid #5aaee2; border-radius:8px; background:#286eaa; color:#fff; padding:8px 11px; font:inherit; font-weight:800; cursor:pointer; }
@@ -41,10 +40,9 @@ EDITOR_CSS = r"""
 .s4-pool-list { margin:8px 0 0; color:#b8cbe0; font-size:13px; line-height:1.55; }
 .s4-color-row { display:grid; grid-template-columns:minmax(0,1fr) 105px 28px; gap:6px; margin:7px 0; align-items:center; }
 .s4-remove-color { border:0; border-radius:7px; min-height:32px; background:rgba(255,91,120,.28); color:#fff; font-size:20px; cursor:pointer; }
-.s4-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px; }
-.s4-card { min-width:0; padding:13px; border:1px solid rgba(104,136,168,.55); border-radius:12px;
-  background:rgba(20,34,54,.82); }
-.s4-card-title { margin-bottom:9px; font-size:15px; font-weight:850; color:#f2f7ff; }
+.s4-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); column-gap:16px; row-gap:12px; }
+.s4-card { min-width:0; padding:0 4px; border:0; border-radius:0; background:transparent; }
+.s4-card-title { margin:0 0 10px; font-size:16px; font-weight:850; color:#f2f7ff; }
 .s4-label-row { display:flex; justify-content:space-between; align-items:center; gap:8px; margin:8px 0 5px; color:#d8e7f7; font-size:13px; font-weight:700; }
 .s4-input, .s4-area { width:100%; box-sizing:border-box; border:1px solid #496582; border-radius:8px;
   background:#243248; color:#f4f8ff; padding:9px 10px; font:inherit; }
@@ -52,14 +50,15 @@ EDITOR_CSS = r"""
 .s4-toggle { display:flex; gap:7px; align-items:center; color:#d9e8f7; font-size:13px; font-weight:700; cursor:pointer; }
 .s4-toggle input { width:17px; height:17px; accent-color:#ff5878; }
 .s4-subfield { margin-top:10px; padding-top:9px; border-top:1px solid rgba(126,157,186,.26); }
+.s4-row-divider { height:1px; margin:24px 0; background:rgba(151,177,207,.3); }
 .s4-action-row { display:flex; gap:10px; margin-top:20px; align-items:center; flex-wrap:wrap; }
 .s4-sync, .s4-reset { border-radius:10px; padding:11px 17px; font:inherit; font-weight:850; cursor:pointer; }
 .s4-sync { border:1px solid #45b4ff; background:#237cba; color:#fff; }
 .s4-reset { border:1px solid #667c96; background:#27374d; color:#dce8f4; }
 .s4-local { color:#9fb2c9; font-size:13px; }
 .s4-count { margin-top:15px; border-radius:10px; padding:10px 12px; background:rgba(57,136,205,.15); color:#9fd8ff; font-weight:750; }
-@media (max-width: 820px) { .s4-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } .s4-panel-grid { grid-template-columns:1fr; } }
-@media (max-width: 520px) { .s4-shell { padding:13px; } .s4-grid { grid-template-columns:1fr; } .s4-mode { font-size:15px; } }
+@media (max-width: 820px) { .s4-mode-row { gap:12px; margin:0 0 20px; } .s4-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } .s4-panel-grid { grid-template-columns:1fr; } }
+@media (max-width: 520px) { .s4-grid { grid-template-columns:1fr; } .s4-mode { font-size:14px; } }
 """
 
 EDITOR_JS = r"""
@@ -227,6 +226,9 @@ export default function(component) {
 
   const render = () => {
     const textMode = state.mode === 'text';
+    const cardRenderer = textMode ? textCard : expressionCard;
+    const firstRow = state.slots.slice(0, 4).map(cardRenderer).join('');
+    const secondRow = state.slots.slice(4).map((slot, index) => cardRenderer(slot, index + 4)).join('');
     root.innerHTML = `
       <div class="s4-shell">
         <div class="s4-mode-row">
@@ -236,7 +238,9 @@ export default function(component) {
         <div class="s4-heading">${textMode ? '💬 使用文字貼圖' : '😶 使用表情貼圖（無文字）'}</div>
         <p class="s4-caption">${textMode ? '切換模式與輸入文字不會讀取頁面。動作指令與局部上色會跟著各自的文字草稿保留。' : '切換模式與設定表情不會讀取頁面。回到文字模式後，先前的 01～08 文字仍會保留。'}</p>
         ${textMode ? sourcePanel() : ''}
-        <div class="s4-grid">${state.slots.map(textMode ? textCard : expressionCard).join('')}</div>
+        <div class="s4-grid">${firstRow}</div>
+        <div class="s4-row-divider"></div>
+        <div class="s4-grid">${secondRow}</div>
         <div class="s4-count"></div>
         <div class="s4-action-row">
           <button class="s4-sync" data-action="sync">✅ 同步測試設定</button>
