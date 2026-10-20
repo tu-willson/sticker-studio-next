@@ -5793,6 +5793,11 @@ def build_prompt(style, custom_style, selected_character, custom_character,
                  sticker_mode="text", expression_specs=None, action_prompts=None):
     _layout_instruction = "人物與特效請置中安排，四周保留自然空間，方便後續以裁切線微調。"
     _safety_margin_instruction = "每格左右與上下都要保留至少約 12% 的乾淨透明／背景安全邊距，作為裁切走廊。"
+    _cell_canvas_instruction = (
+        "【逐格透明畫布規則】每一格貼圖都是各自獨立的透明畫布。人物、文字、手勢、道具、陰影與特效都必須置中，四周保留不可見的透明安全邊距；不得畫出邊框、格線、白底或任何用來表示分隔的圖形。任何元素都不得進入相鄰貼圖的透明安全區。"
+        if transparent
+        else "【逐格獨立畫布規則】每一格貼圖都是各自獨立的畫布。人物、文字、手勢、道具、陰影與特效都必須置中，四周保留不可見的乾淨背景安全邊距；不得畫出邊框、格線、白底或任何用來表示分隔的圖形。任何元素都不得進入相鄰貼圖的安全區。"
+    )
     p = [
         "請以我提供的人物照片作為主要人物參考。",
         "保留人物身份辨識特徵，不任意改變人物核心外觀。",
@@ -5804,6 +5809,7 @@ def build_prompt(style, custom_style, selected_character, custom_character,
         _layout_instruction,
         "遇到大動作時，請優先整體縮小並保留完整姿勢，而不是把手腳、道具、陰影或裝飾延伸到隔壁格。",
         "相鄰貼圖之間必須保留一整條連續、乾淨的背景色或透明空間作為裁切走廊；不要畫格線、框線或分隔線。",
+        _cell_canvas_instruction,
         "【排版硬性規則】將 8 格視為 8 張完全獨立、不可跨越的畫板。每一格的所有像素——人物、文字、道具、特效、光芒、陰影與裝飾——都必須完整留在該格內，絕對不得延伸、重疊或漏進左右／上下相鄰格。",
         _safety_margin_instruction + "內容較多時必須整體縮小，不可把多出的部分放到隔壁格；尤其第二排第 05～08 格，不可將物件、角色或裝飾跨到鄰格。",
         "不要拉伸、變形或壓縮人物。",
