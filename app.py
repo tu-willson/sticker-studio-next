@@ -18,7 +18,7 @@ import secrets
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from i18n import LANGUAGES, tr
-from step04_frontend_test import render_frontend_editor
+from step04_frontend_test import render_frontend_editor, render_frontend_generate_button
 
 
 def _v12_ui_locale():
@@ -4926,6 +4926,10 @@ def _v12_load_history_record(record):
     metadata = _v12_normalize_project_metadata(record)
 
     st.session_state["v12_current_project"] = metadata
+    # A saved project must replace the browser draft, never merge with it.
+    st.session_state["v12_step04_frontend_revision"] = (
+        int(st.session_state.get("v12_step04_frontend_revision", 0)) + 1
+    )
     st.session_state["v12_project_name_input"] = metadata.get("project_name", "")
     st.session_state["generated_4x2_bytes"] = record.get("grid_bytes") or None
 
@@ -5588,23 +5592,23 @@ def _v12_step04_frontend_component_state():
             "expressionAction": expression_slot["action"],
         })
     tone = snapshot["ai"]["tone"]
-    tone_map = {
-        "✨ 溫暖療癒": "溫暖鼓勵",
-        "💬 台灣口語": "自然日常",
-        "😂 搞笑自然": "輕鬆搞笑",
-    }
     pool = snapshot["random"]["pool"]
-    pool_map = {"": "日常", "日常對話": "日常", "歡樂笑聲": "搞笑", "溫暖關愛": "療癒"}
+    random_pools = {
+        str(name): [str(phrase) for phrase in values]
+        for name, values in V8_RANDOM_POOLS.items()
+        if isinstance(values, list)
+    }
     return {
         "mode": snapshot["mode"],
         "sourcePanel": "",
         "aiTopic": snapshot["ai"]["topic"],
-        "aiTone": tone_map.get(tone, "溫暖鼓勵"),
+        "aiTone": tone if tone in V12_AI_COPY_TONES else V12_AI_COPY_TONES[0],
         "aiCandidates": snapshot["ai"]["candidates"],
         "aiSelected": snapshot["ai"]["selected"],
-        "randomPool": pool_map.get(pool, "日常"),
+        "randomPool": pool if pool in random_pools else next(iter(random_pools), ""),
         "randomCustomDraft": "",
         "randomCustomPhrases": snapshot["random"]["customPhrases"],
+        "randomPools": random_pools,
         "message": "",
         "slots": slots,
         "version": 3,
@@ -5647,6 +5651,7 @@ def _v12_apply_step04_frontend_snapshot(payload):
         ]
         payload["ai"] = {
             "topic": payload.get("aiTopic", ""),
+            "tone": payload.get("aiTone", ""),
             "candidates": payload.get("aiCandidates", []),
             "selected": payload.get("aiSelected", []),
         }
@@ -5720,8 +5725,16 @@ def _v12_apply_step04_frontend_snapshot(payload):
     ai = payload.get("ai")
     if isinstance(ai, dict):
         st.session_state["v12_ai_copy_topic"] = str(ai.get("topic", "") or "")[:300]
-        if ai.get("tone") in V12_AI_COPY_TONES:
-            st.session_state["v12_ai_copy_tone"] = ai["tone"]
+        _frontend_tone_map = {
+            "溫暖鼓勵": "✨ 溫暖療癒",
+            "自然日常": "💬 台灣口語",
+            "輕鬆搞笑": "😂 搞笑自然",
+        }
+        _frontend_tone = _frontend_tone_map.get(
+            str(ai.get("tone", "") or ""), ai.get("tone")
+        )
+        if _frontend_tone in V12_AI_COPY_TONES:
+            st.session_state["v12_ai_copy_tone"] = _frontend_tone
         candidates = ai.get("candidates")
         if isinstance(candidates, list):
             st.session_state["v12_ai_copy_candidates"] = [str(item).strip()[:120] for item in candidates if str(item).strip()][:16]
@@ -7273,33 +7286,36 @@ if _save_character_settings:
         st.error(t("save_failed"))
 
 st.session_state.setdefault("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
+st.session_state.setdefault("v12_step04_frontend_revision", 1)
 v10_section(t("section_content"), "#3498db")
 st.caption(t("content_intro"))
 
-# A protected, local-only integration preview.  It is enabled only by the
-# explicit query string below, so the deployed production page keeps using the
-# current STEP 04 UI until the full replacement has passed user verification.
-_v12_step04_frontend_preview = str(
-    st.query_params.get("step04_frontend_preview", "")
-) == "1"
-if _v12_step04_frontend_preview:
-    st.info(
-        "🧪 STEP 04 前端整合預覽：這裡的切換與輸入會留在瀏覽器；"
-        "按「同步測試設定」才會套回下方正式欄位。"
-    )
-    _v12_frontend_sync = render_frontend_editor(
+# STEP 04｜正式採用瀏覽器端互動。一般輸入不觸發 Streamlit rerun；
+# 只有需要後端的動作（例如 AI 幫想或生成總圖）才會同步一次。
+_v12_step04_frontend_enabled = True
+if _v12_step04_frontend_enabled:
+    _v12_frontend_result = render_frontend_editor(
         data={
-            "storageKey": "sticker-studio-next.step04-integration-preview.v2",
+            "storageKey": "sticker-studio-next.step04-formal.v1",
             "initial": _v12_step04_frontend_component_state(),
+            "revision": st.session_state["v12_step04_frontend_revision"],
+            "formal": True,
         },
-        key="v12_step04_frontend_integration_preview",
-        component_name="v12_step04_frontend_integration_preview",
+        key="v12_step04_frontend_formal",
+        component_name="v12_step04_frontend_formal",
     )
-    if isinstance(_v12_frontend_sync, dict):
-        _v12_apply_step04_frontend_snapshot(_v12_frontend_sync)
-        st.success("✅ 已同步到下方正式 STEP 04 欄位；尚未生成或儲存作品。")
-    st.caption("下方保留目前正式欄位，供你核對同步後的完整資料與既有功能。")
-    st.divider()
+    _v12_frontend_event = (
+        _v12_frontend_result.get("event")
+        if isinstance(_v12_frontend_result, dict)
+        else None
+    )
+    if isinstance(_v12_frontend_event, dict):
+        _v12_event_state = _v12_frontend_event.get("state")
+        if isinstance(_v12_event_state, dict):
+            _v12_apply_step04_frontend_snapshot(_v12_event_state)
+        st.session_state["v12_step04_frontend_pending_event"] = dict(
+            _v12_frontend_event
+        )
 
 def _v12_set_sticker_content_mode(mode):
     # 切換模式前後都以獨立草稿保存／回填，不依賴條件式 widget state。
@@ -7315,34 +7331,35 @@ def _v12_set_sticker_content_mode(mode):
 _sticker_content_choice = str(st.session_state.get(
     "v12_sticker_content_mode", V12_STICKER_TEXT_MODE
 ))
-_mode_text_col, _mode_expression_col = st.columns(2)
-with _mode_text_col:
-    st.button(
-        ("✓ " if _sticker_content_choice == V12_STICKER_TEXT_MODE else "")
-        + t("content_text_mode"),
-        key="v12_select_text_sticker_mode",
-        use_container_width=True,
-        type="primary" if _sticker_content_choice == V12_STICKER_TEXT_MODE else "secondary",
-        on_click=_v12_set_sticker_content_mode,
-        args=(V12_STICKER_TEXT_MODE,),
-    )
-with _mode_expression_col:
-    st.button(
-        ("✓ " if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "")
-        + t("content_expression_mode"),
-        key="v12_select_expression_sticker_mode",
-        use_container_width=True,
-        type="primary" if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "secondary",
-        on_click=_v12_set_sticker_content_mode,
-        args=(V12_STICKER_EXPRESSION_MODE,),
-    )
 _sticker_mode = _v12_sticker_mode_value(_sticker_content_choice)
-if _sticker_mode == "text":
-    v12_mode_panel_heading(t("text_source_heading"), '#3498db')
-    st.caption(t("text_source_caption"))
-else:
-    v12_mode_panel_heading(t("expression_heading"), "#3498db")
-    st.caption(t("expression_caption"))
+if not _v12_step04_frontend_enabled:
+    _mode_text_col, _mode_expression_col = st.columns(2)
+    with _mode_text_col:
+        st.button(
+            ("✓ " if _sticker_content_choice == V12_STICKER_TEXT_MODE else "")
+            + t("content_text_mode"),
+            key="v12_select_text_sticker_mode",
+            use_container_width=True,
+            type="primary" if _sticker_content_choice == V12_STICKER_TEXT_MODE else "secondary",
+            on_click=_v12_set_sticker_content_mode,
+            args=(V12_STICKER_TEXT_MODE,),
+        )
+    with _mode_expression_col:
+        st.button(
+            ("✓ " if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "")
+            + t("content_expression_mode"),
+            key="v12_select_expression_sticker_mode",
+            use_container_width=True,
+            type="primary" if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "secondary",
+            on_click=_v12_set_sticker_content_mode,
+            args=(V12_STICKER_EXPRESSION_MODE,),
+        )
+    if _sticker_mode == "text":
+        v12_mode_panel_heading(t("text_source_heading"), '#3498db')
+        st.caption(t("text_source_caption"))
+    else:
+        v12_mode_panel_heading(t("expression_heading"), "#3498db")
+        st.caption(t("expression_caption"))
 
 # V12｜文字來源面板：只有使用者主動點選後，才展開對應功能，
 # 避免 AI 文案與隨機用語區塊同時堆在畫面上。
@@ -7354,7 +7371,7 @@ def _v12_toggle_text_source(_panel):
     else:
         st.session_state["v12_text_source_panel"] = _panel
 
-if _sticker_mode == "text":
+if not _v12_step04_frontend_enabled and _sticker_mode == "text":
     _src_a, _src_b = st.columns(2)
     with _src_a:
         st.button(
@@ -7708,7 +7725,11 @@ def _v12_render_expression_sticker_slots():
     st.info(t("expression_configured", configured=configured))
 
 
-if _sticker_mode == "text" and st.session_state.get("v12_text_source_panel") == "ai":
+if (
+    not _v12_step04_frontend_enabled
+    and _sticker_mode == "text"
+    and st.session_state.get("v12_text_source_panel") == "ai"
+):
     st.caption(t("ai_result_intro"))
     _v12_render_ai_copy_assistant()
 
@@ -7814,16 +7835,89 @@ def _v12_render_random_phrase_panel():
             st.rerun()
 
 
-if _sticker_mode == "text" and st.session_state.get("v12_text_source_panel") == "random":
-    _v12_render_random_phrase_panel()
-
-if _sticker_mode == "text":
-    _v12_render_text_slots()
+if _v12_step04_frontend_enabled:
+    _v12_frontend_pending = st.session_state.pop(
+        "v12_step04_frontend_pending_event", None
+    )
+    if isinstance(_v12_frontend_pending, dict):
+        _v12_event_kind = str(_v12_frontend_pending.get("kind", "") or "")
+        if _v12_event_kind == "generate-ai":
+            _v12_ai_topic = str(
+                st.session_state.get("v12_ai_copy_topic", "") or ""
+            ).strip()
+            _v12_ai_tone = str(
+                st.session_state.get("v12_ai_copy_tone", "") or ""
+            )
+            _v12_feedback = ""
+            if not _v12_ai_topic:
+                _v12_feedback = "請先輸入想要的主題，再請 AI 幫想。"
+            else:
+                _v12_copy_session = _beta_current_user()
+                if not _v12_copy_session:
+                    _v12_feedback = "請先完成 Google 登入，才能使用會員 AI 幫想額度。"
+                else:
+                    _v12_copy_key = _beta_site_openai_key()
+                    if not _v12_copy_key:
+                        _v12_feedback = "站方 AI 幫想服務尚未完成設定，請稍後再試。"
+                    else:
+                        _v12_copy_reservation = None
+                        try:
+                            _v12_copy_reservation = _beta_reserve_copy_generation(
+                                _v12_copy_session
+                            )
+                            if not _v12_copy_reservation.get("granted"):
+                                _v12_feedback = "今日 AI 幫想額度已用完，將在台灣時間午夜重置。"
+                            else:
+                                _v12_phrases = _v12_ai_copy_generate(
+                                    _v12_ai_topic, _v12_ai_tone, _v12_copy_key
+                                )
+                                _beta_finish_copy_generation(
+                                    _v12_copy_session,
+                                    _v12_copy_reservation.get("job_id"),
+                                )
+                                st.session_state["v12_ai_copy_candidates"] = _v12_phrases
+                                st.session_state["v12_ai_copy_topic_used"] = _v12_ai_topic
+                                st.session_state["v12_ai_copy_tone_used"] = _v12_ai_tone
+                                st.session_state["v12_ai_copy_selected"] = []
+                                for _v12_pick_i in range(16):
+                                    st.session_state[
+                                        f"v12_ai_copy_pick_{_v12_pick_i}"
+                                    ] = False
+                        except Exception:
+                            if (
+                                _v12_copy_reservation
+                                and _v12_copy_reservation.get("job_id")
+                            ):
+                                try:
+                                    _beta_finish_copy_generation(
+                                        _v12_copy_session,
+                                        _v12_copy_reservation["job_id"],
+                                        "copy_generation_failed",
+                                    )
+                                except Exception:
+                                    pass
+                            _v12_feedback = "AI 幫想產生失敗，請稍後再試。"
+            st.session_state["v12_step04_frontend_feedback"] = _v12_feedback
+            st.session_state["v12_step04_frontend_revision"] += 1
+            st.rerun()
 else:
-    _v12_render_expression_sticker_slots()
-    # 表情欄位在局部 fragment 內編輯；只在模式切換或完整頁面流程
-    # （例如按下生成）時彙整成 persistent draft，減少不必要的更新。
-    _v12_capture_expression_draft()
+    if _sticker_mode == "text" and st.session_state.get("v12_text_source_panel") == "random":
+        _v12_render_random_phrase_panel()
+
+    if _sticker_mode == "text":
+        _v12_render_text_slots()
+    else:
+        _v12_render_expression_sticker_slots()
+        # 表情欄位在局部 fragment 內編輯；只在模式切換或完整頁面流程
+        # （例如按下生成）時彙整成 persistent draft，減少不必要的更新。
+        _v12_capture_expression_draft()
+
+if _v12_step04_frontend_enabled:
+    _v12_frontend_feedback = str(
+        st.session_state.pop("v12_step04_frontend_feedback", "") or ""
+    )
+    if _v12_frontend_feedback:
+        st.warning(_v12_frontend_feedback)
 texts = get_texts()
 expression_specs = _v12_get_expression_specs()
 _prepared_expression_specs = st.session_state.get("v12_expression_generation_specs")
@@ -8352,13 +8446,35 @@ _generation_feedback = st.session_state.pop("v11_generation_release_feedback", N
 # 這樣下一次畫面重繪時，按鈕會先以 disabled=True 呈現，
 # 然後才進入長時間 AI 工作。
 # ------------------------------------------------------------
-if st.button(
-    t("generating") if _generation_locked else t("generate"),
-    type="primary",
-    use_container_width=True,
-    disabled=_generation_locked,
-    key="v11_generate_4x2",
-):
+if _v12_step04_frontend_enabled:
+    _v12_frontend_generate_request = render_frontend_generate_button(
+        data={
+            "storageKey": "sticker-studio-next.step04-formal.v1",
+            "disabled": _generation_locked,
+        },
+        key="v12_step04_frontend_generate_formal",
+    )
+    _generate_clicked = isinstance(_v12_frontend_generate_request, dict)
+    if _generate_clicked:
+        _v12_apply_step04_frontend_snapshot(
+            _v12_frontend_generate_request.get("state", {})
+        )
+        # The request supplied the current browser-only values.  All following
+        # validation and generation code therefore consumes the same canonical
+        # fields as the former Streamlit button.
+        _sticker_mode = _v12_sticker_mode_value()
+        texts = get_texts()
+        expression_specs = _v12_get_expression_specs()
+else:
+    _generate_clicked = st.button(
+        t("generating") if _generation_locked else t("generate"),
+        type="primary",
+        use_container_width=True,
+        disabled=_generation_locked,
+        key="v11_generate_4x2",
+    )
+
+if _generate_clicked:
     if not st.session_state.uploaded_image_bytes:
         st.warning(t("upload_first"))
         st.stop()

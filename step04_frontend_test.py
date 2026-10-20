@@ -49,6 +49,10 @@ EDITOR_CSS = r"""
 .s4-area { min-height:64px; resize:vertical; }
 .s4-toggle { display:flex; gap:7px; align-items:center; color:#d9e8f7; font-size:13px; font-weight:700; cursor:pointer; }
 .s4-toggle input { width:17px; height:17px; accent-color:#ff5878; }
+.s4-inline-tools { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.s4-clear { flex:0 0 auto; border:1px solid rgba(103,184,242,.72); border-radius:7px;
+  background:rgba(62,139,196,.20); color:#d9f1ff; padding:5px 9px; font:inherit; font-size:13px; font-weight:750; cursor:pointer; }
+.s4-clear:hover { background:rgba(65,151,211,.38); }
 .s4-subfield { margin-top:10px; padding-top:9px; border-top:1px solid rgba(126,157,186,.26); }
 .s4-row-divider { height:1px; margin:24px 0; background:rgba(151,177,207,.3); }
 .s4-action-row { display:flex; gap:10px; margin-top:20px; align-items:center; flex-wrap:wrap; }
@@ -66,6 +70,8 @@ export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
   const root = parentElement.querySelector('.step04-editor-root') || parentElement;
   const storageKey = data.storageKey;
+  const formal = Boolean(data.formal);
+  const revision = String(data.revision || '');
   const COLOR_OPTIONS = [
     ['紅色', '#ff5c75'], ['橘色', '#ff9f43'], ['黃色', '#ffd166'], ['綠色', '#55d68b'],
     ['藍色', '#57b7ff'], ['紫色', '#ad7dff'], ['粉色', '#ff8eb7'], ['白色', '#ffffff']
@@ -81,14 +87,17 @@ export default function(component) {
     '，先休息一下再出發。', '，有我在，別擔心！', '，今天也要保持可愛。', '，一起把煩惱甩開吧！',
     '，這次一定沒問題。', '，辛苦了，抱一下！', '，現在就出發吧！', '，你值得被好好鼓勵。'
   ];
-  const RANDOM_POOLS = {
+  const FALLBACK_RANDOM_POOLS = {
     '日常': ['早安！','午安～','晚安！','收到！','沒問題！','等等我～','辛苦了！','謝謝你！','我懂！','太好了！','先這樣～','交給我吧！','等等見！','加油！','好耶！','原來如此！'],
     '搞笑': ['我先笑一下。','太扯了吧！','你認真的嗎？','等等，讓我消化。','我投降！','這合理嗎？','笑不活了～','先不要鬧！','好像哪裡怪怪的。','我看不懂，但我大受震撼。','真的假的？','這次換我傻眼。','有夠荒謬！','我先躲一下。','再說一次？','好，算你贏。'],
     '療癒': ['慢慢來就好。','今天也辛苦了。','抱抱你。','你已經做得很好。','休息一下吧。','一切都會好的。','別忘了照顧自己。','我在這裡。','給你一點溫柔。','沒事的～','好好吃飯喔。','先喝口水。','明天再繼續。','請對自己好一點。','陪你一起。','你不孤單。']
   };
+  const RANDOM_POOLS = data.randomPools && typeof data.randomPools === 'object'
+    ? data.randomPools : FALLBACK_RANDOM_POOLS;
+  const AI_TONES = ['😂 搞笑自然','😤 憤憤不平','😈 嘲諷吐槽','☁️ 委屈可愛','👑 霸氣有梗','💬 台灣口語','✨ 溫暖療癒'];
   const defaultState = () => ({
-    mode:'text', sourcePanel:'', aiTopic:'', aiTone:'溫暖鼓勵', aiCandidates:[], aiSelected:[],
-    randomPool:'日常', randomCustomDraft:'', randomCustomPhrases:[], message:'', slots:emptySlots(), version:2
+    mode:'text', sourcePanel:'', aiTopic:'', aiTone:'😂 搞笑自然', aiCandidates:[], aiSelected:[],
+    randomPool:Object.keys(RANDOM_POOLS)[0] || '', randomCustomDraft:'', randomCustomPhrases:[], message:'', slots:emptySlots(), version:2
   });
   const normalize = (raw) => {
     const base = defaultState();
@@ -97,10 +106,10 @@ export default function(component) {
     base.mode = raw.mode === 'expression' ? 'expression' : 'text';
     base.sourcePanel = raw.sourcePanel === 'ai' || raw.sourcePanel === 'random' ? raw.sourcePanel : '';
     base.aiTopic = String(raw.aiTopic || '');
-    base.aiTone = ['溫暖鼓勵','自然日常','輕鬆搞笑'].includes(raw.aiTone) ? raw.aiTone : '溫暖鼓勵';
+    base.aiTone = AI_TONES.includes(raw.aiTone) ? raw.aiTone : AI_TONES[0];
     base.aiCandidates = Array.isArray(raw.aiCandidates) ? raw.aiCandidates.map(value => String(value)).slice(0, 16) : [];
     base.aiSelected = Array.isArray(raw.aiSelected) ? [...new Set(raw.aiSelected.map(Number).filter(index => Number.isInteger(index) && index >= 0 && index < base.aiCandidates.length))].slice(0, 8) : [];
-    base.randomPool = Object.prototype.hasOwnProperty.call(RANDOM_POOLS, raw.randomPool) || raw.randomPool === '自訂' ? raw.randomPool : '日常';
+    base.randomPool = Object.prototype.hasOwnProperty.call(RANDOM_POOLS, raw.randomPool) || raw.randomPool === '自訂' ? raw.randomPool : (Object.keys(RANDOM_POOLS)[0] || '');
     base.randomCustomDraft = String(raw.randomCustomDraft || '');
     base.randomCustomPhrases = Array.isArray(raw.randomCustomPhrases) ? raw.randomCustomPhrases.map(value => String(value).trim()).filter(Boolean).slice(0, 50) : [];
     base.message = String(raw.message || '');
@@ -117,10 +126,19 @@ export default function(component) {
   let state;
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
-    state = saved ? normalize(saved) : normalize(data.initial || null);
+    // A loaded project (or a completed server action such as AI copywriting)
+    // deliberately has a new revision.  In that case the server snapshot wins
+    // over a previous browser draft, so one work never leaks into another.
+    state = saved && String(saved.__revision || '') === revision
+      ? normalize(saved)
+      : normalize(data.initial || null);
   }
   catch (_) { state = normalize(data.initial || null); }
-  const save = () => localStorage.setItem(storageKey, JSON.stringify(state));
+  const save = () => {
+    state.__revision = revision;
+    localStorage.setItem(storageKey, JSON.stringify(state));
+  };
+  save();
   const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const checked = value => value ? 'checked' : '';
 
@@ -138,7 +156,7 @@ export default function(component) {
       <div class="s4-label-row"><span>貼圖文字</span></div>
       <input class="s4-input" data-field="text" data-index="${index}" value="${esc(slot.text)}" placeholder="輸入貼圖文字">
       <div class="s4-subfield">
-        <label class="s4-toggle"><input type="checkbox" data-field="actionEnabled" data-index="${index}" ${checked(slot.actionEnabled)}> 🎬 啟用動作指令</label>
+        <div class="s4-inline-tools"><label class="s4-toggle"><input type="checkbox" data-field="actionEnabled" data-index="${index}" ${checked(slot.actionEnabled)}> 🎬 啟用動作指令</label><button class="s4-clear" data-action="clear-slot" data-index="${index}">清空</button></div>
         ${slot.actionEnabled ? `<div class="s4-label-row"><span>輸入希望動作指令</span></div><textarea class="s4-area" data-field="action" data-index="${index}" placeholder="例如：揮手、比讚、跳起來">${esc(slot.action)}</textarea>` : ''}
       </div>
       <div class="s4-subfield">
@@ -153,7 +171,7 @@ export default function(component) {
       <div class="s4-label-row"><span>表情欄位</span><label class="s4-toggle"><input type="checkbox" data-field="random" data-index="${index}" ${checked(slot.random)}> 隨機</label></div>
       <input class="s4-input" data-field="emotion" data-index="${index}" value="${esc(slot.emotion)}" placeholder="例如：驚喜、害羞" ${slot.random ? 'disabled' : ''}>
       <div class="s4-subfield">
-        <label class="s4-toggle"><input type="checkbox" data-field="expressionActionEnabled" data-index="${index}" ${checked(slot.expressionActionEnabled)}> 🎬 啟用動作指令</label>
+        <div class="s4-inline-tools"><label class="s4-toggle"><input type="checkbox" data-field="expressionActionEnabled" data-index="${index}" ${checked(slot.expressionActionEnabled)}> 🎬 啟用動作指令</label><button class="s4-clear" data-action="clear-expression-slot" data-index="${index}">清空</button></div>
         ${slot.expressionActionEnabled ? `<div class="s4-label-row"><span>輸入希望動作指令</span></div><textarea class="s4-area" data-field="expressionAction" data-index="${index}" placeholder="例如：雙手抱頭、指向前方">${esc(slot.expressionAction)}</textarea>` : ''}
       </div>
     </section>`;
@@ -173,22 +191,22 @@ export default function(component) {
   };
   const makeMockCandidates = () => {
     const topic = state.aiTopic.trim() || '今天';
-    const tonePrefix = state.aiTone === '輕鬆搞笑' ? ['我宣布','等等，','這樣也行？','先別急，'][Math.floor(Math.random() * 4)] : '';
-    const toneEnding = state.aiTone === '自然日常' ? ['～','！','。',''][Math.floor(Math.random() * 4)] : '';
+    const tonePrefix = state.aiTone === '😂 搞笑自然' ? ['我宣布','等等，','這樣也行？','先別急，'][Math.floor(Math.random() * 4)] : '';
+    const toneEnding = state.aiTone === '💬 台灣口語' ? ['～','！','。',''][Math.floor(Math.random() * 4)] : '';
     state.aiCandidates = AI_ENDINGS.map(ending => `${tonePrefix}${topic}${ending}${toneEnding}`);
     state.aiSelected = [];
     state.message = '已在前端建立 16 句模擬候選句；請選擇剛好 8 句再套用。';
   };
   const aiPanel = () => `
     <section class="s4-source-panel">
-      <div class="s4-panel-title">✨ 主題 AI 幫想（純前端模擬）</div>
+      <div class="s4-panel-title">✨ 主題 AI 幫想</div>
       <div class="s4-panel-grid">
         <input class="s4-input" data-root-field="aiTopic" value="${esc(state.aiTopic)}" placeholder="輸入主題，例如：上班、下雨天、生日">
         <select class="s4-input" data-root-field="aiTone">
-          ${['溫暖鼓勵','自然日常','輕鬆搞笑'].map(tone => `<option value="${tone}" ${state.aiTone === tone ? 'selected' : ''}>${tone}</option>`).join('')}
+          ${AI_TONES.map(tone => `<option value="${tone}" ${state.aiTone === tone ? 'selected' : ''}>${tone}</option>`).join('')}
         </select>
       </div>
-      <div class="s4-action-row"><button class="s4-small-button" data-action="mock-ai">✨ 產生 16 句測試候選</button><span class="s4-local">不會呼叫 AI，也不會扣額度。</span></div>
+      <div class="s4-action-row"><button class="s4-small-button" data-action="generate-ai">✨ 產生 16 句貼圖文字</button><span class="s4-local">只有按下這個按鈕時才會連線產生文案。</span></div>
       ${state.aiCandidates.length ? `
         <div class="s4-caption">請選擇剛好 8 句（目前 ${state.aiSelected.length} / 8）。</div>
         <div class="s4-candidates">${state.aiCandidates.map((sentence, index) => `<label class="s4-candidate"><input type="checkbox" data-candidate-index="${index}" ${checked(state.aiSelected.includes(index))}> <span>${esc(sentence)}</span></label>`).join('')}</div>
@@ -197,16 +215,16 @@ export default function(component) {
     </section>`;
   const randomPanel = () => `
     <section class="s4-source-panel">
-      <div class="s4-panel-title">🎲 隨機用語（純前端模擬）</div>
+      <div class="s4-panel-title">🎲 隨機用語</div>
       <div class="s4-panel-grid">
         <select class="s4-input" data-root-field="randomPool">
-          ${['日常','搞笑','療癒','自訂'].map(pool => `<option value="${pool}" ${state.randomPool === pool ? 'selected' : ''}>${pool}用語</option>`).join('')}
+          ${[...Object.keys(RANDOM_POOLS), '自訂'].map(pool => `<option value="${pool}" ${state.randomPool === pool ? 'selected' : ''}>${pool === '自訂' ? '⭐ 我的自定義語詞池' : pool}</option>`).join('')}
         <button class="s4-small-button" data-action="random-fill">🎲 隨機填入 8 格</button>
       </div>
       ${state.randomPool === '自訂' ? `
         <div class="s4-label-row"><span>新增自訂用語（一次一則）</span></div>
         <div class="s4-panel-grid"><input class="s4-input" data-root-field="randomCustomDraft" value="${esc(state.randomCustomDraft)}" placeholder="輸入後加入自訂清單"><button class="s4-small-button" data-action="add-custom-phrase">加入清單</button></div>
-        <div class="s4-pool-list">${state.randomCustomPhrases.length ? `目前 ${state.randomCustomPhrases.length} 則：${state.randomCustomPhrases.map(esc).join('、')}` : '尚未新增自訂用語。'}</div>` : `<div class="s4-pool-list">會從「${esc(state.randomPool)}」的測試用語中，隨機挑選 8 句填入文字欄位。</div>`}
+        <div class="s4-pool-list">${state.randomCustomPhrases.length ? `目前 ${state.randomCustomPhrases.length} 則：${state.randomCustomPhrases.map(esc).join('、')}` : '尚未新增自訂用語。'}</div>` : `<div class="s4-pool-list">會從「${esc(state.randomPool)}」的用語中，隨機挑選 8 句填入文字欄位。</div>`}
       ${state.message ? `<div class="s4-message">${esc(state.message)}</div>` : ''}
     </section>`;
   const sourcePanel = () => `
@@ -221,7 +239,9 @@ export default function(component) {
       ? state.slots.filter(s => s.text.trim()).length
       : state.slots.filter(s => s.random || s.emotion.trim() || s.expressionActionEnabled).length;
     const counter = root.querySelector('.s4-count');
-    if (counter) counter.textContent = `已設定 ${filled} / 8 格；目前只保存在此瀏覽器。`;
+    if (counter) counter.textContent = formal
+      ? `已設定 ${filled} / 8 格；按下 AI 產生或生成總圖時會自動帶入。`
+      : `已設定 ${filled} / 8 格；目前只保存在此瀏覽器。`;
   };
 
   const render = () => {
@@ -242,11 +262,11 @@ export default function(component) {
         <div class="s4-row-divider"></div>
         <div class="s4-grid">${secondRow}</div>
         <div class="s4-count"></div>
-        <div class="s4-action-row">
+        ${formal ? '' : `<div class="s4-action-row">
           <button class="s4-sync" data-action="sync">✅ 同步測試設定</button>
           <button class="s4-reset" data-action="reset">↩️ 清除本機測試草稿</button>
           <span class="s4-local">切換與輸入不會傳送資料；只有同步按鈕會觸發一次 Streamlit 更新。</span>
-        </div>
+        </div>`}
       </div>`;
     updateCounter();
   };
@@ -336,10 +356,10 @@ export default function(component) {
       render();
       return;
     }
-    if (button.dataset.action === 'mock-ai') {
-      makeMockCandidates();
+    if (button.dataset.action === 'generate-ai') {
+      state.message = '正在產生 AI 文案…';
       save();
-      render();
+      setTriggerValue('event', {kind:'generate-ai', state});
       return;
     }
     if (button.dataset.action === 'apply-ai') {
@@ -374,7 +394,7 @@ export default function(component) {
         state.message = '自訂清單尚未有用語，請先新增至少一則。';
       } else {
         fillTextSlots(phrases);
-        state.message = `已從「${state.randomPool}」測試用語隨機填入圖片 01～08。`;
+        state.message = `已從「${state.randomPool}」隨機填入圖片 01～08。`;
       }
       save();
       render();
@@ -384,6 +404,31 @@ export default function(component) {
       const index = Number(button.dataset.index);
       if (state.slots[index] && state.slots[index].colorSegments.length < 3) {
         state.slots[index].colorSegments.push({text:'', color_name:'紅色', hex:'#ff5c75'});
+      }
+      save();
+      render();
+      return;
+    }
+    if (button.dataset.action === 'clear-slot') {
+      const index = Number(button.dataset.index);
+      if (state.slots[index]) {
+        state.slots[index].text = '';
+        state.slots[index].actionEnabled = false;
+        state.slots[index].action = '';
+        state.slots[index].colorEnabled = false;
+        state.slots[index].colorSegments = defaultColorSegments();
+      }
+      save();
+      render();
+      return;
+    }
+    if (button.dataset.action === 'clear-expression-slot') {
+      const index = Number(button.dataset.index);
+      if (state.slots[index]) {
+        state.slots[index].emotion = '';
+        state.slots[index].random = false;
+        state.slots[index].expressionActionEnabled = false;
+        state.slots[index].expressionAction = '';
       }
       save();
       render();
@@ -415,7 +460,7 @@ export default function(component) {
 """
 
 def render_frontend_editor(*, data, key, component_name="step04_frontend_editor_test"):
-    """Render the browser-side editor and return its explicit sync payload."""
+    """Render the browser-side editor and return its explicit browser event."""
     editor = components.component(
         component_name,
         html=EDITOR_HTML,
@@ -424,7 +469,51 @@ def render_frontend_editor(*, data, key, component_name="step04_frontend_editor_
         isolate_styles=False,
     )
     result = editor(data=data, key=key)
-    return getattr(result, "sync", None)
+    return {
+        "sync": getattr(result, "sync", None),
+        "event": getattr(result, "event", None),
+    }
+
+
+GENERATOR_HTML = '<div class="step04-generator-root"></div>'
+GENERATOR_CSS = r"""
+:host { display:block; width:100%; }
+.step04-generator-root button { width:100%; min-height:42px; border:0; border-radius:9px;
+  background:#ff5878; color:#fff; font:inherit; font-size:16px; font-weight:850; cursor:pointer; }
+.step04-generator-root button:disabled { opacity:.62; cursor:wait; }
+"""
+GENERATOR_JS = r"""
+export default function(component) {
+  const { parentElement, data, setTriggerValue } = component;
+  const root = parentElement.querySelector('.step04-generator-root') || parentElement;
+  const readDraft = () => {
+    try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
+    catch (_) { return null; }
+  };
+  root.innerHTML = `<button ${data.disabled ? 'disabled' : ''}>${data.disabled ? '🔄 AI 正在生成，請稍候……' : '✨ 生成 4×2 八格總圖'}</button>`;
+  const button = root.querySelector('button');
+  button.addEventListener('click', () => {
+    const state = readDraft();
+    if (!state) return;
+    button.disabled = true;
+    button.textContent = '🔄 正在準備生成…';
+    setTriggerValue('request', {state});
+  });
+}
+"""
+
+
+def render_frontend_generate_button(*, data, key):
+    """Render the real STEP 06 button, carrying the local STEP 04 draft once."""
+    generator = components.component(
+        "v12_step04_frontend_generate_button",
+        html=GENERATOR_HTML,
+        css=GENERATOR_CSS,
+        js=GENERATOR_JS,
+        isolate_styles=False,
+    )
+    result = generator(data=data, key=key)
+    return getattr(result, "request", None)
 
 
 def run_test_page():
@@ -457,10 +546,11 @@ def run_test_page():
         """,
         unsafe_allow_html=True,
     )
-    sync_payload = render_frontend_editor(
+    editor_result = render_frontend_editor(
         data={"storageKey": "sticker-studio-next.step04-frontend-test.v3"},
         key="step04_frontend_editor_test",
     )
+    sync_payload = editor_result.get("sync") if isinstance(editor_result, dict) else None
     if isinstance(sync_payload, dict):
         st.success("✅ 已收到測試草稿。這只是驗證資料，沒有送去生成或保存。")
         st.caption("最後同步時間：" + datetime.now().strftime("%Y/%m/%d %H:%M:%S"))
