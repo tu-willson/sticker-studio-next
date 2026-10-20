@@ -3464,8 +3464,7 @@ POPULAR_STYLES = [
 
 CHARACTER_OPTIONS = [
     "五官比例保留","服飾配件保留","人物辨識度保留",
-    "Q版收藏公仔","療癒系 Cute Wstyle","大頭小身",
-    "LINE貼圖風","柔和光影",
+    "療癒系 Cute Wstyle","大頭小身","柔和光影",
 ]
 
 
@@ -6844,6 +6843,13 @@ else:
 
 v10_section(t("section_features"), "#2ecc71")
 st.caption(t("features_intro"))
+# Clean up selections retired from the feature menu so an older session can
+# reopen this form without retaining hidden style choices.
+_saved_character_options = st.session_state.get("v10_character_options")
+if isinstance(_saved_character_options, list):
+    st.session_state["v10_character_options"] = [
+        option for option in _saved_character_options if option in CHARACTER_OPTIONS
+    ]
 with st.form("v12_character_settings_form", border=False):
     selected_character=st.multiselect(t("feature_select"),CHARACTER_OPTIONS,key="v10_character_options")
     _c1,_c2=st.columns([1,8])
