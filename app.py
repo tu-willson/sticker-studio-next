@@ -5600,7 +5600,9 @@ def _v12_step04_frontend_component_state():
     }
     return {
         "mode": snapshot["mode"],
-        "sourcePanel": "",
+        "sourcePanel": str(
+            st.session_state.get("v12_step04_frontend_source_panel", "") or ""
+        ),
         "aiTopic": snapshot["ai"]["topic"],
         "aiTone": tone if tone in V12_AI_COPY_TONES else V12_AI_COPY_TONES[0],
         "aiCandidates": snapshot["ai"]["candidates"],
@@ -7313,6 +7315,12 @@ if _v12_step04_frontend_enabled:
         _v12_event_state = _v12_frontend_event.get("state")
         if isinstance(_v12_event_state, dict):
             _v12_apply_step04_frontend_snapshot(_v12_event_state)
+            _v12_source_panel = str(
+                _v12_event_state.get("sourcePanel", "") or ""
+            )
+            st.session_state["v12_step04_frontend_source_panel"] = (
+                _v12_source_panel if _v12_source_panel in {"ai", "random"} else ""
+            )
         st.session_state["v12_step04_frontend_pending_event"] = dict(
             _v12_frontend_event
         )
@@ -7842,6 +7850,8 @@ if _v12_step04_frontend_enabled:
     if isinstance(_v12_frontend_pending, dict):
         _v12_event_kind = str(_v12_frontend_pending.get("kind", "") or "")
         if _v12_event_kind == "generate-ai":
+            # Keep the assistant open after the server returns its 16 results.
+            st.session_state["v12_step04_frontend_source_panel"] = "ai"
             _v12_ai_topic = str(
                 st.session_state.get("v12_ai_copy_topic", "") or ""
             ).strip()

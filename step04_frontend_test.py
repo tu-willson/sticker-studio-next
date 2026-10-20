@@ -33,9 +33,13 @@ EDITOR_CSS = r"""
 .s4-panel-title { color:#e9f7ff; font-size:16px; font-weight:850; margin-bottom:9px; }
 .s4-panel-grid { display:grid; grid-template-columns:1.3fr 1fr; gap:10px; }
 .s4-small-button { border:1px solid #5aaee2; border-radius:8px; background:#286eaa; color:#fff; padding:8px 11px; font:inherit; font-weight:800; cursor:pointer; }
-.s4-candidates { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:7px; margin-top:10px; }
+.s4-candidates { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:7px; margin-top:10px; }
 .s4-candidate { display:flex; gap:7px; align-items:flex-start; padding:8px; border:1px solid rgba(111,148,181,.36); border-radius:8px; color:#dceafa; font-size:13px; cursor:pointer; }
 .s4-candidate input { margin-top:2px; accent-color:#ff5878; }
+.s4-random-phrases { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:7px; margin-top:12px; }
+.s4-phrase { min-height:37px; padding:7px 8px; border:1px solid rgba(111,148,181,.38); border-radius:8px;
+  background:rgba(30,53,79,.54); color:#e5f2ff; font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.s4-phrase:hover { border-color:#6dbcf0; background:rgba(54,111,157,.43); }
 .s4-message { margin-top:9px; color:#ffd4dc; font-size:13px; font-weight:700; }
 .s4-pool-list { margin:8px 0 0; color:#b8cbe0; font-size:13px; line-height:1.55; }
 .s4-color-row { display:grid; grid-template-columns:minmax(0,1fr) 105px 28px; gap:6px; margin:7px 0; align-items:center; }
@@ -61,7 +65,7 @@ EDITOR_CSS = r"""
 .s4-reset { border:1px solid #667c96; background:#27374d; color:#dce8f4; }
 .s4-local { color:#9fb2c9; font-size:13px; }
 .s4-count { margin-top:15px; border-radius:10px; padding:10px 12px; background:rgba(57,136,205,.15); color:#9fd8ff; font-weight:750; }
-@media (max-width: 820px) { .s4-mode-row { gap:12px; margin:0 0 20px; } .s4-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } .s4-panel-grid { grid-template-columns:1fr; } }
+@media (max-width: 820px) { .s4-mode-row { gap:12px; margin:0 0 20px; } .s4-grid, .s4-candidates, .s4-random-phrases { grid-template-columns:repeat(2, minmax(0,1fr)); } .s4-panel-grid { grid-template-columns:1fr; } }
 @media (max-width: 520px) { .s4-grid { grid-template-columns:1fr; } .s4-mode { font-size:14px; } }
 """
 
@@ -72,6 +76,7 @@ export default function(component) {
   const storageKey = data.storageKey;
   const formal = Boolean(data.formal);
   const revision = String(data.revision || '');
+  const initial = data.initial && typeof data.initial === 'object' ? data.initial : {};
   const COLOR_OPTIONS = [
     ['紅色', '#ff5c75'], ['橘色', '#ff9f43'], ['黃色', '#ffd166'], ['綠色', '#55d68b'],
     ['藍色', '#57b7ff'], ['紫色', '#ad7dff'], ['粉色', '#ff8eb7'], ['白色', '#ffffff']
@@ -92,12 +97,12 @@ export default function(component) {
     '搞笑': ['我先笑一下。','太扯了吧！','你認真的嗎？','等等，讓我消化。','我投降！','這合理嗎？','笑不活了～','先不要鬧！','好像哪裡怪怪的。','我看不懂，但我大受震撼。','真的假的？','這次換我傻眼。','有夠荒謬！','我先躲一下。','再說一次？','好，算你贏。'],
     '療癒': ['慢慢來就好。','今天也辛苦了。','抱抱你。','你已經做得很好。','休息一下吧。','一切都會好的。','別忘了照顧自己。','我在這裡。','給你一點溫柔。','沒事的～','好好吃飯喔。','先喝口水。','明天再繼續。','請對自己好一點。','陪你一起。','你不孤單。']
   };
-  const RANDOM_POOLS = data.randomPools && typeof data.randomPools === 'object'
-    ? data.randomPools : FALLBACK_RANDOM_POOLS;
+  const RANDOM_POOLS = initial.randomPools && typeof initial.randomPools === 'object'
+    ? initial.randomPools : FALLBACK_RANDOM_POOLS;
   const AI_TONES = ['😂 搞笑自然','😤 憤憤不平','😈 嘲諷吐槽','☁️ 委屈可愛','👑 霸氣有梗','💬 台灣口語','✨ 溫暖療癒'];
   const defaultState = () => ({
     mode:'text', sourcePanel:'', aiTopic:'', aiTone:'😂 搞笑自然', aiCandidates:[], aiSelected:[],
-    randomPool:Object.keys(RANDOM_POOLS)[0] || '', randomCustomDraft:'', randomCustomPhrases:[], message:'', slots:emptySlots(), version:2
+    randomPool:Object.keys(RANDOM_POOLS)[0] || '', randomTarget:'0', randomCustomDraft:'', randomCustomPhrases:[], message:'', slots:emptySlots(), version:2
   });
   const normalize = (raw) => {
     const base = defaultState();
@@ -110,6 +115,7 @@ export default function(component) {
     base.aiCandidates = Array.isArray(raw.aiCandidates) ? raw.aiCandidates.map(value => String(value)).slice(0, 16) : [];
     base.aiSelected = Array.isArray(raw.aiSelected) ? [...new Set(raw.aiSelected.map(Number).filter(index => Number.isInteger(index) && index >= 0 && index < base.aiCandidates.length))].slice(0, 8) : [];
     base.randomPool = Object.prototype.hasOwnProperty.call(RANDOM_POOLS, raw.randomPool) || raw.randomPool === '自訂' ? raw.randomPool : (Object.keys(RANDOM_POOLS)[0] || '');
+    base.randomTarget = String(Number.isInteger(Number(raw.randomTarget)) && Number(raw.randomTarget) >= 0 && Number(raw.randomTarget) < 8 ? Number(raw.randomTarget) : 0);
     base.randomCustomDraft = String(raw.randomCustomDraft || '');
     base.randomCustomPhrases = Array.isArray(raw.randomCustomPhrases) ? raw.randomCustomPhrases.map(value => String(value).trim()).filter(Boolean).slice(0, 50) : [];
     base.message = String(raw.message || '');
@@ -213,20 +219,28 @@ export default function(component) {
         <div class="s4-action-row"><button class="s4-small-button" data-action="apply-ai">套用選取的 8 句到 01～08</button></div>` : ''}
       ${state.message ? `<div class="s4-message">${esc(state.message)}</div>` : ''}
     </section>`;
-  const randomPanel = () => `
+  const randomPanel = () => {
+    const phrases = state.randomPool === '自訂' ? state.randomCustomPhrases : (RANDOM_POOLS[state.randomPool] || []);
+    return `
     <section class="s4-source-panel">
       <div class="s4-panel-title">🎲 隨機用語</div>
       <div class="s4-panel-grid">
         <select class="s4-input" data-root-field="randomPool">
           ${[...Object.keys(RANDOM_POOLS), '自訂'].map(pool => `<option value="${pool}" ${state.randomPool === pool ? 'selected' : ''}>${pool === '自訂' ? '⭐ 我的自定義語詞池' : pool}</option>`).join('')}
-        <button class="s4-small-button" data-action="random-fill">🎲 隨機填入 8 格</button>
+        </select>
+        <select class="s4-input" data-root-field="randomTarget">
+          ${Array.from({length:8}, (_, index) => `<option value="${index}" ${Number(state.randomTarget) === index ? 'selected' : ''}>指定圖片 ${String(index+1).padStart(2,'0')}</option>`).join('')}
+        </select>
       </div>
+      <div class="s4-action-row"><button class="s4-small-button" data-action="random-fill">🎲 隨機填入 8 格</button><span class="s4-local">或點選下方任一句，直接放入指定圖片。</span></div>
       ${state.randomPool === '自訂' ? `
         <div class="s4-label-row"><span>新增自訂用語（一次一則）</span></div>
         <div class="s4-panel-grid"><input class="s4-input" data-root-field="randomCustomDraft" value="${esc(state.randomCustomDraft)}" placeholder="輸入後加入自訂清單"><button class="s4-small-button" data-action="add-custom-phrase">加入清單</button></div>
-        <div class="s4-pool-list">${state.randomCustomPhrases.length ? `目前 ${state.randomCustomPhrases.length} 則：${state.randomCustomPhrases.map(esc).join('、')}` : '尚未新增自訂用語。'}</div>` : `<div class="s4-pool-list">會從「${esc(state.randomPool)}」的用語中，隨機挑選 8 句填入文字欄位。</div>`}
+        <div class="s4-pool-list">${state.randomCustomPhrases.length ? `目前 ${state.randomCustomPhrases.length} 則` : '尚未新增自訂用語。'}</div>` : `<div class="s4-pool-list">「${esc(state.randomPool)}」目前共有 ${phrases.length} 則用語。</div>`}
+      ${phrases.length ? `<div class="s4-random-phrases">${phrases.map((phrase, index) => `<button class="s4-phrase" data-action="insert-random-phrase" data-phrase-index="${index}">${esc(phrase)}</button>`).join('')}</div>` : ''}
       ${state.message ? `<div class="s4-message">${esc(state.message)}</div>` : ''}
     </section>`;
+  };
   const sourcePanel = () => `
     <div class="s4-source-row">
       <button class="s4-source ${state.sourcePanel === 'ai' ? 'active' : ''}" data-source="ai">✨ 主題 AI 幫想</button>
@@ -395,6 +409,18 @@ export default function(component) {
       } else {
         fillTextSlots(phrases);
         state.message = `已從「${state.randomPool}」隨機填入圖片 01～08。`;
+      }
+      save();
+      render();
+      return;
+    }
+    if (button.dataset.action === 'insert-random-phrase') {
+      const phrases = state.randomPool === '自訂' ? state.randomCustomPhrases : (RANDOM_POOLS[state.randomPool] || []);
+      const phraseIndex = Number(button.dataset.phraseIndex);
+      const target = Number(state.randomTarget);
+      if (Number.isInteger(phraseIndex) && phrases[phraseIndex] && Number.isInteger(target) && state.slots[target]) {
+        state.slots[target].text = String(phrases[phraseIndex]);
+        state.message = `已將「${phrases[phraseIndex]}」放入圖片 ${String(target + 1).padStart(2, '0')}。`;
       }
       save();
       render();
