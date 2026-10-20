@@ -5514,6 +5514,153 @@ def set_texts(values):
     # 新的一批文字不沿用舊的動作描述，避免指令與文字語意不一致。
     _v12_clear_sticker_action_prompts()
 
+
+def _v12_step04_frontend_snapshot():
+    """Return the full STEP 04 draft in a browser-component friendly shape.
+
+    This deliberately mirrors the existing canonical session-state fields instead
+    of introducing a second project format.  It is the compatibility boundary
+    used by the standalone frontend experiment before it is wired into the live
+    STEP 04 UI.
+    """
+    text_slots = []
+    for index, action in enumerate(_v12_action_draft()):
+        segments = _v12_get_color_segments(index)
+        active_segments = [
+            dict(segment)
+            for segment in segments
+            if str(segment.get("text", "") or "").strip()
+        ]
+        text_slots.append({
+            "text": str(st.session_state.get(f"sticker_text_{index}", "") or ""),
+            "actionEnabled": bool(action.get("enabled")),
+            "action": str(action.get("prompt", "") or ""),
+            "colorEnabled": bool(active_segments),
+            "colorSegments": active_segments,
+        })
+    expression_slots = []
+    for item in _v12_get_expression_specs():
+        expression_slots.append({
+            "emotion": str(item.get("emotion", "") or ""),
+            "random": bool(item.get("emotion_random")),
+            "actionEnabled": bool(item.get("action_enabled")),
+            "action": str(item.get("effect_action_prompt", "") or ""),
+        })
+    return {
+        "mode": _v12_sticker_mode_value(),
+        "textSlots": text_slots,
+        "expressionSlots": expression_slots,
+        "ai": {
+            "topic": str(st.session_state.get("v12_ai_copy_topic", "") or ""),
+            "tone": str(st.session_state.get("v12_ai_copy_tone", "") or ""),
+            "candidates": list(st.session_state.get("v12_ai_copy_candidates", []) or []),
+            "selected": list(st.session_state.get("v12_ai_copy_selected", []) or []),
+            "themePools": dict(st.session_state.get("v12_theme_pools", {}) or {}),
+            "selectedThemes": list(st.session_state.get("v12_selected_themes", []) or []),
+        },
+        "random": {
+            "pool": str(st.session_state.get("v10_phrase_pool_choice", "") or ""),
+            "customPhrases": list(V10_CUSTOM_PHRASE_POOL),
+        },
+        "version": 1,
+    }
+
+
+def _v12_apply_step04_frontend_snapshot(payload):
+    """Apply a validated frontend STEP 04 draft to the existing canonical state.
+
+    It intentionally performs no generation, cloud write, or rerun.  Existing
+    generation and project-saving code therefore keeps consuming exactly the
+    same fields as before.  The caller decides when an explicit frontend sync is
+    appropriate.
+    """
+    if not isinstance(payload, dict):
+        return False
+
+    mode = "expression" if payload.get("mode") == "expression" else "text"
+    st.session_state["v12_sticker_content_mode"] = (
+        V12_STICKER_EXPRESSION_MODE if mode == "expression" else V12_STICKER_TEXT_MODE
+    )
+
+    text_slots = payload.get("textSlots")
+    if isinstance(text_slots, list):
+        drafts = []
+        for index in range(8):
+            raw = text_slots[index] if index < len(text_slots) and isinstance(text_slots[index], dict) else {}
+            text = str(raw.get("text", "") or "")[:500]
+            enabled = bool(raw.get("actionEnabled"))
+            prompt = str(raw.get("action", "") or "").strip()[:500] if enabled else ""
+            st.session_state[f"sticker_text_{index}"] = text
+            st.session_state[f"v12_sticker_text_widget_{index}"] = text
+            st.session_state[f"v12_sticker_action_enabled_{index}"] = enabled
+            st.session_state[f"v12_sticker_action_enabled_widget_{index}"] = enabled
+            st.session_state[f"v12_sticker_action_prompt_{index}"] = prompt
+            st.session_state[f"v12_sticker_action_prompt_widget_{index}"] = prompt
+            drafts.append({"enabled": enabled, "prompt": prompt})
+
+            raw_segments = raw.get("colorSegments", []) if bool(raw.get("colorEnabled")) else []
+            normalized_segments = _v12_default_color_segments()
+            if isinstance(raw_segments, list):
+                for segment_index, segment in enumerate(raw_segments[:3]):
+                    if not isinstance(segment, dict):
+                        continue
+                    normalized_segments[segment_index] = {
+                        "text": str(segment.get("text", "") or "")[:120],
+                        "color_name": str(segment.get("color_name", "") or "")[:40],
+                        "hex": str(segment.get("hex", "") or "")[:16],
+                    }
+            active_count = sum(
+                bool(str(segment.get("text", "") or "").strip())
+                for segment in normalized_segments
+            )
+            st.session_state[f"v12_text_color_segments_{index}"] = normalized_segments
+            st.session_state[f"v12_text_color_count_{index}"] = active_count
+            st.session_state[f"v12_text_color_enabled_{index}"] = bool(active_count)
+            st.session_state[f"v12_text_color_enabled_widget_{index}"] = bool(active_count)
+            for segment_index, segment in enumerate(normalized_segments):
+                st.session_state[f"v12_text_color_segment_{index}_{segment_index}"] = segment["text"]
+        st.session_state["v12_sticker_action_draft"] = drafts
+
+    expression_slots = payload.get("expressionSlots")
+    if isinstance(expression_slots, list):
+        specs = []
+        for index in range(8):
+            raw = expression_slots[index] if index < len(expression_slots) and isinstance(expression_slots[index], dict) else {}
+            random_emotion = bool(raw.get("random"))
+            action_enabled = bool(raw.get("actionEnabled"))
+            spec = {
+                "emotion": str(raw.get("emotion", "") or "")[:200],
+                "emotion_random": random_emotion,
+                "action_enabled": action_enabled,
+                "effect": V12_EXPRESSION_EFFECTS[0],
+                "effect_action_prompt": str(raw.get("action", "") or "").strip()[:500] if action_enabled else "",
+            }
+            specs.append(spec)
+            st.session_state[f"v12_expression_emotion_{index}"] = spec["emotion"]
+            st.session_state[f"v12_expression_emotion_random_{index}"] = random_emotion
+            st.session_state[f"v12_expression_action_enabled_{index}"] = action_enabled
+            st.session_state[f"v12_expression_effect_action_prompt_{index}"] = spec["effect_action_prompt"]
+        st.session_state["v12_expression_draft"] = _v12_normalize_expression_specs(specs)
+
+    ai = payload.get("ai")
+    if isinstance(ai, dict):
+        st.session_state["v12_ai_copy_topic"] = str(ai.get("topic", "") or "")[:300]
+        if ai.get("tone") in V12_AI_COPY_TONES:
+            st.session_state["v12_ai_copy_tone"] = ai["tone"]
+        candidates = ai.get("candidates")
+        if isinstance(candidates, list):
+            st.session_state["v12_ai_copy_candidates"] = [str(item).strip()[:120] for item in candidates if str(item).strip()][:16]
+        selected = ai.get("selected")
+        if isinstance(selected, list):
+            st.session_state["v12_ai_copy_selected"] = [int(item) for item in selected if isinstance(item, int) and 0 <= item < 16]
+
+    random_state = payload.get("random")
+    if isinstance(random_state, dict):
+        pool = str(random_state.get("pool", "") or "")
+        if pool:
+            st.session_state["v10_phrase_pool_choice"] = pool
+    return True
+
 def base_boxes(w, h):
     boxes = []
     for i in range(8):
