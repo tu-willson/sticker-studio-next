@@ -961,6 +961,11 @@ st.markdown("""
   background:linear-gradient(90deg, transparent, rgba(183,220,255,.55), transparent);
   box-shadow:0 1px 5px rgba(148,206,255,.14);
 }
+/* 自定義風格是貼圖風格快選的模式切換，需比一般勾選更醒目。 */
+.st-key-v12_use_custom_style [data-testid="stCheckbox"] label p{
+  font-size:20px !important;
+  font-weight:850 !important;
+}
 /* 畫風參考的自訂元素需明確儲存，以紅色按鈕提高辨識度。 */
 .st-key-v12_style_reference_save_button button,
 .st-key-v12_character_settings_apply_button button{
