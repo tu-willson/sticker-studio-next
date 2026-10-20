@@ -35,6 +35,11 @@ EDITOR_CSS = r"""
 .s4-panel-title { color:#e9f7ff; font-size:16px; font-weight:850; margin-bottom:9px; }
 .s4-panel-grid { display:grid; grid-template-columns:1.3fr 1fr; gap:10px; }
 .s4-small-button { border:1px solid #5aaee2; border-radius:8px; background:#286eaa; color:#fff; padding:8px 11px; font:inherit; font-weight:800; cursor:pointer; }
+.s4-small-button:disabled { cursor:wait; opacity:.78; }
+.s4-ai-progress { margin:10px 0 2px; padding:9px 10px; border:1px solid rgba(108,213,255,.54); border-radius:9px; background:rgba(28,91,132,.22); }
+.s4-ai-progress-label { display:flex; justify-content:space-between; gap:10px; margin-bottom:7px; color:#d9f4ff; font-size:13px; font-weight:800; }
+.s4-ai-progress-track { height:9px; overflow:hidden; border-radius:999px; background:rgba(8,24,43,.72); box-shadow:inset 0 0 0 1px rgba(132,211,255,.22); }
+.s4-ai-progress-fill { height:100%; border-radius:inherit; background:linear-gradient(90deg,#5bd6ff,#9a8cff,#ff6d9d); box-shadow:0 0 12px rgba(106,207,255,.72); transition:width .2s ease; }
 .s4-candidates { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:7px; margin-top:10px; }
 .s4-candidate { display:flex; gap:7px; align-items:flex-start; padding:8px; border:1px solid rgba(111,148,181,.36); border-radius:8px; color:#dceafa; font-size:13px; cursor:pointer; }
 .s4-candidate input { margin-top:2px; accent-color:#ff5878; }
@@ -113,7 +118,7 @@ export default function(component) {
   const allRandomPhrases = () => Object.values(RANDOM_POOLS).flat().map(value => String(value));
   const AI_TONES = ['😂 搞笑自然','😤 憤憤不平','😈 嘲諷吐槽','☁️ 委屈可愛','👑 霸氣有梗','💬 台灣口語','✨ 溫暖療癒'];
   const defaultState = () => ({
-    mode:'text', sourcePanel:'', aiTopic:'', aiTone:'😂 搞笑自然', aiCandidates:[], aiSelected:[], aiPicked:[], aiTarget:'0',
+    mode:'text', sourcePanel:'', aiTopic:'', aiTone:'😂 搞笑自然', aiCandidates:[], aiSelected:[], aiPicked:[], aiTarget:'0', aiLoading:false, aiProgress:0, aiLoadingText:'',
     randomPool:ALL_RANDOM_POOL, randomTarget:'0', randomCustomDraft:'', randomCustomPhrases:[], message:'', slots:emptySlots(), version:2
   });
   const normalize = (raw) => {
@@ -128,6 +133,11 @@ export default function(component) {
     base.aiSelected = Array.isArray(raw.aiSelected) ? [...new Set(raw.aiSelected.map(Number).filter(index => Number.isInteger(index) && index >= 0 && index < base.aiCandidates.length))] : [];
     base.aiPicked = Array.isArray(raw.aiPicked) ? [...new Set(raw.aiPicked.map(value => String(value).trim()).filter(Boolean))].slice(0, 8) : [];
     base.aiTarget = String(Number.isInteger(Number(raw.aiTarget)) && Number(raw.aiTarget) >= 0 && Number(raw.aiTarget) < 8 ? Number(raw.aiTarget) : 0);
+    // The animation is only for the current click; never restore a stale
+    // loading indicator after a browser refresh or a completed server action.
+    base.aiLoading = false;
+    base.aiProgress = 0;
+    base.aiLoadingText = '';
     base.randomPool = Object.prototype.hasOwnProperty.call(RANDOM_POOLS, raw.randomPool) || raw.randomPool === ALL_RANDOM_POOL || raw.randomPool === CUSTOM_RANDOM_POOL || raw.randomPool === '自訂' ? (raw.randomPool === '自訂' ? CUSTOM_RANDOM_POOL : raw.randomPool) : ALL_RANDOM_POOL;
     base.randomTarget = String(Number.isInteger(Number(raw.randomTarget)) && Number(raw.randomTarget) >= 0 && Number(raw.randomTarget) < 8 ? Number(raw.randomTarget) : 0);
     base.randomCustomDraft = String(raw.randomCustomDraft || '');
@@ -226,7 +236,8 @@ export default function(component) {
           ${AI_TONES.map(tone => `<option value="${tone}" ${state.aiTone === tone ? 'selected' : ''}>${tone}</option>`).join('')}
         </select>
       </div>
-      <div class="s4-action-row"><button class="s4-small-button" data-action="generate-ai">✨ 產生 16 句貼圖文字</button><span class="s4-local">只有按下這個按鈕時才會連線產生文案。</span></div>
+      <div class="s4-action-row"><button class="s4-small-button" data-action="generate-ai" ${state.aiLoading ? 'disabled' : ''}>${state.aiLoading ? '✨ AI 正在構思中…' : '✨ 產生 16 句貼圖文字'}</button></div>
+      ${state.aiLoading ? `<div class="s4-ai-progress"><div class="s4-ai-progress-label"><span>${esc(state.aiLoadingText || '🧠 正在收集靈感…')}</span><span>${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%</span></div><div class="s4-ai-progress-track"><div class="s4-ai-progress-fill" style="width:${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%"></div></div></div>` : ''}
       ${state.aiCandidates.length ? `
         <div class="s4-caption">可勾選任意數量；本批已勾選 ${state.aiSelected.length} 句，待帶入清單 ${state.aiPicked.length} / 8 句。</div>
         <div class="s4-candidates">${state.aiCandidates.map((sentence, index) => `<label class="s4-candidate"><input type="checkbox" data-candidate-index="${index}" ${checked(state.aiSelected.includes(index))}> <span>${esc(sentence)}</span></label>`).join('')}</div>
@@ -392,9 +403,33 @@ export default function(component) {
       return;
     }
     if (button.dataset.action === 'generate-ai') {
-      state.message = '正在產生 AI 文案…';
+      const loadingStages = [
+        [12, '🧠 正在收集靈感…'],
+        [29, '🎲 正在翻找好用的貼圖句…'],
+        [47, '✨ 正在把語氣調得更有梗…'],
+        [66, '📝 正在整理 16 句候選文案…'],
+        [79, '🚀 靈感準備送達…'],
+      ];
+      state.aiLoading = true;
+      state.aiProgress = loadingStages[0][0];
+      state.aiLoadingText = loadingStages[0][1];
+      state.message = '';
       save();
-      setTriggerValue('event', {kind:'generate-ai', state});
+      render();
+      let stageIndex = 0;
+      if (root._aiLoadingTimer) clearInterval(root._aiLoadingTimer);
+      root._aiLoadingTimer = setInterval(() => {
+        stageIndex += 1;
+        if (stageIndex < loadingStages.length) {
+          state.aiProgress = loadingStages[stageIndex][0];
+          state.aiLoadingText = loadingStages[stageIndex][1];
+          render();
+          return;
+        }
+        clearInterval(root._aiLoadingTimer);
+        root._aiLoadingTimer = null;
+        setTriggerValue('event', {kind:'generate-ai', state});
+      }, 170);
       return;
     }
     if (button.dataset.action === 'stash-ai') {
