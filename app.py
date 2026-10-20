@@ -999,6 +999,11 @@ st.markdown("""
   background:#17639c !important;
   border-color:#17639c !important;
 }
+.v12-project-save-divider{
+  height:1px;
+  margin:22px 0 18px;
+  background:linear-gradient(90deg, transparent, rgba(166, 209, 240, .52), transparent);
+}
 /* 畫風參考的自訂元素需明確儲存，以紅色按鈕提高辨識度。 */
 .st-key-v12_style_reference_save_button button,
 .st-key-v12_character_settings_apply_button button{
@@ -4666,25 +4671,17 @@ def _v12_render_sticker_basket_workspace():
     }
     option_labels = list(options.keys())
 
-    st.markdown(f"### {t('main_tab_title')}")
-    st.caption(t("main_tab_caption"))
     main_key = "v12_basket_main_choice"
     tab_key = "v12_basket_tab_choice"
     if st.session_state.get(main_key) not in option_labels:
         st.session_state[main_key] = option_labels[0]
-    main_choices, tab_choices = st.columns(2)
-    with main_choices:
-        main_label = st.selectbox(t("choose_main"), option_labels, key=main_key)
+    main_label = st.session_state[main_key]
     tab_labels = [label for label in option_labels if label != main_label] or [main_label]
     if st.session_state.get(tab_key) not in tab_labels:
         st.session_state[tab_key] = tab_labels[0]
-    with tab_choices:
-        tab_label = st.selectbox(t("choose_tab"), tab_labels, key=tab_key)
+    tab_label = st.session_state[tab_key]
 
-    if len(selected) == 1:
-        st.caption(t("main_tab_same"))
-    st.info(t("package_summary", selected=len(selected), limit=V12_PROJECT_STICKER_LIMIT, main=main_label, tab=tab_label))
-
+    # 作品名稱與保存動作先出現；它們會使用目前 MAIN／TAB 的選擇值。
     st.markdown(f"### {t('project_title')}")
     st.caption(t("project_caption"))
     st.text_input(
@@ -4784,6 +4781,23 @@ def _v12_render_sticker_basket_workspace():
                     )
             except Exception:
                 st.warning(t("cloud_failed"))
+
+    # 把保存動作與 MAIN／TAB 選擇清楚分開，避免兩種用途混在同一區。
+    st.markdown('<div class="v12-project-save-divider"></div>', unsafe_allow_html=True)
+    st.markdown(f"### {t('main_tab_title')}")
+    st.caption(t("main_tab_caption"))
+    main_choices, tab_choices = st.columns(2)
+    with main_choices:
+        main_label = st.selectbox(t("choose_main"), option_labels, key=main_key)
+    tab_labels = [label for label in option_labels if label != main_label] or [main_label]
+    if st.session_state.get(tab_key) not in tab_labels:
+        st.session_state[tab_key] = tab_labels[0]
+    with tab_choices:
+        tab_label = st.selectbox(t("choose_tab"), tab_labels, key=tab_key)
+
+    if len(selected) == 1:
+        st.caption(t("main_tab_same"))
+    st.info(t("package_summary", selected=len(selected), limit=V12_PROJECT_STICKER_LIMIT, main=main_label, tab=tab_label))
 
     if st.button(
         t("package_selected", count=len(selected)),
