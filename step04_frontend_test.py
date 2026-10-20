@@ -36,7 +36,7 @@ EDITOR_CSS = r"""
 .s4-panel-grid { display:grid; grid-template-columns:1.3fr 1fr; gap:10px; }
 .s4-small-button { border:1px solid #5aaee2; border-radius:8px; background:#286eaa; color:#fff; padding:8px 11px; font:inherit; font-weight:800; cursor:pointer; }
 .s4-small-button:disabled { cursor:wait; opacity:.78; }
-.s4-ai-progress { margin:10px 0 2px; padding:9px 10px; border:1px solid rgba(108,213,255,.54); border-radius:9px; background:rgba(28,91,132,.22); }
+.s4-ai-progress { flex:1 1 280px; min-width:240px; margin:0; padding:9px 10px; border:1px solid rgba(108,213,255,.54); border-radius:9px; background:rgba(28,91,132,.22); }
 .s4-ai-progress-label { display:flex; justify-content:space-between; gap:10px; margin-bottom:7px; color:#d9f4ff; font-size:13px; font-weight:800; }
 .s4-ai-progress-track { height:9px; overflow:hidden; border-radius:999px; background:rgba(8,24,43,.72); box-shadow:inset 0 0 0 1px rgba(132,211,255,.22); }
 .s4-ai-progress-fill { height:100%; border-radius:inherit; background:linear-gradient(90deg,#5bd6ff,#9a8cff,#ff6d9d); box-shadow:0 0 12px rgba(106,207,255,.72); transition:width .2s ease; }
@@ -236,8 +236,7 @@ export default function(component) {
           ${AI_TONES.map(tone => `<option value="${tone}" ${state.aiTone === tone ? 'selected' : ''}>${tone}</option>`).join('')}
         </select>
       </div>
-      <div class="s4-action-row"><button class="s4-small-button" data-action="generate-ai" ${state.aiLoading ? 'disabled' : ''}>${state.aiLoading ? '✨ AI 正在構思中…' : '✨ 產生 16 句貼圖文字'}</button></div>
-      ${state.aiLoading ? `<div class="s4-ai-progress"><div class="s4-ai-progress-label"><span>${esc(state.aiLoadingText || '🧠 正在收集靈感…')}</span><span>${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%</span></div><div class="s4-ai-progress-track"><div class="s4-ai-progress-fill" style="width:${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%"></div></div></div>` : ''}
+      <div class="s4-action-row"><button class="s4-small-button" data-action="generate-ai" ${state.aiLoading ? 'disabled' : ''}>${state.aiLoading ? '✨ AI 正在構思中…' : '✨ 產生 16 句貼圖文字'}</button>${state.aiLoading ? `<div class="s4-ai-progress"><div class="s4-ai-progress-label"><span>${esc(state.aiLoadingText || '🧠 正在收集靈感…')}</span><span>${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%</span></div><div class="s4-ai-progress-track"><div class="s4-ai-progress-fill" style="width:${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%"></div></div></div>` : ''}</div>
       ${state.aiCandidates.length ? `
         <div class="s4-caption">可勾選任意數量；本批已勾選 ${state.aiSelected.length} 句，待帶入清單 ${state.aiPicked.length} / 8 句。</div>
         <div class="s4-candidates">${state.aiCandidates.map((sentence, index) => `<label class="s4-candidate"><input type="checkbox" data-candidate-index="${index}" ${checked(state.aiSelected.includes(index))}> <span>${esc(sentence)}</span></label>`).join('')}</div>
