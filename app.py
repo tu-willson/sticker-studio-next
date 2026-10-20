@@ -172,12 +172,12 @@ def _v12_crop_canvas_translations():
             "🔴 固定外框　🔵 上下 6 條獨立垂直分隔線　🟠 水平分隔線　｜　🔒 鎖定後可進行裁切": "🔴 Fixed outer frame　🔵 6 independent vertical guides　🟠 Horizontal guide　｜　🔒 Lock, then crop",
             "↩️ 恢復分隔線位置": "↩️ Reset guides",
             "🔒（第一步）鎖定定位": "🔒 Step 1: Lock guides",
-            "✅（第二步）套用裁切並加入暫存作品區": "✅ Step 2: Apply crops and add to workspace",
+            "✅（第二步）套用裁切並加入作品暫存區": "✅ Step 2: Apply crops and add to workspace",
             "🖱️ 正在調整定位線……": "🖱️ Adjusting guides…",
             "✅ 定位線已更新": "✅ Guides updated",
             "↩️ 已恢復標準4×2定位": "↩️ Standard 4×2 guides restored",
             "🔓 解鎖定位": "🔓 Unlock guides",
-            "🔒 定位已鎖定，可以加入下方暫存作品區": "🔒 Guides locked. You can add this batch to the workspace below.",
+            "🔒 定位已鎖定，可以加入下方作品暫存區": "🔒 Guides locked. You can add this batch to the workspace below.",
             "🔒 定位已鎖定，正在儲存裁切範圍……": "🔒 Guides locked. Saving the crop areas…",
             "⚠️ 無法儲存裁切範圍，請重新整理後再試": "⚠️ The crop areas could not be saved. Please refresh and try again.",
             "🛠️ 定位已解鎖，可以繼續微調": "🛠️ Guides unlocked. You can keep fine-tuning.",
@@ -194,12 +194,12 @@ def _v12_crop_canvas_translations():
             "🔴 固定外框　🔵 上下 6 條獨立垂直分隔線　🟠 水平分隔線　｜　🔒 鎖定後可進行裁切": "🔴 固定外枠　🔵 6本の独立した垂直ガイド　🟠 水平ガイド　｜　🔒 ロック後に切り抜き可能",
             "↩️ 恢復分隔線位置": "↩️ ガイドをリセット",
             "🔒（第一步）鎖定定位": "🔒 手順1：ガイドをロック",
-            "✅（第二步）套用裁切並加入暫存作品區": "✅ 手順2：切り抜きを適用して作業かごに追加",
+            "✅（第二步）套用裁切並加入作品暫存區": "✅ 手順2：切り抜きを適用して作業かごに追加",
             "🖱️ 正在調整定位線……": "🖱️ ガイドを調整中…",
             "✅ 定位線已更新": "✅ ガイドを更新しました",
             "↩️ 已恢復標準4×2定位": "↩️ 標準4×2ガイドに戻しました",
             "🔓 解鎖定位": "🔓 ガイドをロック解除",
-            "🔒 定位已鎖定，可以加入下方暫存作品區": "🔒 ガイドをロックしました。下の作業かごにこのバッチを追加できます。",
+            "🔒 定位已鎖定，可以加入下方作品暫存區": "🔒 ガイドをロックしました。下の作業かごにこのバッチを追加できます。",
             "🔒 定位已鎖定，正在儲存裁切範圍……": "🔒 ガイドをロックしました。切り抜き範囲を保存中…",
             "⚠️ 無法儲存裁切範圍，請重新整理後再試": "⚠️ 切り抜き範囲を保存できませんでした。更新してもう一度お試しください。",
             "🛠️ 定位已解鎖，可以繼續微調": "🛠️ ガイドのロックを解除しました。引き続き微調整できます。",
@@ -987,6 +987,17 @@ st.markdown("""
 .st-key-v12_custom_style_toggle{
   max-width:820px;
   margin:4px auto 0 !important;
+}
+/* 「存入我的作品」是獨立於 ZIP 打包的雲端保存動作。 */
+.st-key-v12_basket_save_to_library button{
+  background:#2478b9 !important;
+  border-color:#2478b9 !important;
+  color:#fff !important;
+  font-weight:850 !important;
+}
+.st-key-v12_basket_save_to_library button:hover{
+  background:#17639c !important;
+  border-color:#17639c !important;
 }
 /* 畫風參考的自訂元素需明確儲存，以紅色按鈕提高辨識度。 */
 .st-key-v12_style_reference_save_button button,
@@ -4475,7 +4486,7 @@ def _v12_add_current_grid_to_sticker_basket(grid_bytes, crop_boxes=None):
     ).hexdigest()
     basket = _v12_get_sticker_basket()
     if any(item.get("source_grid_hash") == source_hash for item in basket):
-        return False, "這組原始圖與目前裁切範圍已加入暫存作品區。"
+        return False, "這組原始圖與目前裁切範圍已加入作品暫存區。"
 
     batch_number = int(st.session_state.get("v12_sticker_basket_batch_number", 0)) + 1
     batch_label = f"批次 {batch_number:02d}"
@@ -4495,7 +4506,7 @@ def _v12_add_current_grid_to_sticker_basket(grid_bytes, crop_boxes=None):
 
     st.session_state["v12_sticker_basket"] = basket + additions
     st.session_state["v12_sticker_basket_batch_number"] = batch_number
-    return True, f"已將 {batch_label} 的 8 張貼圖加入暫存作品區。"
+    return True, f"已將 {batch_label} 的 8 張貼圖加入作品暫存區。"
 
 
 def _v12_remove_sticker_basket_item(item_id):
@@ -4531,6 +4542,57 @@ def _v12_make_special_sticker(image_bytes, size):
         ((size[0] - resized.width) // 2, (size[1] - resized.height) // 2),
     )
     return output
+
+
+def _v12_save_selected_stickers_to_history(selected, options, main_label, tab_label,
+                                           include_style_reference):
+    """Create a My Works record directly from the selected workspace stickers.
+
+    This intentionally does not build a ZIP.  The same selected PNGs, MAIN/TAB
+    choices and optional private materials are retained for My Works instead.
+    """
+    history_stickers = {
+        f"{number:02d}": bytes(item["image_bytes"])
+        for number, item in enumerate(selected, start=1)
+    }
+    main_image = _v12_make_special_sticker(
+        options[main_label]["image_bytes"], (240, 240)
+    )
+    tab_image = _v12_make_special_sticker(
+        options[tab_label]["image_bytes"], (96, 74)
+    )
+    main_buffer, tab_buffer = BytesIO(), BytesIO()
+    main_image.save(main_buffer, "PNG", optimize=True, dpi=(72, 72))
+    tab_image.save(tab_buffer, "PNG", optimize=True, dpi=(72, 72))
+
+    history_project = _v12_project_snapshot()
+    history_project["project_name"] = (
+        history_project.get("project_name") or _v12_default_project_name()
+    )
+    history_record = _v12_history_record(
+        metadata=history_project,
+        zip_bytes=b"",
+        grid_bytes=st.session_state.get("generated_4x2_bytes"),
+        main_bytes=main_buffer.getvalue(),
+        tab_bytes=tab_buffer.getvalue(),
+        sticker_bytes=history_stickers,
+        main_no=main_label,
+        tab_no=tab_label,
+        sticker_count=len(selected),
+        source_photo_bytes=st.session_state.get("uploaded_image_bytes") or b"",
+        style_reference_bytes=(
+            st.session_state.get("v12_style_reference_image_bytes") or b""
+        ) if include_style_reference else b"",
+    )
+    history_record["cloud_main_asset_index"] = next(
+        index for index, item in enumerate(selected, start=1)
+        if item["id"] == options[main_label]["id"]
+    )
+    history_record["cloud_tab_asset_index"] = next(
+        index for index, item in enumerate(selected, start=1)
+        if item["id"] == options[tab_label]["id"]
+    )
+    return history_record
 
 
 @st.fragment
@@ -4666,6 +4728,62 @@ def _v12_render_sticker_basket_workspace():
     )
     if has_creation_materials:
         st.caption(t("materials_private"))
+
+    # 直接存入「我的作品」不建立 ZIP，使用與一般雲端同步相同的素材選項。
+    with st.container(key="v12_basket_save_to_library"):
+        if st.button(
+            t("save_to_library"),
+            use_container_width=True,
+            key="v12_basket_save_to_library_button",
+            disabled=not bool(cloud_session),
+        ):
+            try:
+                history_record = _v12_save_selected_stickers_to_history(
+                    selected,
+                    options,
+                    main_label,
+                    tab_label,
+                    _active_style_reference_for_save,
+                )
+                cloud_record = dict(history_record)
+                if not save_creation_materials:
+                    cloud_record["source_photo_bytes"] = b""
+                    cloud_record["style_reference_bytes"] = b""
+                cloud_progress = st.progress(0, text=t("cloud_prepare"))
+                cloud_save = _beta_save_library_project(
+                    cloud_session,
+                    cloud_record,
+                    progress_callback=lambda progress, message: cloud_progress.progress(
+                        progress, text=message + " " + t("do_not_refresh")
+                    ),
+                )
+                if cloud_save.get("saved"):
+                    cloud_progress.progress(
+                        100,
+                        text=t(
+                            "cloud_saved",
+                            count=cloud_save["saved_count"],
+                            limit=cloud_save["library_capacity"],
+                        ),
+                    )
+                    st.success(
+                        t(
+                            "cloud_saved",
+                            count=cloud_save["saved_count"],
+                            limit=cloud_save["library_capacity"],
+                        )
+                    )
+                else:
+                    cloud_progress.empty()
+                    st.warning(
+                        t(
+                            "cloud_full",
+                            count=cloud_save["saved_count"],
+                            limit=cloud_save["library_capacity"],
+                        )
+                    )
+            except Exception:
+                st.warning(t("cloud_failed"))
 
     if st.button(
         t("package_selected", count=len(selected)),
@@ -8356,7 +8474,7 @@ if st.session_state.generated_4x2_bytes:
         )
     )
 
-    # 本版不在 Canvas 直接下載；裁切結果會先加入下方暫存作品區，再一次打包。
+    # 本版不在 Canvas 直接下載；裁切結果會先加入下方作品暫存區，再一次打包。
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
         '<button id="downloadBtn" class="primary" onclick="downloadAll()" disabled>✂️ 裁切並依序下載01～08(手機下載)</button>',
         '',
@@ -8371,7 +8489,7 @@ if st.session_state.generated_4x2_bytes:
         '    applyBtn.disabled=false;\n    statusEl.textContent="🔒 定位已鎖定，請套用裁切範圍後加入作品籃";',
     ).replace(
         '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒（第一步）鎖定定位</button>',
-        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒（第一步）鎖定定位</button>\n<button id="applyBtn" class="primary" onclick="applyCrop()" disabled>✅（第二步）套用裁切並加入暫存作品區</button>',
+        '<button id="lockBtn" class="lock" onclick="toggleLock()">🔒（第一步）鎖定定位</button>\n<button id="applyBtn" class="primary" onclick="applyCrop()" disabled>✅（第二步）套用裁切並加入作品暫存區</button>',
     )
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
         'let g=guidesDefault();',
@@ -8525,7 +8643,7 @@ function saveBlob(blob,name){''',
             st.rerun()
 
     # 舊版 01～08 立即打包區保留在原始碼中作為回溯參考，但不再執行。
-    # 新版以暫存作品區作為唯一的裁切後工作流程。
+    # 新版以作品暫存區作為唯一的裁切後工作流程。
     st.stop()
 
 
