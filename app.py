@@ -1195,6 +1195,11 @@ st.markdown("""
   font-size:.96rem;
   line-height:1.55;
 }
+/* 畫風參考的原生 X 會在換頁時被 Streamlit 模擬成空檔事件；改用預覽下方的
+   明確清除按鈕，避免把正常換頁誤判為刪除。 */
+.st-key-v12_style_reference_upload [data-testid="stFileChipDeleteBtn"]{
+  display:none !important;
+}
 /* STEP 06｜用「貼圖小劇場」呈現等待階段；這是流程提示，不宣稱 AI 的精準完成百分比。 */
 .v12-generation-showtime{
   width:min(860px,100%);
@@ -5349,6 +5354,49 @@ def _v12_update_navigation_safe_creation_draft(**values):
             current[key] = copy.deepcopy(value)
     st.session_state["v12_navigation_safe_creation_draft"] = current
 
+
+def _v12_restore_durable_style_reference():
+    """Restore an active reference from the durable draft, never from uploader state."""
+    draft = st.session_state.get("v12_navigation_safe_creation_draft")
+    if not isinstance(draft, dict) or not draft.get("v12_style_reference_image_bytes"):
+        return
+    for key in (
+        "v12_style_reference_image_bytes",
+        "v12_style_reference_filename",
+        "v12_style_reference_fingerprint",
+        "v12_style_reference_strength",
+        "v12_style_reference_custom_elements",
+    ):
+        if key in draft:
+            st.session_state[key] = copy.deepcopy(draft[key])
+    if draft.get("v12_style_source_mode") == V12_STYLE_REFERENCE_MODE:
+        st.session_state["v12_style_source_mode"] = V12_STYLE_REFERENCE_MODE
+
+
+def _v12_restore_durable_character_settings():
+    """Rehydrate the character form only when its Streamlit widget was removed."""
+    draft = st.session_state.get("v12_navigation_safe_creation_draft")
+    if not isinstance(draft, dict):
+        return
+    for key in (
+        "v10_character_options",
+        "v10_character_custom_1",
+        "v10_character_enabled_1",
+    ):
+        saved = draft.get(key)
+        current = st.session_state.get(key)
+        if saved and (current is None or current == [] or current == ""):
+            st.session_state[key] = copy.deepcopy(saved)
+
+
+def _v12_capture_character_settings_draft():
+    """Form-submit callback: commit new values before any navigation rerun can erase them."""
+    _v12_update_navigation_safe_creation_draft(
+        v10_character_options=list(st.session_state.get("v10_character_options", []) or []),
+        v10_character_custom_1=str(st.session_state.get("v10_character_custom_1", "") or ""),
+        v10_character_enabled_1=bool(st.session_state.get("v10_character_enabled_1", False)),
+    )
+
 # ============================================================
 # V12 試作版｜局部文字上色
 # 每格最多 3 段：使用者自行輸入文字片段，再用色卡點選顏色。
@@ -6596,11 +6644,9 @@ def _v12_style_reference_upload_changed():
         st.session_state["v12_use_custom_style"] = False
         st.session_state.pop("v12_loaded_project_custom_style", None)
     else:
-        # 在作品頁來回時，Streamlit 也可能以 None 重建 file_uploader。
-        # 只忽略該次換頁造成的空值；一般在創作頁按原生 X 清除時仍可正常刪除。
-        if st.session_state.pop("v12_style_reference_navigation_guard", False):
-            return
-        _v12_clear_style_reference()
+        # 原生 file_uploader 在換頁重建時會回傳 None；這不是使用者刪除。
+        # 畫風圖只能經由畫面上的「清除這張畫風參考」明確移除。
+        return
 
 
 def _v12_clear_style_reference():
@@ -7165,6 +7211,7 @@ st.session_state.setdefault("v12_style_source_mode", V12_STYLE_PRESET_MODE)
 
 def _v12_set_style_source_mode(mode):
     st.session_state["v12_style_source_mode"] = mode
+    _v12_update_navigation_safe_creation_draft(v12_style_source_mode=mode)
     if mode == V12_STYLE_REFERENCE_MODE:
         st.session_state["v10_style_mode"] = "↓ 請選擇風格"
         st.session_state["v12_use_custom_style"] = False
@@ -7177,6 +7224,12 @@ _style_source_mode = str(st.session_state.get(
 if _style_source_mode not in {V12_STYLE_PRESET_MODE, V12_STYLE_REFERENCE_MODE}:
     _style_source_mode = V12_STYLE_PRESET_MODE
     st.session_state["v12_style_source_mode"] = _style_source_mode
+
+# 原生 file_uploader 的值不可靠；創作草稿中的圖片才是畫風參考的真實來源。
+_v12_restore_durable_style_reference()
+_style_source_mode = str(st.session_state.get(
+    "v12_style_source_mode", V12_STYLE_PRESET_MODE
+))
 
 if st.session_state.pop("v12_style_reference_clear_upload_control", False):
     st.session_state.pop("v12_style_reference_upload", None)
@@ -7395,6 +7448,13 @@ else:
             )
         st.success(t("style_reference_enabled"))
         st.info(t("style_identity_priority"))
+        if st.button(
+            "🗑️ 清除這張畫風參考",
+            key="v12_clear_style_reference",
+            help="明確移除目前畫風參考圖。",
+        ):
+            _v12_clear_style_reference()
+            st.rerun()
         st.caption(t("style_settings_caption"))
         _normalized_style_strength = _v12_normalize_style_reference_strength(
             st.session_state.get("v12_style_reference_strength")
@@ -7430,8 +7490,7 @@ else:
         st.caption(t("style_elements_help"))
         st.caption(t("style_materials_caption"))
 
-# 檔案上傳控制項已在這次 create rerun 建立完成；若剛才沒有觸發 on_change，
-# 也不讓換頁保護旗標殘留到使用者下一次真正按下原生 X 的操作。
+# 檔案上傳控制項已在這次 create rerun 建立完成，換頁保護旗標不再需要。
 st.session_state.pop("v12_style_reference_navigation_guard", None)
 
 _v12_update_navigation_safe_creation_draft(
@@ -7450,6 +7509,7 @@ v10_section(t("section_features"), "#2ecc71")
 st.caption(t("features_intro"))
 # Clean up selections retired from the feature menu so an older session can
 # reopen this form without retaining hidden style choices.
+_v12_restore_durable_character_settings()
 _saved_character_options = st.session_state.get("v10_character_options")
 if isinstance(_saved_character_options, list):
     st.session_state["v10_character_options"] = [
@@ -7467,6 +7527,7 @@ with st.form("v12_character_settings_form", border=False):
             t("save_character"),
             type="primary",
             use_container_width=True,
+            on_click=_v12_capture_character_settings_draft,
         )
 custom_character = str(
     st.session_state.get("v10_character_custom_1", "") or ""
