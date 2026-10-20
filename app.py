@@ -3507,6 +3507,7 @@ V12_STICKER_TEXT_MODE = "💬 使用文字貼圖"
 V12_STICKER_EXPRESSION_MODE = "😶 使用表情貼圖（無文字）"
 V12_STYLE_PRESET_MODE = "貼圖風格快選"
 V12_STYLE_REFERENCE_MODE = "畫風參考上傳"
+V12_STYLE_REFERENCE_STRENGTHS = ("柔和融入", "強烈融入")
 V12_EXPRESSION_EFFECTS = [
     "無額外特效（專注表情特寫）",
     "漫畫速度線",
@@ -4023,6 +4024,14 @@ def _v12_current_custom_style_snapshot():
     return snapshot
 
 
+def _v12_normalize_style_reference_strength(value):
+    """Map retired saved values to the two current style-strength choices."""
+    value = str(value or "").strip()
+    if value == "明顯融入":
+        return "強烈融入"
+    return value if value in V12_STYLE_REFERENCE_STRENGTHS else "柔和融入"
+
+
 def _v12_new_project_metadata():
     """V12｜01B①：建立目前作品的標準化 metadata。
 
@@ -4041,7 +4050,7 @@ def _v12_new_project_metadata():
         "updated_at": now,
         "generation_method": "",
         "transparent_background": False,
-        "style_reference_strength": "明顯融入",
+        "style_reference_strength": "柔和融入",
         "style_reference_elements_enabled": False,
         "style_reference_elements": [],
         "style_reference_custom_elements": "",
@@ -4077,7 +4086,7 @@ def _v12_new_project_metadata():
             "text_style": "",
             "generation_method": "",
             "transparent_background": False,
-            "style_reference_strength": "明顯融入",
+            "style_reference_strength": "柔和融入",
             "style_reference_elements_enabled": False,
             "style_reference_elements": [],
             "style_reference_custom_elements": "",
@@ -4146,12 +4155,9 @@ def _v12_normalize_project_metadata(metadata):
     expression_specs = _v12_normalize_expression_specs(
         data.get("expression_specs", creative.get("expression_specs", []))
     )
-    style_reference_strength = str(
-        data.get("style_reference_strength", creative.get("style_reference_strength", "明顯融入"))
-        or "明顯融入"
+    style_reference_strength = _v12_normalize_style_reference_strength(
+        data.get("style_reference_strength", creative.get("style_reference_strength"))
     )
-    if style_reference_strength not in {"柔和融入", "明顯融入", "強烈融入"}:
-        style_reference_strength = "明顯融入"
     # V12｜畫風參考改為單一自訂說明，不再保存已移除的多選元素。
     style_reference_elements = []
     style_reference_elements_enabled = False
@@ -4810,8 +4816,8 @@ def _v12_load_history_record(record):
         V12_STYLE_REFERENCE_MODE if style_reference else V12_STYLE_PRESET_MODE
     )
 
-    st.session_state["v12_style_reference_strength"] = str(
-        metadata.get("style_reference_strength", "明顯融入") or "明顯融入"
+    st.session_state["v12_style_reference_strength"] = _v12_normalize_style_reference_strength(
+        metadata.get("style_reference_strength")
     )
     st.session_state["v12_style_reference_elements_enabled"] = False
     st.session_state["v12_style_reference_elements"] = []
@@ -5012,8 +5018,8 @@ def _v12_project_snapshot():
     project["transparent_background"] = bool(
         st.session_state.get("transparent_png_option", False)
     )
-    project["style_reference_strength"] = str(
-        st.session_state.get("v12_style_reference_strength", "明顯融入")
+    project["style_reference_strength"] = _v12_normalize_style_reference_strength(
+        st.session_state.get("v12_style_reference_strength")
     )
     project["style_reference_elements_enabled"] = False
     project["style_reference_elements"] = []
@@ -5089,7 +5095,7 @@ st.session_state.setdefault("v12_expression_used_recipe_ids", [])
 st.session_state.setdefault("v12_expression_used_visual_pack_ids", [])
 st.session_state.setdefault("v12_expression_last_recipe_labels", [])
 st.session_state.setdefault("v12_expression_recipe_cycle", 1)
-st.session_state.setdefault("v12_style_reference_strength", "明顯融入")
+st.session_state.setdefault("v12_style_reference_strength", "柔和融入")
 st.session_state.setdefault("v12_style_reference_elements_enabled", False)
 st.session_state.setdefault("v12_style_reference_elements", [])
 st.session_state.setdefault("v12_style_reference_custom_elements", "")
@@ -6809,19 +6815,23 @@ else:
         st.success(t("style_reference_enabled"))
         st.info(t("style_identity_priority"))
         st.caption(t("style_settings_caption"))
+        _normalized_style_strength = _v12_normalize_style_reference_strength(
+            st.session_state.get("v12_style_reference_strength")
+        )
+        if st.session_state.get("v12_style_reference_strength") != _normalized_style_strength:
+            st.session_state["v12_style_reference_strength"] = _normalized_style_strength
+        st.radio(
+            f"{t('style_strength')}{t('style_strength_immediate')}",
+            V12_STYLE_REFERENCE_STRENGTHS,
+            horizontal=True,
+            key="v12_style_reference_strength",
+            format_func=lambda value: {
+                "柔和融入": t("style_strength_soft"),
+                "強烈融入": t("style_strength_strong"),
+            }[value],
+            help=t("style_strength_help"),
+        )
         with st.form("v12_style_reference_details_form", border=False):
-            st.radio(
-                t("style_strength"),
-                ["柔和融入", "明顯融入", "強烈融入"],
-                horizontal=True,
-                key="v12_style_reference_strength",
-                format_func=lambda value: {
-                    "柔和融入": t("style_strength_soft"),
-                    "明顯融入": t("style_strength_clear"),
-                    "強烈融入": t("style_strength_strong"),
-                }[value],
-                help=t("style_strength_help"),
-            )
             st.text_area(
                 t("style_elements"),
                 key="v12_style_reference_custom_elements",
@@ -7668,12 +7678,11 @@ prompt = build_prompt(
 )
 
 if _style_reference_active:
-    _style_reference_strength = str(
-        st.session_state.get("v12_style_reference_strength", "明顯融入")
+    _style_reference_strength = _v12_normalize_style_reference_strength(
+        st.session_state.get("v12_style_reference_strength")
     )
     _style_reference_strength_instruction = {
         "柔和融入": "保留第一張人物照片的可辨識臉部與人物特徵；僅輕度採用第二張圖的配色、線條與筆觸，不採用第二張圖的角色外觀。",
-        "明顯融入": "人物必須明確轉換成第二張圖的線條、色塊與陰影語言，但角色的臉部、髮型、鬍鬚、年齡感、體型與服裝辨識特徵均以第一張人物照片為準；不得採用第二張圖的角色外觀、姿勢或配件。",
         "強烈融入": "只強烈採用第二張圖的視覺媒材與畫法（線條、筆觸、色塊、陰影、配色、留白）；絕不可採用其中的人物臉部、髮型、服裝、年齡、姿勢、道具或角色身份。第一張人物照片的身份與外觀永遠優先。",
     }.get(_style_reference_strength, "第二張圖只提供視覺媒材與畫法，不提供人物角色。")
     prompt += (
