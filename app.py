@@ -966,6 +966,18 @@ st.markdown("""
   font-size:20px !important;
   font-weight:850 !important;
 }
+.st-key-v12_use_custom_style [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div{
+  width:23px !important;
+  height:23px !important;
+  background:rgba(28, 83, 130, .82) !important;
+  border:2px solid #4d9ed3 !important;
+  box-shadow:0 0 0 2px rgba(50, 133, 193, .16) !important;
+}
+.st-key-v12_use_custom_style [data-testid="stCheckbox"] [data-baseweb="checkbox"]:has(input:checked) > div{
+  background:#147dc1 !important;
+  border-color:#8ed8ff !important;
+  box-shadow:0 0 0 2px rgba(74, 183, 244, .28) !important;
+}
 /* 與「貼圖風格」下拉欄左緣對齊，讓它成為該欄位上方的模式切換。 */
 .st-key-v12_custom_style_toggle{
   max-width:820px;
