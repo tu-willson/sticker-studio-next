@@ -928,7 +928,8 @@ st.markdown("""
 .st-key-v12_clear_sticker_slot_4 button,
 .st-key-v12_clear_sticker_slot_5 button,
 .st-key-v12_clear_sticker_slot_6 button,
-.st-key-v12_clear_sticker_slot_7 button{
+.st-key-v12_clear_sticker_slot_7 button,
+[class*="st-key-v12_clear_expression_slot_"] button{
   min-height:34px !important;
   min-width:44px !important;
   padding:0 5px !important;
@@ -948,9 +949,17 @@ st.markdown("""
 .st-key-v12_clear_sticker_slot_4 button:hover,
 .st-key-v12_clear_sticker_slot_5 button:hover,
 .st-key-v12_clear_sticker_slot_6 button:hover,
-.st-key-v12_clear_sticker_slot_7 button:hover{
+.st-key-v12_clear_sticker_slot_7 button:hover,
+[class*="st-key-v12_clear_expression_slot_"] button:hover{
   background:rgba(76,165,232,.28) !important;
   border-color:rgba(146,212,255,.7) !important;
+}
+/* 01～04 與 05～08 之間的輕量分隔，避免閱讀時誤認成同一排。 */
+.v12-slot-row-divider{
+  height:1px;
+  margin:18px 0 16px;
+  background:linear-gradient(90deg, transparent, rgba(183,220,255,.55), transparent);
+  box-shadow:0 1px 5px rgba(148,206,255,.14);
 }
 /* 畫風參考的自訂元素需明確儲存，以紅色按鈕提高辨識度。 */
 .st-key-v12_style_reference_save_button button{
@@ -5324,6 +5333,29 @@ def _v12_clear_sticker_slot(i):
         st.session_state.pop(f"v12_text_color_segment_{i}_{j}", None)
 
 
+def _v12_clear_expression_slot(i):
+    """Clear one expression slot without touching the other seven slots."""
+    if not 0 <= i < 8:
+        return
+
+    draft = _v12_expression_draft()
+    draft[i] = {
+        "emotion": "",
+        "emotion_random": False,
+        "action_enabled": False,
+        # Retain this legacy field for saved-project compatibility only.
+        "effect": V12_EXPRESSION_EFFECTS[0],
+        "effect_action_prompt": "",
+    }
+    st.session_state["v12_expression_draft"] = _v12_normalize_expression_specs(draft)
+
+    st.session_state[f"v12_expression_emotion_{i}"] = ""
+    st.session_state[f"v12_expression_emotion_random_{i}"] = False
+    st.session_state[f"v12_expression_action_enabled_{i}"] = False
+    st.session_state[f"v12_expression_effect_action_prompt_{i}"] = ""
+    st.session_state[f"v12_expression_effect_{i}"] = V12_EXPRESSION_EFFECTS[0]
+
+
 _v12_init_color_segment_state()
 _v12_init_sticker_action_state()
 
@@ -7150,6 +7182,7 @@ def _v12_render_text_slots():
         with col:
             _v12_render_text_slot(i)
 
+    st.markdown('<div class="v12-slot-row-divider"></div>', unsafe_allow_html=True)
     cols = st.columns(4)
     for i, col in enumerate(cols, start=4):
         with col:
@@ -7189,10 +7222,20 @@ def _v12_render_expression_sticker_slots():
                     f"v12_expression_action_enabled_{i}",
                     bool(_expression_draft_item["action_enabled"]),
                 )
-                action_enabled = st.checkbox(
-                    t("action_enable"),
-                    key=f"v12_expression_action_enabled_{i}",
-                )
+                _action_toggle, _action_clear = st.columns([7, 3])
+                with _action_toggle:
+                    action_enabled = st.checkbox(
+                        t("action_enable"),
+                        key=f"v12_expression_action_enabled_{i}",
+                    )
+                with _action_clear:
+                    st.button(
+                        _v12_slot_clear_label(),
+                        key=f"v12_clear_expression_slot_{i}",
+                        use_container_width=False,
+                        on_click=_v12_clear_expression_slot,
+                        args=(i,),
+                    )
                 st.session_state.setdefault(
                     f"v12_expression_effect_action_prompt_{i}",
                     str(_expression_draft_item["effect_action_prompt"] or ""),
@@ -7214,6 +7257,8 @@ def _v12_render_expression_sticker_slots():
                         f"v12_expression_effect_action_prompt_{i}", ""
                     ),
                 )
+        if row_start == 0:
+            st.markdown('<div class="v12-slot-row-divider"></div>', unsafe_allow_html=True)
     configured = sum(
         bool(
             spec["emotion"]
