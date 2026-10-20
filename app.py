@@ -56,6 +56,11 @@ def _v12_crop_room_t(key, **kwargs):
     return fallback.format(**kwargs)
 
 
+def _v12_slot_clear_label():
+    """Keep the compact clear action independent from translation-module cache."""
+    return {"zh-TW": "清空", "en": "Clear", "ja": "クリア"}[_v12_ui_locale()]
+
+
 def _v12_localized_option(value, translations):
     """Display a localized label while retaining the stable internal option value."""
     return translations.get(str(value), {}).get(_v12_ui_locale(), str(value))
@@ -6892,7 +6897,7 @@ def _v12_render_text_slot(i):
         )
     with _action_clear:
         st.button(
-            t("slot_clear", number=i + 1),
+            _v12_slot_clear_label(),
             key=f"v12_clear_sticker_slot_{i}",
             use_container_width=True,
             on_click=_v12_clear_sticker_slot,
