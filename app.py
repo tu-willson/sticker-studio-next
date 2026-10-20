@@ -6887,7 +6887,9 @@ def _v12_render_text_slot(i):
         _action_enabled_widget_key,
         bool(_action_draft_item["enabled"]),
     )
-    _action_toggle, _action_clear = st.columns([4, 1])
+    # Keep the per-slot clear action wide enough for its full two-character
+    # label on compact/mobile layouts.
+    _action_toggle, _action_clear = st.columns([3, 2])
     with _action_toggle:
         _action_enabled = st.checkbox(
             t("action_enable"),
