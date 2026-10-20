@@ -7590,6 +7590,34 @@ def _v12_render_sticker_content_workspace():
         # （例如按下生成）時彙整成 persistent draft，減少不必要的更新。
         _v12_capture_expression_draft()
 
+    # Font and gallery controls are rendered below this fragment so Generate
+    # can keep using their existing widget keys.  During a fragment-only mode
+    # switch, hide/show that text-only block in place rather than waiting for
+    # a complete page rerun.
+    import streamlit.components.v2 as _v12_components
+    _v12_sync_mode_visibility = _v12_components.component(
+        "v12_sync_sticker_mode_visibility",
+        html="<span aria-hidden='true'></span>",
+        js="""
+        export default function(component) {
+            const start = document.querySelector('[data-v12-text-tools-start]');
+            const end = document.querySelector('[data-v12-text-tools-end]');
+            if (!start || !end) return;
+            const startBox = start.closest('[data-testid="stElementContainer"]');
+            const endBox = end.closest('[data-testid="stElementContainer"]');
+            if (!startBox || !endBox) return;
+            const hide = component.data === 'expression';
+            let node = startBox.nextElementSibling;
+            while (node && node !== endBox) {
+                node.style.display = hide ? 'none' : '';
+                node = node.nextElementSibling;
+            }
+        }
+        """,
+        isolate_styles=False,
+    )
+    _v12_sync_mode_visibility(data=_sticker_mode, key="v12_sync_sticker_mode_visibility")
+
 
 _v12_render_sticker_content_workspace()
 _sticker_mode = _v12_sticker_mode_value()
@@ -7602,6 +7630,7 @@ _prompt_expression_specs = (
     else expression_specs
 )
 
+st.markdown('<span data-v12-text-tools-start></span>', unsafe_allow_html=True)
 if _sticker_mode == "text":
     with st.expander(t("view_all_phrases"),expanded=False):
         for cat,vals in V8_RANDOM_POOLS.items():
@@ -7826,6 +7855,7 @@ if _sticker_mode == "text":
         else:
             st.write("尚未選擇。")
 
+st.markdown('<span data-v12-text-tools-end></span>', unsafe_allow_html=True)
 st.divider()
 v10_section(t("section_background"), "#16a085")
 st.markdown(f'<div class="v11-transparent-title">{t("background_transparent")}</div>', unsafe_allow_html=True)
