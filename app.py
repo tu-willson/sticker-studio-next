@@ -3817,23 +3817,131 @@ def _v12_sticker_mode_value(value=None):
     return "expression" if value == V12_STICKER_EXPRESSION_MODE else "text"
 
 
+def _v12_expression_draft():
+    """Persistent expression draft, independent from conditional widgets.
+
+    Streamlit removes widget state when a conditional branch is not rendered.
+    Keeping this canonical copy means switching to text mode never discards
+    the eight expression directions.
+    """
+    raw = st.session_state.get("v12_expression_draft")
+    raw = raw if isinstance(raw, list) else []
+    fallback = []
+    for i in range(8):
+        item = raw[i] if i < len(raw) and isinstance(raw[i], dict) else {}
+        fallback.append({
+            "emotion": str(item.get(
+                "emotion", st.session_state.get(f"v12_expression_emotion_{i}", "")
+            ) or ""),
+            "emotion_random": bool(item.get(
+                "emotion_random",
+                st.session_state.get(f"v12_expression_emotion_random_{i}", False),
+            )),
+            "effect": item.get(
+                "effect", st.session_state.get(
+                    f"v12_expression_effect_{i}", V12_EXPRESSION_EFFECTS[0]
+                )
+            ),
+            "effect_action_prompt": str(item.get(
+                "effect_action_prompt",
+                st.session_state.get(f"v12_expression_effect_action_prompt_{i}", ""),
+            ) or ""),
+        })
+    normalized = _v12_normalize_expression_specs(fallback)
+    st.session_state["v12_expression_draft"] = normalized
+    return normalized
+
+
+def _v12_write_expression_draft_slot(
+    i, emotion=None, emotion_random=None, effect=None, effect_action_prompt=None
+):
+    draft = _v12_expression_draft()
+    if not 0 <= i < 8:
+        return
+    if emotion is not None:
+        draft[i]["emotion"] = str(emotion or "").strip()[:160]
+    if emotion_random is not None:
+        draft[i]["emotion_random"] = bool(emotion_random)
+    if effect is not None:
+        draft[i]["effect"] = (
+            effect if effect in V12_EXPRESSION_EFFECTS else V12_EXPRESSION_EFFECTS[0]
+        )
+    if effect_action_prompt is not None:
+        draft[i]["effect_action_prompt"] = str(effect_action_prompt or "").strip()[:500]
+    st.session_state["v12_expression_draft"] = _v12_normalize_expression_specs(draft)
+
+
+def _v12_capture_expression_draft():
+    """Capture visible expression widgets before their branch disappears."""
+    for i, item in enumerate(_v12_expression_draft()):
+        _v12_write_expression_draft_slot(
+            i,
+            emotion=st.session_state.get(f"v12_expression_emotion_{i}", item["emotion"]),
+            emotion_random=st.session_state.get(
+                f"v12_expression_emotion_random_{i}", item["emotion_random"]
+            ),
+            effect=st.session_state.get(f"v12_expression_effect_{i}", item["effect"]),
+            effect_action_prompt=st.session_state.get(
+                f"v12_expression_effect_action_prompt_{i}",
+                item["effect_action_prompt"],
+            ),
+        )
+
+
+def _v12_restore_expression_widgets():
+    """Restore expression widgets from the canonical draft before rendering."""
+    for i, item in enumerate(_v12_expression_draft()):
+        st.session_state[f"v12_expression_emotion_{i}"] = item["emotion"]
+        st.session_state[f"v12_expression_emotion_random_{i}"] = bool(
+            item["emotion_random"]
+        )
+        st.session_state[f"v12_expression_effect_{i}"] = item["effect"]
+        st.session_state[f"v12_expression_effect_action_prompt_{i}"] = item[
+            "effect_action_prompt"
+        ]
+
+
+def _v12_sync_expression_emotion(i):
+    _v12_write_expression_draft_slot(
+        i, emotion=st.session_state.get(f"v12_expression_emotion_{i}", "")
+    )
+
+
+def _v12_sync_expression_random(i):
+    _v12_write_expression_draft_slot(
+        i,
+        emotion_random=st.session_state.get(
+            f"v12_expression_emotion_random_{i}", False
+        ),
+    )
+
+
+def _v12_sync_expression_effect(i):
+    _v12_write_expression_draft_slot(
+        i,
+        effect=st.session_state.get(
+            f"v12_expression_effect_{i}", V12_EXPRESSION_EFFECTS[0]
+        ),
+    )
+
+
+def _v12_sync_expression_action(i):
+    _v12_write_expression_draft_slot(
+        i,
+        effect_action_prompt=st.session_state.get(
+            f"v12_expression_effect_action_prompt_{i}", ""
+        ),
+    )
+
+
 def _v12_get_expression_specs():
+    specs = _v12_expression_draft()
     return _v12_normalize_expression_specs([
         {
-            "emotion": "" if st.session_state.get(
-                f"v12_expression_emotion_random_{i}", False
-            ) else st.session_state.get(f"v12_expression_emotion_{i}", ""),
-            "emotion_random": st.session_state.get(
-                f"v12_expression_emotion_random_{i}", False
-            ),
-            "effect": st.session_state.get(
-                f"v12_expression_effect_{i}", V12_EXPRESSION_EFFECTS[0]
-            ),
-            "effect_action_prompt": st.session_state.get(
-                f"v12_expression_effect_action_prompt_{i}", ""
-            ),
+            **item,
+            "emotion": "" if item["emotion_random"] else item["emotion"],
         }
-        for i in range(8)
+        for item in specs
     ])
 
 
@@ -4756,9 +4864,11 @@ def _v12_load_history_record(record):
         if loaded_sticker_mode == "expression"
         else V12_STICKER_TEXT_MODE
     )
-    for i, spec in enumerate(_v12_normalize_expression_specs(
+    _loaded_expression_specs = _v12_normalize_expression_specs(
         metadata.get("expression_specs", [])
-    )):
+    )
+    st.session_state["v12_expression_draft"] = _loaded_expression_specs
+    for i, spec in enumerate(_loaded_expression_specs):
         st.session_state[f"v12_expression_emotion_{i}"] = spec["emotion"]
         st.session_state[f"v12_expression_emotion_random_{i}"] = spec[
             "emotion_random"
@@ -6702,7 +6812,9 @@ def _v12_set_sticker_content_mode(mode):
     # 切換模式前後都以獨立草稿保存／回填，不依賴條件式 widget state。
     if mode == V12_STICKER_EXPRESSION_MODE:
         _v12_capture_sticker_action_draft()
+        _v12_restore_expression_widgets()
     elif mode == V12_STICKER_TEXT_MODE:
+        _v12_capture_expression_draft()
         _v12_restore_sticker_action_widgets()
     st.session_state["v12_sticker_content_mode"] = mode
 
@@ -7038,17 +7150,23 @@ def _v12_render_expression_sticker_slots():
                 emotion_random = st.checkbox(
                     t("random"),
                     key=f"v12_expression_emotion_random_{i}",
+                    on_change=_v12_sync_expression_random,
+                    args=(i,),
                 )
                 st.text_input(
                     t("expression_field"),
                     key=f"v12_expression_emotion_{i}",
                     placeholder=t("expression_placeholder"),
                     disabled=emotion_random,
+                    on_change=_v12_sync_expression_emotion,
+                    args=(i,),
                 )
                 st.selectbox(
                     t("effect_question"),
                     V12_EXPRESSION_EFFECTS,
                     key=f"v12_expression_effect_{i}",
+                    on_change=_v12_sync_expression_effect,
+                    args=(i,),
                 )
                 st.session_state.setdefault(
                     f"v12_expression_effect_action_prompt_{i}", ""
@@ -7057,6 +7175,8 @@ def _v12_render_expression_sticker_slots():
                     t("effect_action"),
                     key=f"v12_expression_effect_action_prompt_{i}",
                     placeholder=t("effect_action_placeholder"),
+                    on_change=_v12_sync_expression_action,
+                    args=(i,),
                 )
     configured = sum(
         bool(
