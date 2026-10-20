@@ -966,6 +966,11 @@ st.markdown("""
   font-size:20px !important;
   font-weight:850 !important;
 }
+/* 與「貼圖風格」下拉欄左緣對齊，讓它成為該欄位上方的模式切換。 */
+.st-key-v12_custom_style_toggle{
+  max-width:820px;
+  margin:4px auto 0 !important;
+}
 /* 畫風參考的自訂元素需明確儲存，以紅色按鈕提高辨識度。 */
 .st-key-v12_style_reference_save_button button,
 .st-key-v12_character_settings_apply_button button{
@@ -6680,10 +6685,12 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
     st.session_state.setdefault(
         "v12_use_custom_style", style_mode == V8_STYLE_CUSTOM_OPTION
     )
-    _use_custom_style = st.checkbox(
-        t("custom_style_enable"),
-        key="v12_use_custom_style",
-    )
+    # 對齊下方的「貼圖風格」欄位，避免模式切換落在整個頁面的最左側。
+    with st.container(key="v12_custom_style_toggle"):
+        _use_custom_style = st.checkbox(
+            t("custom_style_enable"),
+            key="v12_use_custom_style",
+        )
     if _use_custom_style:
         # Keep the canonical mode explicit so prompts and saved projects retain
         # the exact custom-style behavior.
