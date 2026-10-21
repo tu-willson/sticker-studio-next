@@ -33,6 +33,31 @@ def t(key, **kwargs):
     return tr(_v12_ui_locale(), key, **kwargs)
 
 
+_V12_SHARED_TEMPLATE_MANAGEMENT_FALLBACKS = {
+    "shared_template_management_title": "🧭 我的發布模板管理",
+    "shared_template_management_intro": "查看其他使用者的解鎖與回饋；下架後不會再出現在市集，但已解鎖者仍可免費再次套用。",
+    "shared_template_management_empty": "尚未有已發布或已下架的模板。",
+    "shared_template_management_unavailable": "模板管理資料暫時無法載入，請稍後再試。",
+    "shared_template_management_stats": "每次套用 {cost} 次｜他人解鎖 {unlocks} 次｜累積回饋 {rewards} 次",
+    "shared_template_status_published": "🟢 市集公開中",
+    "shared_template_status_withdrawn": "⚪ 已從市集下架",
+    "shared_template_withdraw_button": "從市集下架",
+    "shared_template_republish_button": "重新上架市集",
+    "shared_template_visibility_saving": "正在更新模板狀態……",
+    "shared_template_visibility_success": "「{title}」已更新為：{status}",
+    "shared_template_visibility_failed": "暫時無法更新模板狀態，請稍後再試。",
+}
+
+
+def _v12_management_t(key, **kwargs):
+    """Keep the new management UI readable during a stale i18n module reload."""
+    translated = t(key, **kwargs)
+    if translated != key:
+        return translated
+    fallback = _V12_SHARED_TEMPLATE_MANAGEMENT_FALLBACKS.get(key, key)
+    return fallback.format(**kwargs) if kwargs else fallback
+
+
 _V12_CROP_ROOM_TEXT_FALLBACKS = {
     "zh-TW": {
         "auto_crop_room": "逐格縮小至 86% 以保留裁切安全邊距",
@@ -5843,10 +5868,10 @@ def _v12_render_shared_template_manager(session):
     feedback = st.session_state.pop("v12_shared_template_management_feedback", None)
     if isinstance(feedback, dict):
         st.success(
-            t(
+            _v12_management_t(
                 "shared_template_visibility_success",
                 title=feedback.get("title", ""),
-                status=t(
+                status=_v12_management_t(
                     "shared_template_status_published"
                     if feedback.get("published")
                     else "shared_template_status_withdrawn"
@@ -5856,13 +5881,13 @@ def _v12_render_shared_template_manager(session):
     try:
         templates = _beta_list_my_shared_template_management(session)
     except Exception:
-        st.warning(t("shared_template_management_unavailable"))
+        st.warning(_v12_management_t("shared_template_management_unavailable"))
         return
 
-    with st.expander(t("shared_template_management_title"), expanded=bool(templates)):
-        st.caption(t("shared_template_management_intro"))
+    with st.expander(_v12_management_t("shared_template_management_title"), expanded=bool(templates)):
+        st.caption(_v12_management_t("shared_template_management_intro"))
         if not templates:
-            st.caption(t("shared_template_management_empty"))
+            st.caption(_v12_management_t("shared_template_management_empty"))
             return
         for template in templates:
             if not isinstance(template, dict) or not template.get("template_id"):
@@ -5877,7 +5902,7 @@ def _v12_render_shared_template_manager(session):
             with content_col:
                 st.markdown(f"**🌐 {html.escape(title)}**")
                 st.caption(
-                    t(
+                    _v12_management_t(
                         "shared_template_management_stats",
                         cost=max(1, int(template.get("apply_cost", 1) or 1)),
                         unlocks=unlock_count,
@@ -5888,13 +5913,13 @@ def _v12_render_shared_template_manager(session):
                     st.caption(str(template["description"]).strip())
             with action_col:
                 st.caption(
-                    t(
+                    _v12_management_t(
                         "shared_template_status_published"
                         if published
                         else "shared_template_status_withdrawn"
                     )
                 )
-                action_label = t(
+                action_label = _v12_management_t(
                     "shared_template_withdraw_button"
                     if published
                     else "shared_template_republish_button"
@@ -5905,7 +5930,7 @@ def _v12_render_shared_template_manager(session):
                     use_container_width=True,
                 ):
                     try:
-                        with st.spinner(t("shared_template_visibility_saving")):
+                        with st.spinner(_v12_management_t("shared_template_visibility_saving")):
                             _beta_set_shared_template_visibility(
                                 session, template_id, publish=not published
                             )
@@ -5915,7 +5940,7 @@ def _v12_render_shared_template_manager(session):
                         }
                         st.rerun()
                     except Exception:
-                        st.error(t("shared_template_visibility_failed"))
+                        st.error(_v12_management_t("shared_template_visibility_failed"))
             st.divider()
 
 
