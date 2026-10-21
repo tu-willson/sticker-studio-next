@@ -1782,6 +1782,20 @@ html{scroll-behavior:smooth;}
 }
 .v12-pricing-hero h1{margin:.25rem 0 .42rem;color:#fff;font-size:clamp(1.8rem,4vw,2.6rem);}
 .v12-pricing-hero p{margin:0;color:rgba(245,248,255,.88);font-weight:650;}
+.v12-pricing-contact{
+  display:inline-flex;
+  align-items:center;
+  gap:.38rem;
+  margin-top:.82rem;
+  padding:.38rem .72rem;
+  border:1px solid rgba(255,210,220,.34);
+  border-radius:999px;
+  color:rgba(255,244,247,.94);
+  background:rgba(5,14,32,.22);
+  font-size:.82rem;
+  font-weight:720;
+}
+.v12-pricing-contact strong{color:#fff;font-weight:900;letter-spacing:.02em;}
 .v12-pricing-card{
   position:relative;
   min-height:258px;
@@ -1819,7 +1833,7 @@ html{scroll-behavior:smooth;}
 }
 .v12-pricing-selection h3{text-align:center;margin:.1rem 0 .65rem;}
 @media (max-width:900px){.v12-pricing-card{min-height:232px;padding:.9rem .72rem;}.v12-pricing-plan-name{font-size:1.08rem;}.v12-pricing-price{font-size:1.42rem;}.v12-pricing-benefit{font-size:.78rem;}}
-@media (max-width:640px){.v12-pricing-hero{padding:1rem .8rem;border-radius:16px;}.v12-pricing-hero p{font-size:.9rem;}.v12-pricing-card{min-height:0;margin-bottom:.42rem;padding:.78rem .55rem;}.v12-pricing-plan-name{font-size:.95rem;}.v12-pricing-price{font-size:1.16rem;}.v12-pricing-benefit{font-size:.7rem;}.v12-pricing-badge,.v12-pricing-current{padding:.15rem .32rem;font-size:.57rem;}}
+@media (max-width:640px){.v12-pricing-hero{padding:1rem .8rem;border-radius:16px;}.v12-pricing-hero p{font-size:.9rem;}.v12-pricing-contact{font-size:.72rem;}.v12-pricing-card{min-height:0;margin-bottom:.42rem;padding:.78rem .55rem;}.v12-pricing-plan-name{font-size:.95rem;}.v12-pricing-price{font-size:1.16rem;}.v12-pricing-benefit{font-size:.7rem;}.v12-pricing-badge,.v12-pricing-current{padding:.15rem .32rem;font-size:.57rem;}}
 
 /* V12｜STEP 01B③｜125 種帶圖字型響應式圖卡牆 */
 .v12-font-grid{
@@ -6729,6 +6743,7 @@ def _v12_render_pricing_page():
           <div class="v12-pricing-kicker">STICKER STUDIO NEXT</div>
           <h1>{t('pricing_title')}</h1>
           <p>{t('pricing_intro')}</p>
+          <div class="v12-pricing-contact">📮 {t('pricing_contact_label')}：<strong>AGUZN@MSN.COM</strong></div>
         </div>
         """,
         unsafe_allow_html=True,
