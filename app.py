@@ -5902,7 +5902,9 @@ def _v12_render_shared_template_manager(session):
             content_col, action_col = st.columns([2.8, 1.0], vertical_alignment="top")
             with content_col:
                 st.markdown(f"**🌐 {html.escape(title)}**")
-                stats_col, preview_col = st.columns([2.15, 0.85], vertical_alignment="center")
+                # Keep the preview immediately after the short two-line stats,
+                # rather than leaving a wide empty gap before the thumbnail.
+                stats_col, preview_col = st.columns([1.3, 1.7], vertical_alignment="center")
                 with stats_col:
                     st.caption(
                         _v12_management_t(
@@ -5929,7 +5931,7 @@ def _v12_render_shared_template_manager(session):
                                     preview_path,
                                     bucket="shared-template-assets",
                                 ),
-                                width=144,
+                                width=200,
                             )
                         except Exception:
                             st.caption(t("shared_template_preview_unavailable"))
