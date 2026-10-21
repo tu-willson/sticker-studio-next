@@ -3774,6 +3774,7 @@ V12_STICKER_TEXT_MODE = "💬 使用文字貼圖"
 V12_STICKER_EXPRESSION_MODE = "😶 使用表情貼圖（無文字）"
 V12_STYLE_PRESET_MODE = "貼圖風格快選"
 V12_STYLE_REFERENCE_MODE = "畫風參考上傳"
+V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
 V12_STYLE_REFERENCE_STRENGTHS = ("柔和融入", "強烈融入")
 V12_EXPRESSION_EFFECTS = [
     "無額外特效（專注表情特寫）",
@@ -7509,7 +7510,6 @@ _v12_update_navigation_safe_creation_draft(
 )
 
 st.divider()
-V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
 
 v10_section(t("section_style"), "#ff9f43")
 st.caption(t("style_intro"))
