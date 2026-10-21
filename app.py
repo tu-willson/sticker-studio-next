@@ -2479,12 +2479,14 @@ def _beta_raw_http(method, path, body=None, access_token=None,
         raise RuntimeError("beta_storage_request_failed") from exc
 
 
-def _beta_storage_upload(session, object_path, content, content_type):
+def _beta_storage_upload(session, object_path, content, content_type,
+                         bucket="member-projects"):
     if not content:
         raise RuntimeError("library_asset_empty")
     return _beta_raw_http(
         "POST",
-        "/storage/v1/object/member-projects/" + urllib.parse.quote(object_path, safe="/"),
+        "/storage/v1/object/" + urllib.parse.quote(bucket, safe="") + "/"
+        + urllib.parse.quote(object_path, safe="/"),
         body=bytes(content),
         access_token=session["access_token"],
         content_type=content_type,
@@ -2492,21 +2494,22 @@ def _beta_storage_upload(session, object_path, content, content_type):
     )
 
 
-def _beta_storage_download(session, object_path):
+def _beta_storage_download(session, object_path, bucket="member-projects"):
     return _beta_raw_http(
         "GET",
-        "/storage/v1/object/member-projects/" + urllib.parse.quote(object_path, safe="/"),
+        "/storage/v1/object/" + urllib.parse.quote(bucket, safe="") + "/"
+        + urllib.parse.quote(object_path, safe="/"),
         access_token=session["access_token"],
     )
 
 
-def _beta_storage_delete(session, object_paths):
+def _beta_storage_delete(session, object_paths, bucket="member-projects"):
     paths = [str(path) for path in object_paths if path]
     if not paths:
         return
     _beta_http(
         "DELETE",
-        "/storage/v1/object/member-projects",
+        "/storage/v1/object/" + urllib.parse.quote(bucket, safe=""),
         payload={"prefixes": paths},
         access_token=session["access_token"],
     )
@@ -2533,6 +2536,140 @@ def _beta_list_library_projects(session):
     )
     response = _beta_http("GET", query, access_token=session["access_token"])
     return response if isinstance(response, list) else []
+
+
+def _beta_creator_reel_status(session):
+    response = _beta_rpc(
+        "get_my_creator_reel_status", {}, access_token=session["access_token"]
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("creator_reel_status_invalid")
+    return {
+        "eligible": bool(response.get("eligible", False)),
+        "product_code": str(response.get("product_code", "") or ""),
+        "auto_reel_limit": max(0, int(response.get("auto_reel_limit", 0) or 0)),
+        "retention_days": max(0, int(response.get("retention_days", 0) or 0)),
+        "collected_reel_limit": max(
+            0, int(response.get("collected_reel_limit", 0) or 0)
+        ),
+        "publish_template_limit": max(
+            0, int(response.get("publish_template_limit", 0) or 0)
+        ),
+        "active_auto_reel_count": max(
+            0, int(response.get("active_auto_reel_count", 0) or 0)
+        ),
+    }
+
+
+def _beta_finalize_creator_reel_cleanup(session, reel_ids, object_paths):
+    """Remove Storage objects first, then delete their expired database rows."""
+    valid_ids = [str(reel_id) for reel_id in (reel_ids or []) if reel_id]
+    valid_paths = [str(path) for path in (object_paths or []) if path]
+    if valid_paths:
+        _beta_storage_delete(session, valid_paths, bucket="creator-reels")
+    if valid_ids:
+        _beta_rpc(
+            "finalize_creator_reel_cleanup",
+            {"p_reel_ids": valid_ids},
+            access_token=session["access_token"],
+        )
+
+
+def _beta_save_creator_reel(session, snapshot, grid_bytes,
+                            style_reference_bytes=b""):
+    """Persist one completed 4×2 generation for an eligible subscriber.
+
+    This is intentionally best-effort from the generator's perspective: a
+    snapshot problem never invalidates a successfully generated image.
+    """
+    if not isinstance(snapshot, dict) or not grid_bytes:
+        raise RuntimeError("creator_reel_snapshot_invalid")
+
+    reel_id = str(uuid4())
+    project_id = str(snapshot.get("project_id", "") or "")
+    if not project_id:
+        raise RuntimeError("creator_reel_project_missing")
+    reservation = _beta_rpc(
+        "reserve_creator_reel",
+        {
+            "p_reel_id": reel_id,
+            "p_source_project_id": project_id,
+            "p_source_project_name": str(snapshot.get("project_name", "") or ""),
+            "p_snapshot": snapshot,
+            "p_has_style_reference": bool(style_reference_bytes),
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(reservation, list):
+        reservation = reservation[0] if reservation else {}
+    if not isinstance(reservation, dict) or not reservation.get("reel_id"):
+        raise RuntimeError("creator_reel_reservation_invalid")
+
+    grid_path = str(reservation.get("grid_path", "") or "")
+    style_path = str(reservation.get("style_reference_path", "") or "")
+    if not grid_path:
+        raise RuntimeError("creator_reel_path_missing")
+
+    grid_webp = _v12_webp_bytes(grid_bytes, quality=86)
+    style_webp = (
+        _v12_webp_bytes(style_reference_bytes, quality=90)
+        if style_reference_bytes else b""
+    )
+    created_paths = [grid_path]
+    if style_path and style_webp:
+        created_paths.append(style_path)
+    try:
+        _beta_storage_upload(
+            session, grid_path, grid_webp, "image/webp", bucket="creator-reels"
+        )
+        if style_path and style_webp:
+            _beta_storage_upload(
+                session, style_path, style_webp, "image/webp", bucket="creator-reels"
+            )
+        _beta_rpc(
+            "complete_creator_reel_upload",
+            {
+                "p_reel_id": reel_id,
+                "p_grid_bytes": len(grid_webp),
+                "p_style_reference_bytes": len(style_webp),
+            },
+            access_token=session["access_token"],
+        )
+    except Exception:
+        try:
+            _beta_rpc(
+                "cancel_creator_reel_upload",
+                {"p_reel_id": reel_id},
+                access_token=session["access_token"],
+            )
+            _beta_finalize_creator_reel_cleanup(
+                session, [reel_id], created_paths
+            )
+        except Exception:
+            pass
+        raise
+
+    # Cleanup retries are deliberately non-fatal.  A stale private object is
+    # never shown in the UI and is retried at the next successful snapshot.
+    try:
+        _beta_finalize_creator_reel_cleanup(
+            session,
+            reservation.get("cleanup_reel_ids", []),
+            reservation.get("cleanup_object_paths", []),
+        )
+    except Exception:
+        pass
+    return {
+        "saved": True,
+        "reel_id": reel_id,
+        "auto_reel_limit": int(reservation.get("auto_reel_limit", 0) or 0),
+        "active_auto_reel_count": int(
+            reservation.get("active_auto_reel_count", 0) or 0
+        ),
+        "auto_expires_at": str(reservation.get("auto_expires_at", "") or ""),
+    }
 
 
 def _v12_webp_bytes(image_or_bytes, quality=86):
@@ -5277,6 +5414,32 @@ def _v12_project_snapshot():
 
     st.session_state["v12_current_project"] = project
     return dict(project)
+
+
+def _v12_creator_reel_snapshot():
+    """Freeze the exact settings for one completed 4×2 generation.
+
+    The snapshot intentionally excludes the uploader's source photograph.  An
+    optional style-reference image is handled as a separate private asset so a
+    later sharing flow can ask for explicit permission before exposing it.
+    """
+    snapshot = _beta_library_metadata(_v12_project_snapshot())
+    resolved_expression_specs = st.session_state.get(
+        "v12_expression_generation_specs"
+    )
+    if isinstance(resolved_expression_specs, list):
+        snapshot["expression_specs"] = copy.deepcopy(resolved_expression_specs)
+    grid_bytes = bytes(st.session_state.get("generated_4x2_bytes") or b"")
+    snapshot["schema_version"] = "v12.creator-reel.1"
+    snapshot["creator_reel"] = {
+        "kind": "auto",
+        "grid_sha256": hashlib.sha256(grid_bytes).hexdigest() if grid_bytes else "",
+        "grid_width": 1536,
+        "grid_height": 1024,
+        "crop_boxes": None,
+        "prompt": str(st.session_state.get("last_prompt", "") or "")[:30000],
+    }
+    return snapshot
 
 
 for i in range(8):
@@ -9007,6 +9170,33 @@ if st.session_state.get("v11_generation_pending", False):
             _generation_succeeded = True
             if _sticker_mode == "expression":
                 _v12_commit_random_expression_recipes()
+            # 每次成功的 4×2 都嘗試建立一卷私人的「創作膠卷」。
+            # 只有有效訂閱者會通過 Supabase 的伺服器端資格檢查；失敗絕不
+            # 影響已經完成的圖片生成或扣點流程。
+            try:
+                _reel_style_reference = (
+                    bytes(st.session_state.get("v12_style_reference_image_bytes") or b"")
+                    if _style_reference_active else b""
+                )
+                _creator_reel_save = _beta_save_creator_reel(
+                    _beta_live_session,
+                    _v12_creator_reel_snapshot(),
+                    _grid_bytes,
+                    style_reference_bytes=_reel_style_reference,
+                )
+                st.session_state["v12_creator_reel_generation_feedback"] = {
+                    "saved": bool(_creator_reel_save.get("saved", False)),
+                    "active_count": int(
+                        _creator_reel_save.get("active_auto_reel_count", 0) or 0
+                    ),
+                    "limit": int(
+                        _creator_reel_save.get("auto_reel_limit", 0) or 0
+                    ),
+                }
+            except Exception:
+                st.session_state["v12_creator_reel_generation_feedback"] = {
+                    "saved": False,
+                }
             if _using_beta_credit:
                 try:
                     _beta_finish_generation(_beta_live_session, _beta_job_id)
@@ -9017,6 +9207,15 @@ if st.session_state.get("v11_generation_pending", False):
                 st.success("🎉 4×2 原始總圖生成成功！已自動保留每格裁切留白。")
             else:
                 st.success("🎉 4×2 原始總圖生成成功！")
+            _creator_reel_feedback = st.session_state.get(
+                "v12_creator_reel_generation_feedback", {}
+            )
+            if _creator_reel_feedback.get("saved"):
+                st.caption(
+                    "🎞️ 已自動保存一卷創作膠卷（"
+                    f"{_creator_reel_feedback['active_count']}／"
+                    f"{_creator_reel_feedback['limit']} 卷）。"
+                )
 
     except Exception as e:
         if _using_beta_credit and _beta_job_id and not _beta_generation_returned:
