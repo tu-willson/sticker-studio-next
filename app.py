@@ -5162,6 +5162,11 @@ def _v12_load_history_record(record):
     st.session_state["v12_style_source_mode"] = (
         V12_STYLE_REFERENCE_MODE if style_reference else V12_STYLE_PRESET_MODE
     )
+    st.session_state["transparent_png_option"] = bool(
+        metadata.get("transparent_background", False)
+    )
+    # 逐格縮小是下一次生成才適用的暫時設定，不隨歷史作品強制帶回。
+    st.session_state["v12_auto_crop_room_enabled"] = False
 
     st.session_state["v12_style_reference_strength"] = _v12_normalize_style_reference_strength(
         metadata.get("style_reference_strength")
@@ -5620,6 +5625,8 @@ _V12_CREATION_DRAFT_KEYS = (
     "v10_character_options",
     "v10_character_custom_1",
     "v10_character_enabled_1",
+    "transparent_png_option",
+    "v12_auto_crop_room_enabled",
 )
 
 
@@ -8732,7 +8739,10 @@ st.divider()
 v10_section(t("section_background"), "#16a085")
 st.markdown(f'<div class="v11-transparent-title">{t("background_transparent")}</div>', unsafe_allow_html=True)
 with st.container(key="transparent_png_option"):
-    transparent = st.checkbox(t("transparent_png"), value=False)
+    transparent = st.checkbox(
+        t("transparent_png"),
+        value=bool(st.session_state.get("transparent_png_option", False)),
+    )
 
 _auto_crop_room = st.checkbox(
     _v12_crop_room_t("auto_crop_room"),
@@ -8740,6 +8750,10 @@ _auto_crop_room = st.checkbox(
     key="v12_auto_crop_room_enabled",
     disabled=not transparent,
     help=_v12_crop_room_t("auto_crop_room_help"),
+)
+_v12_update_navigation_safe_creation_draft(
+    transparent_png_option=bool(transparent),
+    v12_auto_crop_room_enabled=bool(_auto_crop_room),
 )
 
 v10_subsection(t("settings_review"), "#ff9f43")
