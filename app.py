@@ -2627,6 +2627,23 @@ def _beta_list_creator_reels(session):
     return response if isinstance(response, list) else []
 
 
+def _beta_collect_creator_reel(session, reel_id):
+    """Promote one active automatic reel into the member's permanent shelf."""
+    response = _beta_rpc(
+        "collect_creator_reel",
+        {"p_reel_id": str(reel_id)},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("creator_reel_collect_invalid")
+    return {
+        "count": max(0, int(response.get("collected_reel_count", 0) or 0)),
+        "limit": max(0, int(response.get("collected_reel_limit", 0) or 0)),
+    }
+
+
 def _beta_finalize_creator_reel_cleanup(session, reel_ids, object_paths):
     """Remove Storage objects first, then delete their expired database rows."""
     valid_ids = [str(reel_id) for reel_id in (reel_ids or []) if reel_id]
@@ -5649,6 +5666,17 @@ def _v12_render_creator_reels(session):
         return
 
     st.markdown(f"### {t('creator_reel_title')}")
+    collection_feedback = st.session_state.pop(
+        "v12_creator_reel_collection_feedback", None
+    )
+    if isinstance(collection_feedback, dict):
+        st.success(
+            t(
+                "creator_reel_collect_success",
+                count=collection_feedback.get("count", 0),
+                limit=collection_feedback.get("limit", 0),
+            )
+        )
     if not status["eligible"]:
         st.info(t("creator_reel_subscription_only"))
         return
@@ -5722,6 +5750,37 @@ def _v12_render_creator_reels(session):
                         time=_v12_format_display_time(expires_at),
                     )
                 )
+            reel_status = str(reel.get("status", "") or "")
+            if reel_status == "collected":
+                st.success(t("creator_reel_collected_badge"))
+            elif reel_status == "active":
+                collect_button, collect_note = st.columns([1.05, 1.95])
+                with collect_button:
+                    if st.button(
+                        t("creator_reel_collect_button"),
+                        key=f"v12_creator_reel_collect_{reel_id}",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        try:
+                            collected = _beta_collect_creator_reel(session, reel_id)
+                            st.session_state[
+                                "v12_creator_reel_collection_feedback"
+                            ] = collected
+                            st.rerun()
+                        except Exception as exc:
+                            message = str(exc or "")
+                            if "creator_reel_collection_limit" in message:
+                                st.warning(
+                                    t(
+                                        "creator_reel_collect_limit",
+                                        limit=status["collected_reel_limit"],
+                                    )
+                                )
+                            else:
+                                st.error(t("creator_reel_collect_failed"))
+                with collect_note:
+                    st.caption(t("creator_reel_collect_help"))
             if style_name:
                 st.caption(t("creator_reel_style", style=style_name))
             if labels:
