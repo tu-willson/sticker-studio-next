@@ -2602,17 +2602,20 @@ def _beta_save_creator_reel(session, snapshot, grid_bytes,
     project_id = str(snapshot.get("project_id", "") or "")
     if not project_id:
         raise RuntimeError("creator_reel_project_missing")
-    reservation = _beta_rpc(
-        "reserve_creator_reel",
-        {
-            "p_reel_id": reel_id,
-            "p_source_project_id": project_id,
-            "p_source_project_name": str(snapshot.get("project_name", "") or ""),
-            "p_snapshot": snapshot,
-            "p_has_style_reference": bool(style_reference_bytes),
-        },
-        access_token=session["access_token"],
-    )
+    try:
+        reservation = _beta_rpc(
+            "reserve_creator_reel",
+            {
+                "p_reel_id": reel_id,
+                "p_source_project_id": project_id,
+                "p_source_project_name": str(snapshot.get("project_name", "") or ""),
+                "p_snapshot": snapshot,
+                "p_has_style_reference": bool(style_reference_bytes),
+            },
+            access_token=session["access_token"],
+        )
+    except Exception as exc:
+        raise RuntimeError("creator_reel_reservation_failed") from exc
     if isinstance(reservation, list):
         reservation = reservation[0] if reservation else {}
     if not isinstance(reservation, dict) or not reservation.get("reel_id"):
@@ -2631,14 +2634,17 @@ def _beta_save_creator_reel(session, snapshot, grid_bytes,
     created_paths = [grid_path]
     if style_path and style_webp:
         created_paths.append(style_path)
+    stage = "grid_upload"
     try:
         _beta_storage_upload(
             session, grid_path, grid_webp, "image/webp", bucket="creator-reels"
         )
         if style_path and style_webp:
+            stage = "style_upload"
             _beta_storage_upload(
                 session, style_path, style_webp, "image/webp", bucket="creator-reels"
             )
+        stage = "completion"
         _beta_rpc(
             "complete_creator_reel_upload",
             {
@@ -2648,7 +2654,7 @@ def _beta_save_creator_reel(session, snapshot, grid_bytes,
             },
             access_token=session["access_token"],
         )
-    except Exception:
+    except Exception as exc:
         try:
             _beta_rpc(
                 "cancel_creator_reel_upload",
@@ -2660,7 +2666,7 @@ def _beta_save_creator_reel(session, snapshot, grid_bytes,
             )
         except Exception:
             pass
-        raise
+        raise RuntimeError(f"creator_reel_{stage}_failed") from exc
 
     # Cleanup retries are deliberately non-fatal.  A stale private object is
     # never shown in the UI and is retried at the next successful snapshot.
@@ -5457,6 +5463,54 @@ def _v12_creator_reel_snapshot():
         "prompt": str(st.session_state.get("last_prompt", "") or "")[:30000],
     }
     return snapshot
+
+
+def _v12_save_current_creator_reel(session):
+    """Save the current successful grid, including a manual retry from STEP 07."""
+    grid_bytes = bytes(st.session_state.get("generated_4x2_bytes") or b"")
+    if not grid_bytes:
+        raise RuntimeError("creator_reel_grid_missing")
+    status = _beta_creator_reel_status(session)
+    if not status.get("eligible"):
+        feedback = {"saved": False, "reason": "subscription_required"}
+    else:
+        try:
+            style_bytes = bytes(
+                st.session_state.get("v12_style_reference_image_bytes") or b""
+            )
+            has_style_reference = (
+                st.session_state.get("v12_style_source_mode")
+                == V12_STYLE_REFERENCE_MODE
+            )
+            saved = _beta_save_creator_reel(
+                session,
+                _v12_creator_reel_snapshot(),
+                grid_bytes,
+                style_reference_bytes=style_bytes if has_style_reference else b"",
+            )
+            feedback = {
+                "saved": bool(saved.get("saved", False)),
+                "active_count": int(saved.get("active_auto_reel_count", 0) or 0),
+                "limit": int(saved.get("auto_reel_limit", 0) or 0),
+            }
+        except Exception as exc:
+            feedback = {
+                "saved": False,
+                "reason": "save_retry",
+                "diagnostic": str(exc or "creator_reel_save_failed")[:100],
+            }
+    st.session_state["v12_creator_reel_generation_feedback"] = feedback
+    return feedback
+
+
+def _v12_creator_reel_diagnostic_label(value):
+    labels = {
+        "creator_reel_reservation_failed": t("creator_reel_diagnostic_reservation"),
+        "creator_reel_grid_upload_failed": t("creator_reel_diagnostic_grid"),
+        "creator_reel_style_upload_failed": t("creator_reel_diagnostic_style"),
+        "creator_reel_completion_failed": t("creator_reel_diagnostic_completion"),
+    }
+    return labels.get(str(value or ""), t("creator_reel_diagnostic_unknown"))
 
 
 def _v12_creator_reel_slot_labels(snapshot):
@@ -9316,36 +9370,12 @@ if st.session_state.get("v11_generation_pending", False):
             # 只有有效訂閱者會通過 Supabase 的伺服器端資格檢查；失敗絕不
             # 影響已經完成的圖片生成或扣點流程。
             try:
-                _reel_status = _beta_creator_reel_status(_beta_live_session)
-                if not _reel_status.get("eligible"):
-                    st.session_state["v12_creator_reel_generation_feedback"] = {
-                        "saved": False,
-                        "reason": "subscription_required",
-                    }
-                else:
-                    _reel_style_reference = (
-                        bytes(st.session_state.get("v12_style_reference_image_bytes") or b"")
-                        if _style_reference_active else b""
-                    )
-                    _creator_reel_save = _beta_save_creator_reel(
-                        _beta_live_session,
-                        _v12_creator_reel_snapshot(),
-                        _grid_bytes,
-                        style_reference_bytes=_reel_style_reference,
-                    )
-                    st.session_state["v12_creator_reel_generation_feedback"] = {
-                        "saved": bool(_creator_reel_save.get("saved", False)),
-                        "active_count": int(
-                            _creator_reel_save.get("active_auto_reel_count", 0) or 0
-                        ),
-                        "limit": int(
-                            _creator_reel_save.get("auto_reel_limit", 0) or 0
-                        ),
-                    }
-            except Exception:
+                _v12_save_current_creator_reel(_beta_live_session)
+            except Exception as exc:
                 st.session_state["v12_creator_reel_generation_feedback"] = {
                     "saved": False,
                     "reason": "save_retry",
+                    "diagnostic": str(exc or "creator_reel_save_failed")[:100],
                 }
             if _using_beta_credit:
                 try:
@@ -9437,6 +9467,36 @@ if st.session_state.generated_4x2_bytes:
         st.info(t("creator_reel_not_saved_subscription"))
     elif _results_reel_feedback.get("reason") == "save_retry":
         st.warning(t("creator_reel_not_saved_retry"))
+        st.caption(
+            t(
+                "creator_reel_diagnostic",
+                stage=_v12_creator_reel_diagnostic_label(
+                    _results_reel_feedback.get("diagnostic", "")
+                ),
+            )
+        )
+        if st.button(
+            t("creator_reel_retry_button"),
+            key="v12_creator_reel_retry_current_grid",
+            type="primary",
+        ):
+            _retry_finished = False
+            try:
+                _retry_session = _beta_current_user() if _beta_config() else None
+                if not _retry_session:
+                    raise RuntimeError("creator_reel_not_authenticated")
+                with st.spinner(t("creator_reel_retrying")):
+                    _v12_save_current_creator_reel(_retry_session)
+                _retry_finished = True
+            except Exception as exc:
+                st.session_state["v12_creator_reel_generation_feedback"] = {
+                    "saved": False,
+                    "reason": "save_retry",
+                    "diagnostic": str(exc or "creator_reel_save_failed")[:100],
+                }
+                _retry_finished = True
+            if _retry_finished:
+                st.rerun()
 
     src = Image.open(BytesIO(st.session_state.generated_4x2_bytes)).convert("RGBA")
     w, h = src.size
