@@ -2647,9 +2647,9 @@ def _beta_collect_creator_reel(session, reel_id):
 def _beta_list_my_shared_template_sources(session):
     """Map a collected reel to its current sharing-template publication state."""
     try:
-        response = _beta_http(
-            "GET",
-            "/rest/v1/shared_templates?select=source_reel_id,status",
+        response = _beta_rpc(
+            "get_my_shared_template_sources",
+            {},
             access_token=session["access_token"],
         )
     except Exception:
@@ -2663,6 +2663,31 @@ def _beta_list_my_shared_template_sources(session):
         for item in response
         if isinstance(item, dict) and item.get("source_reel_id")
     }
+
+
+def _beta_list_shared_template_marketplace(session):
+    response = _beta_rpc(
+        "list_shared_template_marketplace",
+        {"p_limit": 24, "p_offset": 0},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_redeem_shared_template(session, template_id, idempotency_key):
+    response = _beta_rpc(
+        "redeem_shared_template",
+        {
+            "p_template_id": str(template_id),
+            "p_idempotency_key": str(idempotency_key),
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict) or not response.get("template_id"):
+        raise RuntimeError("shared_template_redemption_invalid")
+    return response
 
 
 def _beta_publish_creator_reel(session, reel, title, description, apply_cost):
@@ -5974,6 +5999,160 @@ def _v12_render_creator_reels(session):
         st.divider()
 
 
+def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
+    """Load a redeemed template while preserving the recipient's own photo."""
+    metadata = copy.deepcopy(snapshot) if isinstance(snapshot, dict) else {}
+    metadata.pop("source_photo_bytes", None)
+    # A shared template carries the requested style/text directions, never the
+    # publisher's personal character or scene requirements.
+    metadata["character_features"] = []
+    metadata["custom_character"] = ""
+    metadata["custom_character_enabled"] = False
+    metadata["project_id"] = str(uuid4())
+    metadata["project_name"] = _v12_normalize_project_name(
+        f"模板｜{str(title or '').strip()}"
+    )
+    metadata["created_at"] = _v12_now_iso()
+    metadata["updated_at"] = _v12_now_iso()
+
+    current_photo = bytes(st.session_state.get("uploaded_image_bytes") or b"")
+    _v12_load_history_record(
+        {
+            **metadata,
+            "source_photo_bytes": current_photo,
+            "style_reference_bytes": bytes(style_reference_bytes or b""),
+            "grid_bytes": b"",
+            "sticker_bytes": {},
+        }
+    )
+    _v12_update_navigation_safe_creation_draft(
+        uploaded_image_bytes=current_photo or None,
+        v12_style_source_mode=st.session_state.get("v12_style_source_mode"),
+        v10_style_mode=st.session_state.get("v10_style_mode"),
+        v12_style_reference_image_bytes=st.session_state.get(
+            "v12_style_reference_image_bytes"
+        ),
+        v12_style_reference_filename=st.session_state.get(
+            "v12_style_reference_filename"
+        ),
+        v12_style_reference_fingerprint=st.session_state.get(
+            "v12_style_reference_fingerprint"
+        ),
+    )
+    st.session_state["v12_view"] = "create"
+    st.session_state["v12_scroll_target"] = "v12-step-02"
+
+
+def _v12_render_shared_template_marketplace(session):
+    """Browse public templates without exposing protected template internals."""
+    st.markdown(f'<div class="v10-main-title">{t("shared_template_market_title")}</div>', unsafe_allow_html=True)
+    st.caption(t("shared_template_market_intro"))
+    if st.button(
+        t("shared_template_back_library"),
+        key="v12_shared_template_back_library",
+    ):
+        st.session_state["v12_view"] = "library"
+        st.rerun()
+    try:
+        templates = _beta_list_shared_template_marketplace(session)
+    except Exception:
+        st.warning(t("shared_template_market_unavailable"))
+        return
+    if not templates:
+        st.info(t("shared_template_market_empty"))
+        return
+
+    for template in templates:
+        if not isinstance(template, dict) or not template.get("template_id"):
+            continue
+        template_id = str(template["template_id"])
+        title = str(template.get("title", "") or "").strip()
+        description = str(template.get("description", "") or "").strip()
+        cost = max(1, int(template.get("apply_cost", 1) or 1))
+        is_owner = bool(template.get("is_owner", False))
+        is_unlocked = bool(template.get("is_unlocked", False))
+        preview_path = str(template.get("preview_path", "") or "")
+        left, right = st.columns([1.05, 2.15], vertical_alignment="top")
+        with left:
+            try:
+                if preview_path:
+                    st.image(
+                        _beta_storage_download(
+                            session, preview_path, bucket="shared-template-assets"
+                        ),
+                        caption=t("shared_template_preview_caption"),
+                        use_container_width=True,
+                    )
+            except Exception:
+                st.info(t("shared_template_preview_unavailable"))
+        with right:
+            st.markdown(f"### 🌐 {html.escape(title or t('untitled_project'))}")
+            if description:
+                st.caption(description)
+            st.caption(
+                t(
+                    "shared_template_style_note",
+                    value=t("shared_template_has_style_reference")
+                    if bool(template.get("has_style_reference", False))
+                    else t("shared_template_no_style_reference"),
+                )
+            )
+            if is_owner:
+                button_label = t("shared_template_apply_own")
+            elif is_unlocked:
+                button_label = t("shared_template_apply_unlocked")
+            else:
+                button_label = t("shared_template_apply_cost_button", cost=cost)
+                st.info(t("shared_template_cost_explainer", cost=cost))
+            if st.button(
+                button_label,
+                key=f"v12_shared_template_apply_{template_id}",
+                type="primary",
+                use_container_width=True,
+            ):
+                idempotency_state_key = (
+                    f"v12_shared_template_redemption_key_{template_id}"
+                )
+                redemption_key = st.session_state.setdefault(
+                    idempotency_state_key, str(uuid4())
+                )
+                try:
+                    with st.spinner(t("shared_template_redeeming")):
+                        redeemed = _beta_redeem_shared_template(
+                            session, template_id, redemption_key
+                        )
+                        style_reference_bytes = b""
+                        style_reference_path = str(
+                            redeemed.get("style_reference_path", "") or ""
+                        )
+                        if style_reference_path:
+                            style_reference_bytes = _beta_storage_download(
+                                session,
+                                style_reference_path,
+                                bucket="shared-template-assets",
+                            )
+                    _v12_apply_shared_template(
+                        redeemed.get("template_snapshot"),
+                        style_reference_bytes,
+                        redeemed.get("title", title),
+                    )
+                    st.session_state.pop(idempotency_state_key, None)
+                    st.session_state["v12_shared_template_apply_feedback"] = {
+                        "charged": max(
+                            0, int(redeemed.get("charged_cost", 0) or 0)
+                        ),
+                        "title": str(redeemed.get("title", title) or title),
+                    }
+                    st.rerun()
+                except Exception as exc:
+                    message = str(exc or "")
+                    if "shared_template_insufficient_credits" in message:
+                        st.warning(t("shared_template_insufficient_credits"))
+                    else:
+                        st.error(t("shared_template_apply_failed"))
+        st.divider()
+
+
 for i in range(8):
     st.session_state.setdefault(f"sticker_text_{i}", "")
     st.session_state.setdefault(
@@ -7592,7 +7771,7 @@ _v12_nav_cols = st.columns(3)
 with _v12_nav_cols[0]:
     # V12 微調：創作頁上方改為「聯繫作者」；其他頁面保留「開始製作」。
     _v12_current_view = st.session_state.get("v12_view", "create")
-    if _v12_current_view in {"library", "pricing"}:
+    if _v12_current_view in {"library", "pricing", "marketplace"}:
         if st.button(t("nav_create"), key="v12_nav_create", use_container_width=True):
             st.session_state["v12_view"] = "create"
             st.rerun()
@@ -7653,9 +7832,30 @@ if st.session_state["v12_view"] == "pricing":
     _v12_render_pricing_page()
     st.stop()
 
+if st.session_state["v12_view"] == "marketplace":
+    _marketplace_session = _beta_current_user() if _beta_config() else None
+    if _marketplace_session:
+        _v12_render_shared_template_marketplace(_marketplace_session)
+    else:
+        st.markdown(f'<div class="v10-main-title">{t("shared_template_market_title")}</div>', unsafe_allow_html=True)
+        st.warning(t("shared_template_market_login_required"))
+        if st.button(t("shared_template_back_library"), key="v12_shared_template_login_back"):
+            st.session_state["v12_view"] = "library"
+            st.rerun()
+    st.stop()
+
 if st.session_state["v12_view"] == "library":
     st.markdown(f'<div class="v10-main-title">{t("nav_library")}</div>', unsafe_allow_html=True)
     st.caption(t("library_intro"))
+
+    if st.button(
+        t("shared_template_market_nav"),
+        key="v12_shared_template_market_nav",
+        type="primary",
+        use_container_width=True,
+    ):
+        st.session_state["v12_view"] = "marketplace"
+        st.rerun()
 
     _cloud_session = _beta_current_user() if _beta_config() else None
     if _cloud_session:
@@ -7822,6 +8022,20 @@ if st.session_state["v12_view"] == "library":
 
 st.markdown('<div id="v12-page-top"></div>', unsafe_allow_html=True)
 st.markdown(f'<div class="v10-main-title">{t("main_title")}</div>', unsafe_allow_html=True)
+_shared_template_apply_feedback = st.session_state.pop(
+    "v12_shared_template_apply_feedback", None
+)
+if isinstance(_shared_template_apply_feedback, dict):
+    _shared_template_charged = max(
+        0, int(_shared_template_apply_feedback.get("charged", 0) or 0)
+    )
+    st.success(
+        t(
+            "shared_template_apply_success",
+            title=_shared_template_apply_feedback.get("title", ""),
+            cost=_shared_template_charged,
+        )
+    )
 
 # OAuth redirects arrive with a short-lived code in the URL.  Handle it before
 # creating the rest of the widgets so a successful login returns to a clean app.
