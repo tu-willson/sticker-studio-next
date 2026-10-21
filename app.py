@@ -2488,6 +2488,24 @@ def _beta_http(method, path, payload=None, access_token=None):
         with urllib.request.urlopen(request, timeout=20) as response:
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
+        # Supabase wraps PostgreSQL exceptions in JSON.  Keep transport and
+        # database details private, but preserve our small set of deliberate,
+        # user-actionable domain codes so the UI can explain what happened.
+        error_code = ""
+        try:
+            error_payload = json.loads(exc.read().decode("utf-8") or "{}")
+            if isinstance(error_payload, dict):
+                error_code = str(error_payload.get("message", "") or "")
+        except Exception:
+            pass
+        known_codes = {
+            "shared_template_already_exists",
+            "shared_template_publish_limit",
+            "shared_templates_subscription_required",
+            "shared_template_insufficient_credits",
+        }
+        if error_code in known_codes:
+            raise RuntimeError(error_code) from exc
         raise RuntimeError("beta_request_failed") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
         raise RuntimeError("beta_request_failed") from exc
