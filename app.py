@@ -2563,6 +2563,17 @@ def _beta_creator_reel_status(session):
     }
 
 
+def _beta_list_creator_reels(session):
+    """Return the member's private automatic reels, newest first."""
+    query = (
+        "/rest/v1/creator_reels?select=id,source_project_name,reel_number,status,"
+        "snapshot,grid_path,style_reference_path,created_at,completed_at,auto_expires_at"
+        "&status=in.(active,collected,published)&order=created_at.desc"
+    )
+    response = _beta_http("GET", query, access_token=session["access_token"])
+    return response if isinstance(response, list) else []
+
+
 def _beta_finalize_creator_reel_cleanup(session, reel_ids, object_paths):
     """Remove Storage objects first, then delete their expired database rows."""
     valid_ids = [str(reel_id) for reel_id in (reel_ids or []) if reel_id]
@@ -5442,6 +5453,121 @@ def _v12_creator_reel_snapshot():
     return snapshot
 
 
+def _v12_creator_reel_slot_labels(snapshot):
+    """Summarize the frozen 01–08 directions without exposing source photos."""
+    if not isinstance(snapshot, dict):
+        return []
+    mode = str(snapshot.get("sticker_mode", "text") or "text")
+    if mode == "expression":
+        specs = _v12_normalize_expression_specs(snapshot.get("expression_specs", []))
+        labels = []
+        for item in specs:
+            emotion = str(item.get("emotion", "") or "").strip()
+            if bool(item.get("emotion_random")):
+                emotion = t("creator_reel_random_expression")
+            action = str(item.get("effect_action_prompt", "") or "").strip()
+            labels.append("｜".join(part for part in (emotion, action) if part))
+        return labels
+    return [
+        str(item or "").strip()
+        for item in list(snapshot.get("sticker_texts", []) or [])[:8]
+    ]
+
+
+def _v12_render_creator_reels(session):
+    """Render the private first-stage reel shelf inside My Works."""
+    try:
+        status = _beta_creator_reel_status(session)
+    except Exception:
+        st.warning(t("creator_reel_status_unavailable"))
+        return
+
+    st.markdown(f"### {t('creator_reel_title')}")
+    if not status["eligible"]:
+        st.info(t("creator_reel_subscription_only"))
+        return
+
+    st.caption(t("creator_reel_intro"))
+    st.info(
+        t(
+            "creator_reel_capacity",
+            count=status["active_auto_reel_count"],
+            limit=status["auto_reel_limit"],
+            days=status["retention_days"],
+        )
+    )
+    st.caption(
+        t(
+            "creator_reel_policy",
+            collected=status["collected_reel_limit"],
+            publish=status["publish_template_limit"],
+        )
+    )
+    try:
+        reels = _beta_list_creator_reels(session)
+    except Exception:
+        st.warning(t("creator_reel_list_unavailable"))
+        return
+
+    if not reels:
+        st.caption(t("creator_reel_empty"))
+        return
+
+    for reel in reels:
+        if not isinstance(reel, dict) or not reel.get("id"):
+            continue
+        reel_id = str(reel["id"])
+        snapshot = reel.get("snapshot")
+        snapshot = snapshot if isinstance(snapshot, dict) else {}
+        source_name = str(reel.get("source_project_name", "") or "").strip()
+        if not source_name:
+            source_name = str(snapshot.get("project_name", "") or t("untitled_project"))
+        reel_number = max(1, int(reel.get("reel_number", 1) or 1))
+        style_name = str(snapshot.get("style_name", "") or "").strip()
+        labels = [label for label in _v12_creator_reel_slot_labels(snapshot) if label]
+        left, right = st.columns([1.1, 2.2], vertical_alignment="top")
+        with left:
+            try:
+                st.image(
+                    _beta_storage_download(
+                        session, str(reel.get("grid_path", "") or ""),
+                        bucket="creator-reels",
+                    ),
+                    caption=t("creator_reel_grid_caption"),
+                    use_container_width=True,
+                )
+            except Exception:
+                st.info(t("creator_reel_preview_unavailable"))
+        with right:
+            st.markdown(
+                f"### 🎞️ {html.escape(source_name)} · {t('creator_reel_number', number=reel_number)}"
+            )
+            st.caption(
+                t(
+                    "creator_reel_created_at",
+                    time=_v12_format_display_time(reel.get("created_at", "")),
+                )
+            )
+            expires_at = str(reel.get("auto_expires_at", "") or "")
+            if expires_at:
+                st.caption(
+                    t(
+                        "creator_reel_expires_at",
+                        time=_v12_format_display_time(expires_at),
+                    )
+                )
+            if style_name:
+                st.caption(t("creator_reel_style", style=style_name))
+            if labels:
+                with st.expander(t("creator_reel_snapshot_settings"), expanded=False):
+                    for index, label in enumerate(labels, start=1):
+                        st.caption(f"{index:02d}｜{label}")
+                    st.caption(t("creator_reel_private_note"))
+            else:
+                st.caption(t("creator_reel_private_note"))
+        st.divider()
+
+
 for i in range(8):
     st.session_state.setdefault(f"sticker_text_{i}", "")
     st.session_state.setdefault(
@@ -7125,6 +7251,8 @@ if st.session_state["v12_view"] == "library":
 
     _cloud_session = _beta_current_user() if _beta_config() else None
     if _cloud_session:
+        _v12_render_creator_reels(_cloud_session)
+        st.divider()
         try:
             _cloud_status = _beta_library_status(_cloud_session)
             st.info(t("cloud_library_status", count=_cloud_status["saved_count"], limit=_cloud_status["library_capacity"]))
