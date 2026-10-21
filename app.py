@@ -38,7 +38,7 @@ _V12_SHARED_TEMPLATE_MANAGEMENT_FALLBACKS = {
     "shared_template_management_intro": "查看其他使用者的解鎖與回饋；下架後不會再出現在市集，但已解鎖者仍可免費再次套用。",
     "shared_template_management_empty": "尚未有已發布或已下架的模板。",
     "shared_template_management_unavailable": "模板管理資料暫時無法載入，請稍後再試。",
-    "shared_template_management_stats": "每次套用 {cost} 次｜他人解鎖 {unlocks} 次｜累積回饋 {rewards} 次",
+    "shared_template_management_stats": "其他使用者套用購買｜設定消耗次數：{cost} 次｜目前他人解鎖：{unlocks} 次｜目前累積回饋：{rewards} 次",
     "shared_template_status_published": "🟢 市集公開中",
     "shared_template_status_withdrawn": "⚪ 已從市集下架",
     "shared_template_withdraw_button": "從市集下架",
