@@ -1228,6 +1228,7 @@ st.markdown("""
   font-size:.8rem;
 }
 .v12-generation-showtime-track{
+  position:relative;
   height:10px;
   overflow:hidden;
   margin:.65rem 0 .5rem;
@@ -1236,13 +1237,65 @@ st.markdown("""
   box-shadow:inset 0 0 0 1px rgba(255,220,163,.23);
 }
 .v12-generation-showtime-fill{
+  position:relative;
   height:100%;
   border-radius:inherit;
-  background:linear-gradient(90deg,#ff9f43,#ffcf5a,#ff6e91,#9d7dff);
+  overflow:hidden;
+  background:linear-gradient(90deg,#ff9f43,#ffcf5a,#ff6e91,#9d7dff,#ff9f43);
+  background-size:220% 100%;
   box-shadow:0 0 14px rgba(255,180,83,.76);
-  transition:width .35s ease;
+  animation:v12-generation-stage-breathe 5.8s ease-in-out infinite,
+            v12-generation-color-flow 7s linear infinite;
 }
-.v12-generation-showtime-note{ color:#d8eaf7; font-size:.88rem; }
+.v12-generation-showtime-fill::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  width:42%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.64),transparent);
+  transform:translateX(-155%) skewX(-18deg);
+  animation:v12-generation-shimmer 2.65s ease-in-out infinite;
+}
+.v12-generation-showtime-note{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.7rem;
+  color:#d8eaf7;
+  font-size:.88rem;
+}
+.v12-generation-showtime-dots{ display:inline-flex; flex:0 0 auto; gap:.22rem; }
+.v12-generation-showtime-dots i{
+  width:.34rem;
+  height:.34rem;
+  border-radius:50%;
+  background:#ffe1a3;
+  box-shadow:0 0 8px rgba(255,220,163,.72);
+  animation:v12-generation-dot-bounce 1.15s ease-in-out infinite;
+}
+.v12-generation-showtime-dots i:nth-child(2){ animation-delay:.16s; }
+.v12-generation-showtime-dots i:nth-child(3){ animation-delay:.32s; }
+@keyframes v12-generation-stage-breathe{
+  0%,100%{ width:var(--v12-stage-start); }
+  50%{ width:var(--v12-stage-end); }
+}
+@keyframes v12-generation-color-flow{
+  from{ background-position:0% 50%; }
+  to{ background-position:220% 50%; }
+}
+@keyframes v12-generation-shimmer{
+  0%,24%{ transform:translateX(-155%) skewX(-18deg); opacity:0; }
+  32%{ opacity:1; }
+  74%,100%{ transform:translateX(330%) skewX(-18deg); opacity:0; }
+}
+@keyframes v12-generation-dot-bounce{
+  0%,100%{ transform:translateY(0); opacity:.4; }
+  50%{ transform:translateY(-.24rem); opacity:1; }
+}
+@media (prefers-reduced-motion: reduce){
+  .v12-generation-showtime-fill,.v12-generation-showtime-fill::after,
+  .v12-generation-showtime-dots i{ animation:none !important; }
+}
 .v11-success-next{
   width:min(900px,100%);
   margin:.8rem auto 1rem;
@@ -9270,14 +9323,15 @@ if st.session_state.get("v11_generation_pending", False):
             _started_at = time.monotonic()
 
             def _show_generation_scene(scene, title, note, percent):
+                _stage_end = min(100, percent + (3 if percent < 96 else 0))
                 _showtime.markdown(
                     f"""
                     <div class="v12-generation-showtime">
                       <div class="v12-generation-showtime-top">
                         <span>{title}</span><span class="v12-generation-showtime-scene">{scene}</span>
                       </div>
-                      <div class="v12-generation-showtime-track"><div class="v12-generation-showtime-fill" style="width:{percent}%"></div></div>
-                      <div class="v12-generation-showtime-note">{note}</div>
+                      <div class="v12-generation-showtime-track"><div class="v12-generation-showtime-fill" style="--v12-stage-start:{percent}%;--v12-stage-end:{_stage_end}%"></div></div>
+                      <div class="v12-generation-showtime-note"><span>{note}</span><span class="v12-generation-showtime-dots" aria-label="製作中"><i></i><i></i><i></i></span></div>
                     </div>
                     """,
                     unsafe_allow_html=True,
