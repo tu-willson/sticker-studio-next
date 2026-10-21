@@ -2644,6 +2644,107 @@ def _beta_collect_creator_reel(session, reel_id):
     }
 
 
+def _beta_list_my_shared_template_sources(session):
+    """Map a collected reel to its current sharing-template publication state."""
+    try:
+        response = _beta_http(
+            "GET",
+            "/rest/v1/shared_templates?select=source_reel_id,status",
+            access_token=session["access_token"],
+        )
+    except Exception:
+        # The private reel shelf must remain usable while an administrator is
+        # still applying the publishing migration.
+        return {}
+    if not isinstance(response, list):
+        return {}
+    return {
+        str(item.get("source_reel_id")): str(item.get("status", "") or "")
+        for item in response
+        if isinstance(item, dict) and item.get("source_reel_id")
+    }
+
+
+def _beta_publish_creator_reel(session, reel, title, description, apply_cost):
+    """Copy a collected reel's allowed assets into isolated template storage."""
+    reel_id = str((reel or {}).get("id", "") or "")
+    grid_source_path = str((reel or {}).get("grid_path", "") or "")
+    style_source_path = str((reel or {}).get("style_reference_path", "") or "")
+    if not reel_id or not grid_source_path:
+        raise RuntimeError("shared_template_source_invalid")
+
+    template_id = str(uuid4())
+    reservation = _beta_rpc(
+        "reserve_shared_template",
+        {
+            "p_template_id": template_id,
+            "p_source_reel_id": reel_id,
+            "p_title": str(title or "").strip(),
+            "p_description": str(description or "").strip(),
+            "p_apply_cost": int(apply_cost),
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(reservation, list):
+        reservation = reservation[0] if reservation else {}
+    if not isinstance(reservation, dict) or not reservation.get("template_id"):
+        raise RuntimeError("shared_template_reservation_invalid")
+
+    preview_path = str(reservation.get("preview_path", "") or "")
+    style_path = str(reservation.get("style_reference_path", "") or "")
+    if not preview_path:
+        raise RuntimeError("shared_template_path_missing")
+
+    created_paths = []
+    try:
+        preview_bytes = _beta_storage_download(
+            session, grid_source_path, bucket="creator-reels"
+        )
+        _beta_storage_upload(
+            session, preview_path, preview_bytes, "image/webp",
+            bucket="shared-template-assets",
+        )
+        created_paths.append(preview_path)
+        style_bytes = b""
+        if style_path and style_source_path:
+            style_bytes = _beta_storage_download(
+                session, style_source_path, bucket="creator-reels"
+            )
+            _beta_storage_upload(
+                session, style_path, style_bytes, "image/webp",
+                bucket="shared-template-assets",
+            )
+            created_paths.append(style_path)
+        _beta_rpc(
+            "complete_shared_template_upload",
+            {
+                "p_template_id": template_id,
+                "p_preview_bytes": len(preview_bytes),
+                "p_style_reference_bytes": len(style_bytes),
+            },
+            access_token=session["access_token"],
+        )
+    except Exception:
+        try:
+            _beta_storage_delete(
+                session, created_paths, bucket="shared-template-assets"
+            )
+            _beta_rpc(
+                "cancel_shared_template_upload",
+                {"p_template_id": template_id},
+                access_token=session["access_token"],
+            )
+        except Exception:
+            pass
+        raise
+
+    return {
+        "template_id": template_id,
+        "limit": max(0, int(reservation.get("publish_template_limit", 0) or 0)),
+        "count": max(0, int(reservation.get("published_template_count", 0) or 0)),
+    }
+
+
 def _beta_finalize_creator_reel_cleanup(session, reel_ids, object_paths):
     """Remove Storage objects first, then delete their expired database rows."""
     valid_ids = [str(reel_id) for reel_id in (reel_ids or []) if reel_id]
@@ -5677,6 +5778,17 @@ def _v12_render_creator_reels(session):
                 limit=collection_feedback.get("limit", 0),
             )
         )
+    template_feedback = st.session_state.pop(
+        "v12_shared_template_publish_feedback", None
+    )
+    if isinstance(template_feedback, dict):
+        st.success(
+            t(
+                "shared_template_publish_success",
+                count=template_feedback.get("count", 0),
+                limit=template_feedback.get("limit", 0),
+            )
+        )
     if not status["eligible"]:
         st.info(t("creator_reel_subscription_only"))
         return
@@ -5706,6 +5818,8 @@ def _v12_render_creator_reels(session):
     if not reels:
         st.caption(t("creator_reel_empty"))
         return
+
+    published_sources = _beta_list_my_shared_template_sources(session)
 
     for reel in reels:
         if not isinstance(reel, dict) or not reel.get("id"):
@@ -5753,6 +5867,73 @@ def _v12_render_creator_reels(session):
             reel_status = str(reel.get("status", "") or "")
             if reel_status == "collected":
                 st.success(t("creator_reel_collected_badge"))
+                published_status = published_sources.get(reel_id, "")
+                if published_status == "published":
+                    st.info(t("shared_template_published_badge"))
+                elif published_status != "uploading":
+                    with st.expander(t("shared_template_publish_expander"), expanded=False):
+                        st.caption(t("shared_template_publish_intro"))
+                        with st.form(f"v12_shared_template_publish_{reel_id}"):
+                            template_title = st.text_input(
+                                t("shared_template_title"),
+                                value=f"{source_name} · {t('creator_reel_number', number=reel_number)}",
+                                max_chars=80,
+                                key=f"v12_shared_template_title_{reel_id}",
+                            )
+                            template_description = st.text_area(
+                                t("shared_template_description"),
+                                max_chars=300,
+                                key=f"v12_shared_template_description_{reel_id}",
+                            )
+                            template_cost = st.number_input(
+                                t("shared_template_apply_cost"),
+                                min_value=1,
+                                max_value=20,
+                                value=1,
+                                step=1,
+                                key=f"v12_shared_template_cost_{reel_id}",
+                            )
+                            rights_confirmed = st.checkbox(
+                                t("shared_template_rights_confirm"),
+                                key=f"v12_shared_template_rights_{reel_id}",
+                            )
+                            publish_pressed = st.form_submit_button(
+                                t("shared_template_publish_button"),
+                                type="primary",
+                                use_container_width=True,
+                            )
+                        if publish_pressed:
+                            if len(str(template_title or "").strip()) < 3:
+                                st.warning(t("shared_template_title_required"))
+                            elif not rights_confirmed:
+                                st.warning(t("shared_template_rights_required"))
+                            else:
+                                try:
+                                    with st.spinner(t("shared_template_publishing")):
+                                        published = _beta_publish_creator_reel(
+                                            session,
+                                            reel,
+                                            template_title,
+                                            template_description,
+                                            template_cost,
+                                        )
+                                    st.session_state[
+                                        "v12_shared_template_publish_feedback"
+                                    ] = published
+                                    st.rerun()
+                                except Exception as exc:
+                                    message = str(exc or "")
+                                    if "shared_template_publish_limit" in message:
+                                        st.warning(
+                                            t(
+                                                "shared_template_publish_limit",
+                                                limit=status["publish_template_limit"],
+                                            )
+                                        )
+                                    elif "shared_template_already_exists" in message:
+                                        st.warning(t("shared_template_already_published"))
+                                    else:
+                                        st.error(t("shared_template_publish_failed"))
             elif reel_status == "active":
                 collect_button, collect_note = st.columns([1.05, 1.95])
                 with collect_button:
