@@ -2626,9 +2626,12 @@ def _beta_save_creator_reel(session, snapshot, grid_bytes,
     if not grid_path:
         raise RuntimeError("creator_reel_path_missing")
 
-    grid_webp = _v12_webp_bytes(grid_bytes, quality=86)
+    # The reel is a private review snapshot, not the member's downloadable
+    # master. A compact WebP keeps automatic saving unobtrusive after image
+    # generation has completed.
+    grid_webp = _v12_webp_bytes(grid_bytes, quality=80, method=4)
     style_webp = (
-        _v12_webp_bytes(style_reference_bytes, quality=90)
+        _v12_webp_bytes(style_reference_bytes, quality=82, method=4)
         if style_reference_bytes else b""
     )
     created_paths = [grid_path]
@@ -2689,14 +2692,14 @@ def _beta_save_creator_reel(session, snapshot, grid_bytes,
     }
 
 
-def _v12_webp_bytes(image_or_bytes, quality=86):
+def _v12_webp_bytes(image_or_bytes, quality=86, method=6):
     """Compact persistent project assets without altering the downloadable PNG ZIP."""
     image = image_or_bytes
     if not isinstance(image, Image.Image):
         image = Image.open(BytesIO(bytes(image_or_bytes)))
     image = image.convert("RGBA")
     buf = BytesIO()
-    image.save(buf, "WEBP", quality=quality, method=6)
+    image.save(buf, "WEBP", quality=quality, method=max(0, min(6, int(method))))
     return buf.getvalue()
 
 
@@ -5465,42 +5468,92 @@ def _v12_creator_reel_snapshot():
     return snapshot
 
 
-def _v12_save_current_creator_reel(session):
-    """Save the current successful grid, including a manual retry from STEP 07."""
+_V12_CREATOR_REEL_EXECUTOR = ThreadPoolExecutor(max_workers=2)
+
+
+def _v12_current_creator_reel_payload():
+    """Capture all reel inputs on Streamlit's main thread before queuing work."""
     grid_bytes = bytes(st.session_state.get("generated_4x2_bytes") or b"")
     if not grid_bytes:
         raise RuntimeError("creator_reel_grid_missing")
-    status = _beta_creator_reel_status(session)
-    if not status.get("eligible"):
-        feedback = {"saved": False, "reason": "subscription_required"}
-    else:
-        try:
-            style_bytes = bytes(
-                st.session_state.get("v12_style_reference_image_bytes") or b""
-            )
-            has_style_reference = (
-                st.session_state.get("v12_style_source_mode")
-                == V12_STYLE_REFERENCE_MODE
-            )
-            saved = _beta_save_creator_reel(
-                session,
-                _v12_creator_reel_snapshot(),
-                grid_bytes,
-                style_reference_bytes=style_bytes if has_style_reference else b"",
-            )
-            feedback = {
-                "saved": bool(saved.get("saved", False)),
-                "active_count": int(saved.get("active_auto_reel_count", 0) or 0),
-                "limit": int(saved.get("auto_reel_limit", 0) or 0),
-            }
-        except Exception as exc:
-            feedback = {
-                "saved": False,
-                "reason": "save_retry",
-                "diagnostic": str(exc or "creator_reel_save_failed")[:100],
-            }
+    style_bytes = bytes(
+        st.session_state.get("v12_style_reference_image_bytes") or b""
+    )
+    has_style_reference = (
+        st.session_state.get("v12_style_source_mode")
+        == V12_STYLE_REFERENCE_MODE
+    )
+    return (
+        _v12_creator_reel_snapshot(),
+        grid_bytes,
+        style_bytes if has_style_reference else b"",
+    )
+
+
+def _v12_persist_creator_reel(session, snapshot, grid_bytes, style_bytes=b""):
+    """Pure worker task: never access Streamlit state from a background thread."""
+    try:
+        status = _beta_creator_reel_status(session)
+        if not status.get("eligible"):
+            return {"saved": False, "reason": "subscription_required"}
+        saved = _beta_save_creator_reel(
+            session, snapshot, grid_bytes, style_reference_bytes=style_bytes
+        )
+        return {
+            "saved": bool(saved.get("saved", False)),
+            "active_count": int(saved.get("active_auto_reel_count", 0) or 0),
+            "limit": int(saved.get("auto_reel_limit", 0) or 0),
+        }
+    except Exception as exc:
+        return {
+            "saved": False,
+            "reason": "save_retry",
+            "diagnostic": str(exc or "creator_reel_save_failed")[:100],
+        }
+
+
+def _v12_save_current_creator_reel(session):
+    """Save synchronously only when the member explicitly presses Retry."""
+    snapshot, grid_bytes, style_bytes = _v12_current_creator_reel_payload()
+    feedback = _v12_persist_creator_reel(
+        session, snapshot, grid_bytes, style_bytes
+    )
     st.session_state["v12_creator_reel_generation_feedback"] = feedback
     return feedback
+
+
+def _v12_queue_current_creator_reel(session):
+    """Start automatic reel saving without delaying the completed-image UI."""
+    snapshot, grid_bytes, style_bytes = _v12_current_creator_reel_payload()
+    st.session_state["v12_creator_reel_save_future"] = (
+        _V12_CREATOR_REEL_EXECUTOR.submit(
+            _v12_persist_creator_reel,
+            dict(session),
+            snapshot,
+            grid_bytes,
+            style_bytes,
+        )
+    )
+    feedback = {"saved": False, "reason": "saving"}
+    st.session_state["v12_creator_reel_generation_feedback"] = feedback
+    return feedback
+
+
+def _v12_collect_creator_reel_save():
+    """Publish a finished background save result on the next normal rerun."""
+    future = st.session_state.get("v12_creator_reel_save_future")
+    if not future or not future.done():
+        return
+    try:
+        feedback = future.result()
+    except Exception as exc:
+        feedback = {
+            "saved": False,
+            "reason": "save_retry",
+            "diagnostic": str(exc or "creator_reel_save_failed")[:100],
+        }
+    st.session_state["v12_creator_reel_generation_feedback"] = feedback
+    st.session_state.pop("v12_creator_reel_save_future", None)
 
 
 def _v12_creator_reel_diagnostic_label(value):
@@ -9367,10 +9420,9 @@ if st.session_state.get("v11_generation_pending", False):
             if _sticker_mode == "expression":
                 _v12_commit_random_expression_recipes()
             # 每次成功的 4×2 都嘗試建立一卷私人的「創作膠卷」。
-            # 只有有效訂閱者會通過 Supabase 的伺服器端資格檢查；失敗絕不
-            # 影響已經完成的圖片生成或扣點流程。
+            # 這是背景工作；生成圖一完成就先交還給使用者，不等待轉檔與上傳。
             try:
-                _v12_save_current_creator_reel(_beta_live_session)
+                _v12_queue_current_creator_reel(_beta_live_session)
             except Exception as exc:
                 st.session_state["v12_creator_reel_generation_feedback"] = {
                     "saved": False,
@@ -9400,6 +9452,8 @@ if st.session_state.get("v11_generation_pending", False):
                 st.info(t("creator_reel_not_saved_subscription"))
             elif _creator_reel_feedback.get("reason") == "save_retry":
                 st.warning(t("creator_reel_not_saved_retry"))
+            elif _creator_reel_feedback.get("reason") == "saving":
+                st.caption(t("creator_reel_saving"))
 
     except Exception as e:
         if _using_beta_credit and _beta_job_id and not _beta_generation_returned:
@@ -9454,6 +9508,7 @@ if st.session_state.generated_4x2_bytes:
     st.divider()
     v10_section(t("section_results"), "#32c6c0")
     st.caption(t("results_intro"))
+    _v12_collect_creator_reel_save()
     _results_reel_feedback = st.session_state.get(
         "v12_creator_reel_generation_feedback", {}
     )
@@ -9465,6 +9520,8 @@ if st.session_state.generated_4x2_bytes:
         )
     elif _results_reel_feedback.get("reason") == "subscription_required":
         st.info(t("creator_reel_not_saved_subscription"))
+    elif _results_reel_feedback.get("reason") == "saving":
+        st.info(t("creator_reel_saving"))
     elif _results_reel_feedback.get("reason") == "save_retry":
         st.warning(t("creator_reel_not_saved_retry"))
         st.caption(
