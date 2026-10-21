@@ -9424,6 +9424,19 @@ if st.session_state.generated_4x2_bytes:
     st.divider()
     v10_section(t("section_results"), "#32c6c0")
     st.caption(t("results_intro"))
+    _results_reel_feedback = st.session_state.get(
+        "v12_creator_reel_generation_feedback", {}
+    )
+    if _results_reel_feedback.get("saved"):
+        st.success(
+            "🎞️ 本次 4×2 已自動保存為創作膠卷（"
+            f"{_results_reel_feedback.get('active_count', 0)}／"
+            f"{_results_reel_feedback.get('limit', 0)} 卷）。"
+        )
+    elif _results_reel_feedback.get("reason") == "subscription_required":
+        st.info(t("creator_reel_not_saved_subscription"))
+    elif _results_reel_feedback.get("reason") == "save_retry":
+        st.warning(t("creator_reel_not_saved_retry"))
 
     src = Image.open(BytesIO(st.session_state.generated_4x2_bytes)).convert("RGBA")
     w, h = src.size
