@@ -1395,6 +1395,21 @@ st.markdown("""
   margin:1.0rem auto 1.8rem;
   white-space:nowrap;
 }
+.v12-marketplace-intro{
+  width:min(1050px,100%);
+  margin:-.85rem auto 1.15rem;
+  padding:.85rem 1rem;
+  border:1px solid rgba(74,183,255,.48);
+  border-left:5px solid #39b8ff;
+  border-radius:13px;
+  background:linear-gradient(100deg,rgba(12,48,78,.96),rgba(20,34,59,.90));
+  color:#e7f5ff;
+  font-size:clamp(1.02rem,2vw,1.18rem);
+  font-weight:800;
+  line-height:1.65;
+  letter-spacing:.015em;
+  box-shadow:0 8px 22px rgba(0,0,0,.16);
+}
 @media (max-width:640px){
   .v10-main-title{
     font-size:clamp(1.7rem,8vw,2.2rem);
@@ -6064,7 +6079,10 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
 def _v12_render_shared_template_marketplace(session):
     """Browse public templates without exposing protected template internals."""
     st.markdown(f'<div class="v10-main-title">{t("shared_template_market_title")}</div>', unsafe_allow_html=True)
-    st.caption(t("shared_template_market_intro"))
+    st.markdown(
+        f'<div class="v12-marketplace-intro">{html.escape(t("shared_template_market_intro"))}</div>',
+        unsafe_allow_html=True,
+    )
     if st.button(
         t("shared_template_back_library"),
         key="v12_shared_template_back_library",
