@@ -53,6 +53,14 @@ _V12_SHARED_TEMPLATE_MANAGEMENT_FALLBACKS = {
 }
 
 
+V12_SHARED_TEMPLATE_TAGS = [
+    "日常招呼", "可愛療癒", "搞笑吐槽", "心情情緒", "情侶曖昧",
+    "親友互動", "職場同事", "校園學生", "家庭親子", "寵物日常",
+    "節日祝福", "生日慶祝", "加油鼓勵", "感謝道歉", "美食生活",
+    "旅行出遊", "運動健身", "商務客服", "自媒體創作", "其他主題",
+]
+
+
 def _v12_management_t(key, **kwargs):
     """Keep the new management UI readable during a stale i18n module reload."""
     translated = t(key, **kwargs)
@@ -2727,10 +2735,19 @@ def _beta_list_my_shared_template_sources(session):
     }
 
 
-def _beta_list_shared_template_marketplace(session):
+def _beta_list_shared_template_marketplace(session, tags=None, search="", sort="newest"):
     response = _beta_rpc(
         "list_shared_template_marketplace",
-        {"p_limit": 24, "p_offset": 0},
+        {
+            "p_limit": 24,
+            "p_offset": 0,
+            "p_tags": [
+                str(tag).strip() for tag in (tags or [])
+                if str(tag).strip() in V12_SHARED_TEMPLATE_TAGS
+            ],
+            "p_search": str(search or "").strip(),
+            "p_sort": str(sort or "newest"),
+        },
         access_token=session["access_token"],
     )
     return response if isinstance(response, list) else []
@@ -2777,7 +2794,7 @@ def _beta_redeem_shared_template(session, template_id, idempotency_key):
     return response
 
 
-def _beta_publish_creator_reel(session, reel, title, description, apply_cost):
+def _beta_publish_creator_reel(session, reel, title, description, apply_cost, tags):
     """Copy a collected reel's allowed assets into isolated template storage."""
     reel_id = str((reel or {}).get("id", "") or "")
     grid_source_path = str((reel or {}).get("grid_path", "") or "")
@@ -2794,6 +2811,10 @@ def _beta_publish_creator_reel(session, reel, title, description, apply_cost):
             "p_title": str(title or "").strip(),
             "p_description": str(description or "").strip(),
             "p_apply_cost": int(apply_cost),
+            "p_tags": [
+                str(tag).strip() for tag in (tags or [])
+                if str(tag).strip() in V12_SHARED_TEMPLATE_TAGS
+            ],
         },
         access_token=session["access_token"],
     )
@@ -6157,6 +6178,13 @@ def _v12_render_creator_reels(session):
                                 step=1,
                                 key=f"v12_shared_template_cost_{reel_id}",
                             )
+                            template_tags = st.multiselect(
+                                t("shared_template_tags"),
+                                options=V12_SHARED_TEMPLATE_TAGS,
+                                max_selections=3,
+                                key=f"v12_shared_template_tags_{reel_id}",
+                                help=t("shared_template_tags_help"),
+                            )
                             rights_confirmed = st.checkbox(
                                 t("shared_template_rights_confirm"),
                                 key=f"v12_shared_template_rights_{reel_id}",
@@ -6169,6 +6197,8 @@ def _v12_render_creator_reels(session):
                         if publish_pressed:
                             if len(str(template_title or "").strip()) < 3:
                                 st.warning(t("shared_template_title_required"))
+                            elif not template_tags:
+                                st.warning(t("shared_template_tags_required"))
                             elif not rights_confirmed:
                                 st.warning(t("shared_template_rights_required"))
                             else:
@@ -6180,6 +6210,7 @@ def _v12_render_creator_reels(session):
                                             template_title,
                                             template_description,
                                             template_cost,
+                                            template_tags,
                                         )
                                     st.session_state[
                                         "v12_shared_template_publish_feedback"
@@ -6295,13 +6326,43 @@ def _v12_render_shared_template_marketplace(session):
     ):
         st.session_state["v12_view"] = "library"
         st.rerun()
+    search_col, sort_col = st.columns([2.1, 1.0], vertical_alignment="bottom")
+    with search_col:
+        marketplace_search = st.text_input(
+            t("shared_template_market_search"),
+            placeholder=t("shared_template_market_search_placeholder"),
+            key="v12_shared_template_market_search",
+        )
+    with sort_col:
+        marketplace_sort = st.selectbox(
+            t("shared_template_market_sort"),
+            options=["newest", "popular", "low_cost"],
+            format_func=lambda value: t(f"shared_template_market_sort_{value}"),
+            key="v12_shared_template_market_sort",
+        )
+    marketplace_tags = st.pills(
+        t("shared_template_market_filter_tags"),
+        options=V12_SHARED_TEMPLATE_TAGS,
+        selection_mode="multi",
+        key="v12_shared_template_market_tags",
+        help=t("shared_template_market_filter_tags_help"),
+    )
     try:
-        templates = _beta_list_shared_template_marketplace(session)
+        templates = _beta_list_shared_template_marketplace(
+            session,
+            tags=marketplace_tags,
+            search=marketplace_search,
+            sort=marketplace_sort,
+        )
     except Exception:
         st.warning(t("shared_template_market_unavailable"))
         return
     if not templates:
-        st.info(t("shared_template_market_empty"))
+        st.info(
+            t("shared_template_market_no_match")
+            if marketplace_search or marketplace_tags
+            else t("shared_template_market_empty")
+        )
         return
 
     for template in templates:
@@ -6331,6 +6392,13 @@ def _v12_render_shared_template_marketplace(session):
             st.markdown(f"### 🌐 {html.escape(title or t('untitled_project'))}")
             if description:
                 st.caption(description)
+            template_tags = [
+                str(tag).strip()
+                for tag in list(template.get("tags", []) or [])
+                if str(tag).strip()
+            ]
+            if template_tags:
+                st.caption(f"🏷️ {'　'.join(template_tags)}")
             st.caption(
                 t(
                     "shared_template_style_note",
