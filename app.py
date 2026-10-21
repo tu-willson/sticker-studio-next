@@ -47,6 +47,9 @@ _V12_SHARED_TEMPLATE_MANAGEMENT_FALLBACKS = {
     "shared_template_visibility_saving": "正在更新模板狀態……",
     "shared_template_visibility_success": "「{title}」已更新為：{status}",
     "shared_template_visibility_failed": "暫時無法更新模板狀態，請稍後再試。",
+    "shared_template_previous_page": "← 上一頁",
+    "shared_template_next_page": "下一頁 →",
+    "shared_template_management_page": "第 {page}／{pages} 頁｜每頁 {size} 組",
 }
 
 
@@ -2733,10 +2736,13 @@ def _beta_list_shared_template_marketplace(session):
     return response if isinstance(response, list) else []
 
 
-def _beta_list_my_shared_template_management(session):
+def _beta_list_my_shared_template_management(session, limit=4, offset=0):
     response = _beta_rpc(
-        "get_my_shared_template_management",
-        {},
+        "list_my_shared_template_management",
+        {
+            "p_limit": max(1, min(int(limit), 12)),
+            "p_offset": max(0, int(offset)),
+        },
         access_token=session["access_token"],
     )
     return response if isinstance(response, list) else []
@@ -5866,6 +5872,9 @@ def _v12_creator_reel_slot_labels(snapshot):
 
 def _v12_render_shared_template_manager(session):
     """Let a publisher see rewards and control marketplace visibility."""
+    page_size = 4
+    page_state_key = "v12_shared_template_management_page"
+    page_number = max(0, int(st.session_state.get(page_state_key, 0) or 0))
     feedback = st.session_state.pop("v12_shared_template_management_feedback", None)
     if isinstance(feedback, dict):
         st.success(
@@ -5880,10 +5889,25 @@ def _v12_render_shared_template_manager(session):
             )
         )
     try:
-        templates = _beta_list_my_shared_template_management(session)
+        templates = _beta_list_my_shared_template_management(
+            session,
+            limit=page_size,
+            offset=page_number * page_size,
+        )
     except Exception:
         st.warning(_v12_management_t("shared_template_management_unavailable"))
         return
+
+    # A withdrawal/republication can change the final page while the screen is
+    # open.  Return safely to the preceding page instead of showing a blank one.
+    if not templates and page_number > 0:
+        st.session_state[page_state_key] = page_number - 1
+        st.rerun()
+    total_count = max(
+        0,
+        int((templates[0].get("total_count", 0) if templates else 0) or 0),
+    )
+    total_pages = max(1, (total_count + page_size - 1) // page_size)
 
     with st.expander(_v12_management_t("shared_template_management_title"), expanded=bool(templates)):
         st.caption(_v12_management_t("shared_template_management_intro"))
@@ -5966,6 +5990,35 @@ def _v12_render_shared_template_manager(session):
                     except Exception:
                         st.error(_v12_management_t("shared_template_visibility_failed"))
             st.divider()
+        if total_pages > 1:
+            previous_col, page_col, next_col = st.columns([1, 1.25, 1])
+            with previous_col:
+                if st.button(
+                    _v12_management_t("shared_template_previous_page"),
+                    key="v12_shared_template_management_previous_page",
+                    disabled=page_number <= 0,
+                    use_container_width=True,
+                ):
+                    st.session_state[page_state_key] = page_number - 1
+                    st.rerun()
+            with page_col:
+                st.caption(
+                    _v12_management_t(
+                        "shared_template_management_page",
+                        page=page_number + 1,
+                        pages=total_pages,
+                        size=page_size,
+                    )
+                )
+            with next_col:
+                if st.button(
+                    _v12_management_t("shared_template_next_page"),
+                    key="v12_shared_template_management_next_page",
+                    disabled=page_number >= total_pages - 1,
+                    use_container_width=True,
+                ):
+                    st.session_state[page_state_key] = page_number + 1
+                    st.rerun()
 
 
 def _v12_render_creator_reels(session):
