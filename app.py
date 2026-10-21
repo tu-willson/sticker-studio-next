@@ -2707,6 +2707,28 @@ def _beta_list_shared_template_marketplace(session):
     return response if isinstance(response, list) else []
 
 
+def _beta_list_my_shared_template_management(session):
+    response = _beta_rpc(
+        "get_my_shared_template_management",
+        {},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_set_shared_template_visibility(session, template_id, publish):
+    response = _beta_rpc(
+        "set_my_shared_template_visibility",
+        {"p_template_id": str(template_id), "p_publish": bool(publish)},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict) or not response.get("template_id"):
+        raise RuntimeError("shared_template_management_invalid")
+    return response
+
+
 def _beta_redeem_shared_template(session, template_id, idempotency_key):
     response = _beta_rpc(
         "redeem_shared_template",
@@ -5816,6 +5838,87 @@ def _v12_creator_reel_slot_labels(snapshot):
     ]
 
 
+def _v12_render_shared_template_manager(session):
+    """Let a publisher see rewards and control marketplace visibility."""
+    feedback = st.session_state.pop("v12_shared_template_management_feedback", None)
+    if isinstance(feedback, dict):
+        st.success(
+            t(
+                "shared_template_visibility_success",
+                title=feedback.get("title", ""),
+                status=t(
+                    "shared_template_status_published"
+                    if feedback.get("published")
+                    else "shared_template_status_withdrawn"
+                ),
+            )
+        )
+    try:
+        templates = _beta_list_my_shared_template_management(session)
+    except Exception:
+        st.warning(t("shared_template_management_unavailable"))
+        return
+
+    with st.expander(t("shared_template_management_title"), expanded=bool(templates)):
+        st.caption(t("shared_template_management_intro"))
+        if not templates:
+            st.caption(t("shared_template_management_empty"))
+            return
+        for template in templates:
+            if not isinstance(template, dict) or not template.get("template_id"):
+                continue
+            template_id = str(template["template_id"])
+            title = str(template.get("title", "") or t("untitled_project"))
+            status = str(template.get("status", "") or "withdrawn")
+            published = status == "published"
+            unlock_count = max(0, int(template.get("unlock_count", 0) or 0))
+            reward_credits = max(0, int(template.get("reward_credits", 0) or 0))
+            content_col, action_col = st.columns([2.6, 1.0], vertical_alignment="center")
+            with content_col:
+                st.markdown(f"**🌐 {html.escape(title)}**")
+                st.caption(
+                    t(
+                        "shared_template_management_stats",
+                        cost=max(1, int(template.get("apply_cost", 1) or 1)),
+                        unlocks=unlock_count,
+                        rewards=reward_credits,
+                    )
+                )
+                if str(template.get("description", "") or "").strip():
+                    st.caption(str(template["description"]).strip())
+            with action_col:
+                st.caption(
+                    t(
+                        "shared_template_status_published"
+                        if published
+                        else "shared_template_status_withdrawn"
+                    )
+                )
+                action_label = t(
+                    "shared_template_withdraw_button"
+                    if published
+                    else "shared_template_republish_button"
+                )
+                if st.button(
+                    action_label,
+                    key=f"v12_shared_template_visibility_{template_id}",
+                    use_container_width=True,
+                ):
+                    try:
+                        with st.spinner(t("shared_template_visibility_saving")):
+                            _beta_set_shared_template_visibility(
+                                session, template_id, publish=not published
+                            )
+                        st.session_state["v12_shared_template_management_feedback"] = {
+                            "title": title,
+                            "published": not published,
+                        }
+                        st.rerun()
+                    except Exception:
+                        st.error(t("shared_template_visibility_failed"))
+            st.divider()
+
+
 def _v12_render_creator_reels(session):
     """Render the private first-stage reel shelf inside My Works."""
     try:
@@ -5867,6 +5970,7 @@ def _v12_render_creator_reels(session):
             publish=status["publish_template_limit"],
         )
     )
+    _v12_render_shared_template_manager(session)
     try:
         reels = _beta_list_creator_reels(session)
     except Exception:
