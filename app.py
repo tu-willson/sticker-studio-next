@@ -9316,28 +9316,36 @@ if st.session_state.get("v11_generation_pending", False):
             # 只有有效訂閱者會通過 Supabase 的伺服器端資格檢查；失敗絕不
             # 影響已經完成的圖片生成或扣點流程。
             try:
-                _reel_style_reference = (
-                    bytes(st.session_state.get("v12_style_reference_image_bytes") or b"")
-                    if _style_reference_active else b""
-                )
-                _creator_reel_save = _beta_save_creator_reel(
-                    _beta_live_session,
-                    _v12_creator_reel_snapshot(),
-                    _grid_bytes,
-                    style_reference_bytes=_reel_style_reference,
-                )
-                st.session_state["v12_creator_reel_generation_feedback"] = {
-                    "saved": bool(_creator_reel_save.get("saved", False)),
-                    "active_count": int(
-                        _creator_reel_save.get("active_auto_reel_count", 0) or 0
-                    ),
-                    "limit": int(
-                        _creator_reel_save.get("auto_reel_limit", 0) or 0
-                    ),
-                }
+                _reel_status = _beta_creator_reel_status(_beta_live_session)
+                if not _reel_status.get("eligible"):
+                    st.session_state["v12_creator_reel_generation_feedback"] = {
+                        "saved": False,
+                        "reason": "subscription_required",
+                    }
+                else:
+                    _reel_style_reference = (
+                        bytes(st.session_state.get("v12_style_reference_image_bytes") or b"")
+                        if _style_reference_active else b""
+                    )
+                    _creator_reel_save = _beta_save_creator_reel(
+                        _beta_live_session,
+                        _v12_creator_reel_snapshot(),
+                        _grid_bytes,
+                        style_reference_bytes=_reel_style_reference,
+                    )
+                    st.session_state["v12_creator_reel_generation_feedback"] = {
+                        "saved": bool(_creator_reel_save.get("saved", False)),
+                        "active_count": int(
+                            _creator_reel_save.get("active_auto_reel_count", 0) or 0
+                        ),
+                        "limit": int(
+                            _creator_reel_save.get("auto_reel_limit", 0) or 0
+                        ),
+                    }
             except Exception:
                 st.session_state["v12_creator_reel_generation_feedback"] = {
                     "saved": False,
+                    "reason": "save_retry",
                 }
             if _using_beta_credit:
                 try:
@@ -9358,6 +9366,10 @@ if st.session_state.get("v11_generation_pending", False):
                     f"{_creator_reel_feedback['active_count']}／"
                     f"{_creator_reel_feedback['limit']} 卷）。"
                 )
+            elif _creator_reel_feedback.get("reason") == "subscription_required":
+                st.info(t("creator_reel_not_saved_subscription"))
+            elif _creator_reel_feedback.get("reason") == "save_retry":
+                st.warning(t("creator_reel_not_saved_retry"))
 
     except Exception as e:
         if _using_beta_credit and _beta_job_id and not _beta_generation_returned:
