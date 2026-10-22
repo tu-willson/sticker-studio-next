@@ -7090,28 +7090,18 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
     st.session_state["v12_scroll_target"] = "v12-step-02"
 
 
-def _v12_render_shared_template_apply_button(
-    session, template_id, title, button_label, button_key
-):
-    """Apply either a marketplace card or an already-unlocked template."""
-    if not st.button(
-        button_label,
-        key=button_key,
-        type="primary",
-        use_container_width=True,
-    ):
-        return
+def _v12_apply_shared_template_callback(session, template_id, title):
+    """Redeem and load a template before Streamlit's one automatic rerun."""
     idempotency_state_key = f"v12_shared_template_redemption_key_{template_id}"
     redemption_key = st.session_state.setdefault(idempotency_state_key, str(uuid4()))
     try:
-        with st.spinner(t("shared_template_redeeming")):
-            redeemed = _beta_redeem_shared_template(session, template_id, redemption_key)
-            style_reference_bytes = b""
-            style_reference_path = str(redeemed.get("style_reference_path", "") or "")
-            if style_reference_path:
-                style_reference_bytes = _beta_storage_download(
-                    session, style_reference_path, bucket="shared-template-assets"
-                )
+        redeemed = _beta_redeem_shared_template(session, template_id, redemption_key)
+        style_reference_bytes = b""
+        style_reference_path = str(redeemed.get("style_reference_path", "") or "")
+        if style_reference_path:
+            style_reference_bytes = _beta_storage_download(
+                session, style_reference_path, bucket="shared-template-assets"
+            )
         _v12_apply_shared_template(
             redeemed.get("template_snapshot"), style_reference_bytes,
             redeemed.get("title", title),
@@ -7121,17 +7111,31 @@ def _v12_render_shared_template_apply_button(
             "charged": max(0, int(redeemed.get("charged_cost", 0) or 0)),
             "title": str(redeemed.get("title", title) or title),
         }
-        st.rerun()
     except Exception as exc:
         message = str(exc or "")
         if "shared_template_insufficient_credits" in message:
-            st.warning(t("shared_template_insufficient_credits"))
+            error_type = "insufficient_credits"
         elif "shared_template_collection_limit" in message:
-            st.warning("已解鎖模板與已收藏膠捲共用數量上限，請先整理收藏區後再套用。")
+            error_type = "collection_limit"
         elif "shared_templates_marketplace_required" in message:
-            st.warning("一般會員無法使用市集模板；購買 7 次生成包或訂閱方案後即可解鎖。")
+            error_type = "marketplace_required"
         else:
-            st.error(t("shared_template_apply_failed"))
+            error_type = "failed"
+        st.session_state["v12_shared_template_apply_error"] = error_type
+
+
+def _v12_render_shared_template_apply_button(
+    session, template_id, title, button_label, button_key
+):
+    """Apply either a marketplace card or an already-unlocked template."""
+    st.button(
+        button_label,
+        key=button_key,
+        type="primary",
+        use_container_width=True,
+        on_click=_v12_apply_shared_template_callback,
+        args=(session, template_id, title),
+    )
 
 
 def _v12_render_unlocked_template_shelf(session):
@@ -9514,6 +9518,9 @@ st.markdown(f'<div class="v10-main-title">{t("main_title")}</div>', unsafe_allow
 _shared_template_apply_feedback = st.session_state.pop(
     "v12_shared_template_apply_feedback", None
 )
+_shared_template_apply_error = st.session_state.pop(
+    "v12_shared_template_apply_error", None
+)
 if isinstance(_shared_template_apply_feedback, dict):
     _shared_template_charged = max(
         0, int(_shared_template_apply_feedback.get("charged", 0) or 0)
@@ -9525,6 +9532,14 @@ if isinstance(_shared_template_apply_feedback, dict):
             cost=_shared_template_charged,
         )
     )
+elif _shared_template_apply_error == "insufficient_credits":
+    st.warning(t("shared_template_insufficient_credits"))
+elif _shared_template_apply_error == "collection_limit":
+    st.warning("已解鎖模板與已收藏膠捲共用數量上限，請先整理收藏區後再套用。")
+elif _shared_template_apply_error == "marketplace_required":
+    st.warning("一般會員無法使用市集模板；購買 7 次生成包或訂閱方案後即可解鎖。")
+elif _shared_template_apply_error == "failed":
+    st.error(t("shared_template_apply_failed"))
 
 
 def _v12_capture_style_reference_details_draft():
