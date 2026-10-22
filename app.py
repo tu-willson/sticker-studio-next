@@ -2727,6 +2727,27 @@ def _beta_delete_creator_reel(session, reel_id):
         raise RuntimeError("creator_reel_delete_not_available")
 
 
+def _v12_delete_creator_reel_callback(session, reel_id):
+    """Handle reel deletion before the form's single Streamlit rerun.
+
+    A form submission already starts a rerun.  Keeping the network work in its
+    callback avoids the second, explicit rerun that previously doubled the
+    perceived wait after pressing the delete button.
+    """
+    confirmation_key = f"v12_creator_reel_delete_confirm_{reel_id}"
+    if not bool(st.session_state.get(confirmation_key, False)):
+        st.session_state["v12_creator_reel_delete_error"] = "confirmation"
+        return
+    try:
+        _beta_delete_creator_reel(session, reel_id)
+        st.session_state["v12_creator_reel_delete_feedback"] = True
+    except Exception as exc:
+        if "creator_reel_has_published_template" in str(exc):
+            st.session_state["v12_creator_reel_delete_error"] = "published"
+        else:
+            st.session_state["v12_creator_reel_delete_error"] = "failed"
+
+
 def _beta_list_my_shared_template_sources(session):
     """Map a collected reel to its current sharing-template publication state."""
     try:
@@ -6238,6 +6259,15 @@ def _v12_render_creator_reels(session):
         )
     if st.session_state.pop("v12_creator_reel_delete_feedback", False):
         st.success("🗑️ 創作膠卷已刪除。")
+    delete_error = str(
+        st.session_state.pop("v12_creator_reel_delete_error", "") or ""
+    )
+    if delete_error == "confirmation":
+        st.warning("請先勾選「確認刪除這卷」。")
+    elif delete_error == "published":
+        st.warning("這卷已作為分享模板來源，為保障已套用者，無法直接刪除。")
+    elif delete_error == "failed":
+        st.error("這卷暫時無法刪除，請稍後再試。")
     template_feedback = st.session_state.pop(
         "v12_shared_template_publish_feedback", None
     )
@@ -6434,9 +6464,9 @@ def _v12_render_creator_reels(session):
                 with collect_note:
                     st.caption(t("creator_reel_collect_help"))
             if reel_status in {"active", "collected"}:
-                # Keep the confirmation control in a form so ticking it does not
-                # trigger Streamlit's full rerun. Only the actual delete action
-                # submits this small form and refreshes the reel list.
+                # Ticking stays inside the form, so it does not trigger a rerun.
+                # The callback completes deletion before this form's one and
+                # only submission rerun.
                 with st.form(f"v12_creator_reel_delete_form_{reel_id}"):
                     _delete_confirm, _delete_action = st.columns([1.05, 1.25])
                     with _delete_confirm:
@@ -6445,27 +6475,12 @@ def _v12_render_creator_reels(session):
                             key=f"v12_creator_reel_delete_confirm_{reel_id}",
                         )
                     with _delete_action:
-                        delete_pressed = st.form_submit_button(
+                        st.form_submit_button(
                             "🗑️ 刪除這卷",
                             use_container_width=True,
+                            on_click=_v12_delete_creator_reel_callback,
+                            args=(session, reel_id),
                         )
-                if delete_pressed:
-                    if not delete_confirmed:
-                        st.warning("請先勾選「確認刪除這卷」。")
-                    else:
-                        try:
-                            _beta_delete_creator_reel(session, reel_id)
-                            st.session_state[
-                                "v12_creator_reel_delete_feedback"
-                            ] = True
-                            st.rerun()
-                        except Exception as exc:
-                            if "creator_reel_has_published_template" in str(exc):
-                                st.warning(
-                                    "這卷已作為分享模板來源，為保障已套用者，無法直接刪除。"
-                                )
-                            else:
-                                st.error("這卷暫時無法刪除，請稍後再試。")
             elif reel_status == "published":
                 st.caption("此卷已發布為分享模板來源，為保障已套用者，不提供刪除。")
             if style_name:
