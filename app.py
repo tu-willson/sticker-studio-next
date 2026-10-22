@@ -6293,8 +6293,8 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
     """Load a redeemed template while preserving the recipient's own photo."""
     metadata = copy.deepcopy(snapshot) if isinstance(snapshot, dict) else {}
     metadata.pop("source_photo_bytes", None)
-    # 固定勾選的特色是套用到接收者自己人物照的通用創作設定，允許帶入；
-    # 自由輸入的人物／場景描述則可能含上傳者私人內容，絕不轉移。
+    # 固定勾選的特色與自由文字都是模板的創作指令，會套用到接收者自己
+    # 的人物照；人物照片本身不會隨模板轉移。
     metadata["character_features"] = [
         option
         for option in _v12_clean_character_features(
@@ -6302,8 +6302,17 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         )
         if option in CHARACTER_OPTIONS
     ]
-    metadata["custom_character"] = ""
-    metadata["custom_character_enabled"] = False
+    metadata["custom_character"] = str(
+        metadata.get("custom_character", "") or ""
+    ).strip()[:2000]
+    metadata["custom_character_enabled"] = bool(metadata["custom_character"])
+    custom_style_snapshot = metadata.get("custom_style_snapshot")
+    if isinstance(custom_style_snapshot, dict):
+        # 保持為模板獨立快照，不能寫入或覆蓋套用者自己的 01～10 風格庫。
+        metadata["custom_style_snapshot"] = {
+            **custom_style_snapshot,
+            "source": "shared_template",
+        }
     metadata["project_id"] = str(uuid4())
     metadata["project_name"] = _v12_normalize_project_name(
         f"模板｜{str(title or '').strip()}"
@@ -6343,8 +6352,12 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         v10_character_options=list(
             st.session_state.get("v10_character_options", []) or []
         ),
-        v10_character_custom_1="",
-        v10_character_enabled_1=False,
+        v10_character_custom_1=st.session_state.get(
+            "v10_character_custom_1", ""
+        ),
+        v10_character_enabled_1=bool(
+            st.session_state.get("v10_character_enabled_1", False)
+        ),
         v8_text_style=st.session_state.get("v8_text_style"),
         v8_selected_font=st.session_state.get("v8_selected_font"),
         v12_font_quick_pick=st.session_state.get("v12_font_quick_pick"),
@@ -8621,7 +8634,13 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
             if isinstance(_loaded_project_style, dict) and str(_loaded_project_style.get("prompt", "") or "").strip():
                 custom_style = str(_loaded_project_style.get("prompt", "") or "").strip()
                 _loaded_style_name = str(_loaded_project_style.get("name", "") or "").strip()
-                st.info("📦 已載入作品當時的自定義風格" + (f"：{_loaded_style_name}" if _loaded_style_name else ""))
+                _loaded_style_source = str(_loaded_project_style.get("source", "") or "")
+                _loaded_style_label = (
+                    "📦 已載入分享模板的自定義風格（不會覆蓋你的 01～10）"
+                    if _loaded_style_source == "shared_template"
+                    else "📦 已載入作品當時的自定義風格"
+                )
+                st.info(_loaded_style_label + (f"：{_loaded_style_name}" if _loaded_style_name else ""))
             elif _draft_style_prompt:
                 custom_style = _draft_style_prompt
                 st.info("✏️ 正在使用尚未儲存的自定義風格草稿。")
