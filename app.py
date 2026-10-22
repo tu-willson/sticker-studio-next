@@ -8699,7 +8699,7 @@ def _v12_render_pricing_page():
             "credits": t("benefit_credits", count=7, suffix=""),
             "copy": t("benefit_copy", count=7),
             "library": t("benefit_library", count=7),
-            "reels": t("benefit_reels", count=5),
+            "reels": t("benefit_reels", count=7),
             "market_publish": t("benefit_market_publish", count=3),
             "button": t("pricing_choose_pack"),
         },
@@ -9146,7 +9146,7 @@ if st.session_state["v12_view"] == "library":
                   <tr>
                     <td class="v12-reel-rules-plan v12-reel-rules-pack">7 次生成包</td>
                     <td>上限 7 卷｜保存 10 天</td>
-                    <td>共用上限 5 卷</td>
+                    <td>共用上限 7 卷</td>
                     <td>可解鎖 5 組｜可發布 3 組</td>
                   </tr>
                   <tr>
