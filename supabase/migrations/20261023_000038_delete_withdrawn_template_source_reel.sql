@@ -37,6 +37,11 @@ as $$
   );
 $$;
 
+-- PostgreSQL does not permit CREATE OR REPLACE to change a function's
+-- returned table shape.  The old helper returned only object_paths; this
+-- version intentionally returns separate reel and template asset paths.
+drop function if exists public.get_my_creator_reel_delete_paths(uuid);
+
 create or replace function public.get_my_creator_reel_delete_paths(
   p_reel_id uuid
 )
