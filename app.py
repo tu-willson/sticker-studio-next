@@ -2993,6 +2993,28 @@ def _v12_collect_creator_reel_callback(session, reel_id):
         )
 
 
+def _v12_save_creator_reel_rename_callback(session, reel_id):
+    """Save a rename before the form's single automatic submission rerun."""
+    rename_key = f"v12_creator_reel_rename_draft_{reel_id}"
+    clean_title = str(st.session_state.get(rename_key, "") or "").strip()
+    if not clean_title:
+        st.session_state["v12_creator_reel_rename_error"] = "empty"
+        return
+    try:
+        _beta_rename_collected_creator_reel(session, reel_id, clean_title)
+        st.session_state["v12_creator_reel_rename_feedback"] = clean_title
+        st.session_state.pop("v12_creator_reel_rename_open", None)
+        st.session_state.pop(rename_key, None)
+    except Exception:
+        st.session_state["v12_creator_reel_rename_error"] = "failed"
+
+
+def _v12_cancel_creator_reel_rename_callback(reel_id):
+    """Close the rename form without adding an unnecessary second rerun."""
+    st.session_state.pop("v12_creator_reel_rename_open", None)
+    st.session_state.pop(f"v12_creator_reel_rename_draft_{reel_id}", None)
+
+
 def _beta_list_my_shared_template_sources(session):
     """Map a collected reel to its current sharing-template publication state."""
     try:
@@ -6604,6 +6626,13 @@ def _v12_render_creator_reels(session, shelf="active"):
     )
     if rename_feedback:
         st.success(f"✏️ 已重新命名為「{rename_feedback}」。")
+    rename_error = str(
+        st.session_state.pop("v12_creator_reel_rename_error", "") or ""
+    )
+    if rename_error == "empty":
+        st.warning("請輸入膠卷名稱。")
+    elif rename_error == "failed":
+        st.error("這卷暫時無法重新命名，請稍後再試。")
     delete_error = str(
         st.session_state.pop("v12_creator_reel_delete_error", "") or ""
     )
@@ -6815,35 +6844,20 @@ def _v12_render_creator_reels(session, shelf="active"):
                     )
                     rename_save, rename_cancel = st.columns(2)
                     with rename_save:
-                        rename_pressed = st.form_submit_button(
+                        st.form_submit_button(
                             "儲存新名稱",
                             type="primary",
                             use_container_width=True,
+                            on_click=_v12_save_creator_reel_rename_callback,
+                            args=(session, reel_id),
                         )
                     with rename_cancel:
-                        cancel_rename = st.form_submit_button(
+                        st.form_submit_button(
                             "取消",
                             use_container_width=True,
+                            on_click=_v12_cancel_creator_reel_rename_callback,
+                            args=(reel_id,),
                         )
-                if cancel_rename:
-                    st.session_state.pop("v12_creator_reel_rename_open", None)
-                    st.session_state.pop(rename_key, None)
-                    st.rerun()
-                if rename_pressed:
-                    clean_title = str(renamed_title or "").strip()
-                    if not clean_title:
-                        st.warning("請輸入膠卷名稱。")
-                    else:
-                        try:
-                            _beta_rename_collected_creator_reel(
-                                session, reel_id, clean_title
-                            )
-                            st.session_state["v12_creator_reel_rename_feedback"] = clean_title
-                            st.session_state.pop("v12_creator_reel_rename_open", None)
-                            st.session_state.pop(rename_key, None)
-                            st.rerun()
-                        except Exception:
-                            st.error("這卷暫時無法重新命名，請稍後再試。")
             st.caption(
                 t(
                     "creator_reel_created_at",
