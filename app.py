@@ -3805,11 +3805,15 @@ def _beta_admin_grant_test_purchase(session, user_id, product_code, note):
 def _beta_render_admin_console(session):
     """Show a small audited console only when Supabase authorizes this member."""
     if not session:
+        st.session_state["v12_is_beta_admin"] = False
         return
     try:
-        if not _beta_is_admin(session):
+        is_admin = _beta_is_admin(session)
+        st.session_state["v12_is_beta_admin"] = is_admin
+        if not is_admin:
             return
     except Exception:
+        st.session_state["v12_is_beta_admin"] = False
         return
 
     st.markdown("---")
@@ -5736,6 +5740,7 @@ def _v12_load_history_record(record):
         int(st.session_state.get("v12_step04_frontend_revision", 0)) + 1
     )
     st.session_state["v12_project_name_input"] = metadata.get("project_name", "")
+    st.session_state["v12_project_name_top_input"] = metadata.get("project_name", "")
     st.session_state["generated_4x2_bytes"] = record.get("grid_bytes") or None
 
     source_photo = bytes(record.get("source_photo_bytes") or b"")
@@ -5944,7 +5949,7 @@ def _v12_current_project():
     return project
 
 def _v12_default_project_name():
-    return datetime.now().strftime("LINE貼圖_%Y%m%d_%H%M")
+    return "未命名作品"
 
 def _v12_normalize_project_name(value):
     value = str(value or "").strip()
@@ -5957,12 +5962,24 @@ def _v12_safe_download_stem(value):
     return value[:80] or _v12_default_project_name()
 
 def _v12_project_name_on_change():
-    project = _v12_current_project()
-    project["project_name"] = _v12_normalize_project_name(
+    value = _v12_normalize_project_name(
         st.session_state.get("v12_project_name_input", "")
     )
+    # 上方的快速命名欄與打包區名稱共用同一個作品名稱。
+    st.session_state["v12_project_name_top_input"] = value
+    project = _v12_current_project()
+    project["project_name"] = value
     project["updated_at"] = _v12_now_iso()
     st.session_state["v12_current_project"] = project
+
+
+def _v12_project_name_top_on_change():
+    """Mirror the early project-name field into the canonical save field."""
+    value = _v12_normalize_project_name(
+        st.session_state.get("v12_project_name_top_input", "")
+    )
+    st.session_state["v12_project_name_input"] = value
+    _v12_project_name_on_change()
 
 def _v12_project_snapshot():
     """取得目前作品的可保存 metadata 快照；絕不包含 API Key。"""
@@ -10638,7 +10655,29 @@ _v12_update_navigation_safe_creation_draft(
     v12_auto_crop_room_enabled=bool(_auto_crop_room),
 )
 
-v10_subsection(t("settings_review"), "#ff9f43")
+_v12_project_name_initial = _v12_normalize_project_name(
+    st.session_state.get(
+        "v12_project_name_input",
+        _v12_current_project().get("project_name", ""),
+    )
+)
+if "v12_project_name_top_input" not in st.session_state:
+    st.session_state["v12_project_name_top_input"] = _v12_project_name_initial
+st.markdown("### 🏷️ 作品名稱")
+st.caption("此名稱會同時用於「我的作品」內的所有紀錄。")
+st.text_input(
+    "為這組作品命名",
+    key="v12_project_name_top_input",
+    placeholder="例如：小屁孩日常",
+    max_chars=80,
+    on_change=_v12_project_name_top_on_change,
+)
+if not str(st.session_state.get("v12_project_name_top_input", "") or "").strip():
+    st.caption("未填寫時，會自動使用：未命名作品 替代。")
+
+_v12_prompt_settings_admin = bool(st.session_state.get("v12_is_beta_admin", False))
+if _v12_prompt_settings_admin:
+    v10_subsection(t("settings_review"), "#ff9f43")
 style_mode = st.session_state.get("v10_style_mode", "↓ 請選擇風格")
 
 _prompt_color_segments = _v12_valid_color_segments(texts)
@@ -10716,7 +10755,8 @@ if _sticker_mode == "text" and _selected_font_for_prompt:
         "若同時指定文字外框／形狀效果，兩者必須融合呈現、不可互相覆蓋。"
         "不要照搬參考圖中的人物或其他內容。"
     )
-with st.expander(t("prompt_view")):
+_v12_prompt_view = st.expander(t("prompt_view"))
+with _v12_prompt_view:
     st.markdown(
         """
         <div style="
@@ -10886,6 +10926,11 @@ with st.expander(t("prompt_view")):
         )
     else:
         st.info(t("prompt_unavailable"))
+
+if not _v12_prompt_settings_admin:
+    # 先完成共用 prompt 的建立，接著移除整個管理員檢視器；一般使用者
+    # 不會留下空白標題、展開列或 Prompt 內容。
+    _v12_prompt_view.empty()
 
 
 
