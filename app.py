@@ -8782,6 +8782,8 @@ with _v12_nav_cols[2]:
         _v12_preserve_creation_draft_for_navigation()
         _public02a_sync_style_bank_from_widgets()
         _save_v10_presets()
+        # 「我的作品」主入口永遠回到作品首頁，避免沿用上次的膠捲／雲端分頁。
+        st.session_state["v12_library_section"] = "home"
         st.session_state["v12_view"] = "library"
         st.rerun()
 
@@ -8791,6 +8793,7 @@ if st.button(t("quick_nav_library_button"), key="v12_quick_library", help=t("qui
     _v12_preserve_creation_draft_for_navigation()
     _public02a_sync_style_bank_from_widgets()
     _save_v10_presets()
+    st.session_state["v12_library_section"] = "home"
     st.session_state["v12_view"] = "library"
     st.rerun()
 
@@ -11786,6 +11789,7 @@ with _link_col:
         _v12_preserve_creation_draft_for_navigation()
         _public02a_sync_style_bank_from_widgets()
         _save_v10_presets()
+        st.session_state["v12_library_section"] = "home"
         st.session_state["v12_view"] = "library"
         st.rerun()
 
