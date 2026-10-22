@@ -1828,6 +1828,16 @@ div[class*="st-key-v12_quick_step_05"] button{background:linear-gradient(145deg,
 div[class*="st-key-v12_quick_step_06"] button{background:linear-gradient(145deg,#f2ae69,#e67e22) !important;}
 div[class*="st-key-v12_quick_step_07"] button{background:linear-gradient(145deg,#72dfda,#32c6c0) !important;}
 div[class*="st-key-v12_quick_step_08"] button{background:linear-gradient(145deg,#ef8d84,#e74c3c) !important;}
+/* 模板再次套用是私人已取得內容，使用藍色與首次購買的粉紅按鈕區隔。 */
+div[class*="st-key-v12_shared_template_apply_own_"] button,
+div[class*="st-key-v12_shared_template_apply_unlocked_"] button,
+div[class*="st-key-v12_unlocked_template_apply_"] button,
+div[class*="st-key-v12_creator_reel_apply_"] button,
+div[class*="st-key-v12_market_unlocked_tab"] button{
+  background:linear-gradient(145deg,#4aa8ec,#247fbd) !important;
+  border-color:#63b8f3 !important;
+  color:#fff !important;
+}
 html{scroll-behavior:smooth;}
 [id^="v12-step-"]{scroll-margin-top:1rem;}
 .v12-font-gallery-note{
@@ -2652,7 +2662,7 @@ def _beta_list_library_projects(session):
 
 def _beta_creator_reel_status(session):
     response = _beta_rpc(
-        "get_my_creator_reel_status", {}, access_token=session["access_token"]
+        "get_my_creator_reel_library_status", {}, access_token=session["access_token"]
     )
     if isinstance(response, list):
         response = response[0] if response else {}
@@ -2660,6 +2670,7 @@ def _beta_creator_reel_status(session):
         raise RuntimeError("creator_reel_status_invalid")
     return {
         "eligible": bool(response.get("eligible", False)),
+        "marketplace_eligible": bool(response.get("marketplace_eligible", False)),
         "product_code": str(response.get("product_code", "") or ""),
         "auto_reel_limit": max(0, int(response.get("auto_reel_limit", 0) or 0)),
         "retention_days": max(0, int(response.get("retention_days", 0) or 0)),
@@ -2671,6 +2682,15 @@ def _beta_creator_reel_status(session):
         ),
         "active_auto_reel_count": max(
             0, int(response.get("active_auto_reel_count", 0) or 0)
+        ),
+        "collected_reel_count": max(
+            0, int(response.get("collected_reel_count", 0) or 0)
+        ),
+        "unlocked_template_count": max(
+            0, int(response.get("unlocked_template_count", 0) or 0)
+        ),
+        "shared_reel_count": max(
+            0, int(response.get("shared_reel_count", 0) or 0)
         ),
     }
 
@@ -2799,6 +2819,18 @@ def _beta_list_shared_template_marketplace(session, tags=None, search="", sort="
             ],
             "p_search": str(search or "").strip(),
             "p_sort": str(sort or "newest"),
+        },
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_list_my_unlocked_templates(session, limit=5, offset=0):
+    response = _beta_rpc(
+        "list_my_unlocked_shared_templates",
+        {
+            "p_limit": max(1, min(int(limit), 12)),
+            "p_offset": max(0, int(offset)),
         },
         access_token=session["access_token"],
     )
@@ -6104,6 +6136,28 @@ def _v12_creator_reel_slot_labels(snapshot):
     ]
 
 
+def _v12_apply_creator_reel_snapshot(session, reel):
+    """Load a collected private reel back into the studio without any charge."""
+    snapshot = reel.get("snapshot") if isinstance(reel, dict) else {}
+    snapshot = snapshot if isinstance(snapshot, dict) else {}
+    title = str(
+        (reel or {}).get("source_project_name", "")
+        or snapshot.get("project_name", "")
+        or t("untitled_project")
+    )
+    style_reference_bytes = b""
+    style_reference_path = str((reel or {}).get("style_reference_path", "") or "")
+    if style_reference_path:
+        style_reference_bytes = _beta_storage_download(
+            session, style_reference_path, bucket="creator-reels"
+        )
+    _v12_apply_shared_template(snapshot, style_reference_bytes, title)
+    st.session_state["v12_shared_template_apply_feedback"] = {
+        "charged": 0,
+        "title": title,
+    }
+
+
 def _v12_render_shared_template_manager(session):
     """Let a publisher see rewards and control marketplace visibility."""
     page_size = 4
@@ -6318,10 +6372,12 @@ def _v12_render_creator_reels(session, shelf="active"):
         )
     )
     st.caption(
-        t(
-            "creator_reel_policy",
-            collected=status["collected_reel_limit"],
-            publish=status["publish_template_limit"],
+        (
+            "已收藏膠捲與已解鎖模板共用 "
+            f"{status['collected_reel_limit']} 卷額度；可發布 "
+            f"{status['publish_template_limit']} 組模板。"
+            if status["marketplace_eligible"]
+            else "一般會員可使用膠捲與收藏功能；無法使用市集模板。"
         )
     )
 
@@ -6373,6 +6429,12 @@ def _v12_render_creator_reels(session, shelf="active"):
     ]
     shelf_title = "⭐ 已收藏的膠卷" if desired_status == "collected" else "🎞️ 未收藏的膠卷"
     st.markdown(f"#### {shelf_title}")
+    if desired_status == "collected":
+        st.caption("已解鎖模板與已收藏膠捲共用數量上限。")
+        st.info(
+            f"已收藏／已解鎖：{status['shared_reel_count']}／"
+            f"{status['collected_reel_limit']} 卷"
+        )
     search_label = (
         "搜尋作品名稱（收藏膠卷後可重新命名）"
         if desired_status == "active"
@@ -6462,6 +6524,17 @@ def _v12_render_creator_reels(session, shelf="active"):
                     ):
                         st.session_state["v12_creator_reel_rename_open"] = reel_id
                         st.session_state[rename_key] = source_name
+                    if st.button(
+                        "🔵 套用模板",
+                        key=f"v12_creator_reel_apply_{reel_id}",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        try:
+                            _v12_apply_creator_reel_snapshot(session, reel)
+                            st.rerun()
+                        except Exception:
+                            st.error("這卷暫時無法載回創作頁，請稍後再試。")
 
             rename_key = f"v12_creator_reel_rename_draft_{reel_id}"
             if (
@@ -6527,7 +6600,10 @@ def _v12_render_creator_reels(session, shelf="active"):
                     st.caption(
                         "⚪ 已從市集下架；刪除這卷時會同步移除市集管理紀錄。"
                     )
-                elif published_status != "uploading":
+                elif (
+                    published_status != "uploading"
+                    and status["publish_template_limit"] > 0
+                ):
                     with st.expander(t("shared_template_publish_expander"), expanded=False):
                         st.caption(t("shared_template_publish_intro"))
                         with st.form(f"v12_shared_template_publish_{reel_id}"):
@@ -6789,6 +6865,130 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
     st.session_state["v12_scroll_target"] = "v12-step-02"
 
 
+def _v12_render_shared_template_apply_button(
+    session, template_id, title, button_label, button_key
+):
+    """Apply either a marketplace card or an already-unlocked template."""
+    if not st.button(
+        button_label,
+        key=button_key,
+        type="primary",
+        use_container_width=True,
+    ):
+        return
+    idempotency_state_key = f"v12_shared_template_redemption_key_{template_id}"
+    redemption_key = st.session_state.setdefault(idempotency_state_key, str(uuid4()))
+    try:
+        with st.spinner(t("shared_template_redeeming")):
+            redeemed = _beta_redeem_shared_template(session, template_id, redemption_key)
+            style_reference_bytes = b""
+            style_reference_path = str(redeemed.get("style_reference_path", "") or "")
+            if style_reference_path:
+                style_reference_bytes = _beta_storage_download(
+                    session, style_reference_path, bucket="shared-template-assets"
+                )
+        _v12_apply_shared_template(
+            redeemed.get("template_snapshot"), style_reference_bytes,
+            redeemed.get("title", title),
+        )
+        st.session_state.pop(idempotency_state_key, None)
+        st.session_state["v12_shared_template_apply_feedback"] = {
+            "charged": max(0, int(redeemed.get("charged_cost", 0) or 0)),
+            "title": str(redeemed.get("title", title) or title),
+        }
+        st.rerun()
+    except Exception as exc:
+        message = str(exc or "")
+        if "shared_template_insufficient_credits" in message:
+            st.warning(t("shared_template_insufficient_credits"))
+        elif "shared_template_collection_limit" in message:
+            st.warning("已解鎖模板與已收藏膠捲共用數量上限，請先整理收藏區後再套用。")
+        elif "shared_templates_marketplace_required" in message:
+            st.warning("一般會員無法使用市集模板；購買 7 次生成包或訂閱方案後即可解鎖。")
+        else:
+            st.error(t("shared_template_apply_failed"))
+
+
+def _v12_render_unlocked_template_shelf(session):
+    """Show the member's own redeemed templates, five at a time."""
+    try:
+        status = _beta_creator_reel_status(session)
+        page_size = 5
+        page_key = "v12_unlocked_template_page"
+        page_number = max(0, int(st.session_state.get(page_key, 0) or 0))
+        templates = _beta_list_my_unlocked_templates(
+            session, limit=page_size, offset=page_number * page_size
+        )
+    except Exception:
+        st.warning("已解鎖模板暫時無法載入，請稍後再試。")
+        return
+
+    total_count = max(
+        0, int((templates[0].get("total_count", 0) if templates else 0) or 0)
+    )
+    total_pages = max(1, (total_count + page_size - 1) // page_size)
+    if not templates and page_number > 0:
+        st.session_state[page_key] = page_number - 1
+        st.rerun()
+
+    st.markdown("### 🔓 已解鎖模版區")
+    st.info(
+        f"自動創作膠卷：{status['shared_reel_count']}／"
+        f"{status['collected_reel_limit']} 卷"
+    )
+    st.caption("已解鎖模板與已收藏膠捲共用數量上限。")
+    if not templates:
+        st.caption("尚未解鎖其他創作者的模板。")
+        return
+
+    for template in templates:
+        if not isinstance(template, dict) or not template.get("template_id"):
+            continue
+        template_id = str(template["template_id"])
+        title = str(template.get("title", "") or t("untitled_project")).strip()
+        description = str(template.get("description", "") or "").strip()
+        preview_path = str(template.get("preview_path", "") or "")
+        left, right = st.columns([1.05, 2.15], vertical_alignment="top")
+        with left:
+            try:
+                if preview_path:
+                    st.image(
+                        _beta_storage_download(
+                            session, preview_path, bucket="shared-template-assets"
+                        ),
+                        caption=t("shared_template_preview_caption"),
+                        use_container_width=True,
+                    )
+            except Exception:
+                st.caption(t("shared_template_preview_unavailable"))
+        with right:
+            st.markdown(f"### 🔓 {html.escape(title)}")
+            if description:
+                st.caption(description)
+            tags = [str(tag).strip() for tag in list(template.get("tags", []) or []) if str(tag).strip()]
+            if tags:
+                st.caption(f"🏷️ {'　'.join(tags)}")
+            st.caption("已解鎖，可免費再次套用。")
+            _v12_render_shared_template_apply_button(
+                session, template_id, title, t("shared_template_apply_unlocked"),
+                f"v12_unlocked_template_apply_{template_id}",
+            )
+        st.divider()
+
+    if total_pages > 1:
+        previous_col, page_col, next_col = st.columns([1, 1.35, 1])
+        with previous_col:
+            if st.button("← 上一頁", key="v12_unlocked_template_previous", disabled=page_number <= 0, use_container_width=True):
+                st.session_state[page_key] = page_number - 1
+                st.rerun()
+        with page_col:
+            st.caption(f"第 {page_number + 1}／{total_pages} 頁｜每頁 {page_size} 組")
+        with next_col:
+            if st.button("下一頁 →", key="v12_unlocked_template_next", disabled=page_number >= total_pages - 1, use_container_width=True):
+                st.session_state[page_key] = page_number + 1
+                st.rerun()
+
+
 def _v12_render_shared_template_marketplace(session):
     """Browse public templates without exposing protected template internals."""
     st.markdown(f'<div class="v10-main-title">{t("shared_template_market_title")}</div>', unsafe_allow_html=True)
@@ -6796,12 +6996,36 @@ def _v12_render_shared_template_marketplace(session):
         f'<div class="v12-marketplace-intro">{html.escape(t("shared_template_market_intro"))}</div>',
         unsafe_allow_html=True,
     )
-    if st.button(
-        t("shared_template_back_library"),
-        key="v12_shared_template_back_library",
-    ):
-        st.session_state["v12_view"] = "library"
-        st.rerun()
+    st.session_state.setdefault("v12_marketplace_shelf", "market")
+    market_shelf = str(st.session_state.get("v12_marketplace_shelf", "market") or "market")
+    back_col, unlocked_col, _market_spacer = st.columns([1, 1, 1])
+    with back_col:
+        if st.button(
+            t("shared_template_back_library"),
+            key="v12_shared_template_back_library",
+            use_container_width=True,
+        ):
+            st.session_state["v12_view"] = "library"
+            st.rerun()
+    with unlocked_col:
+        if st.button(
+            ("✓ " if market_shelf == "unlocked" else "") + "已解鎖模版區",
+            key="v12_market_unlocked_tab",
+            type="primary",
+            use_container_width=True,
+        ):
+            st.session_state["v12_marketplace_shelf"] = "unlocked"
+            st.rerun()
+
+    if market_shelf == "unlocked":
+        _v12_render_unlocked_template_shelf(session)
+        return
+    try:
+        marketplace_rights = _beta_creator_reel_status(session)
+    except Exception:
+        marketplace_rights = {"marketplace_eligible": False}
+    if not marketplace_rights["marketplace_eligible"]:
+        st.caption("一般會員可瀏覽市集，但無法解鎖模板；購買 7 次生成包或訂閱方案後即可使用。")
     search_col, sort_col = st.columns([2.1, 1.0], vertical_alignment="bottom")
     with search_col:
         marketplace_search = st.text_input(
@@ -6885,57 +7109,25 @@ def _v12_render_shared_template_marketplace(session):
             )
             if is_owner:
                 button_label = t("shared_template_apply_own")
+                button_key = f"v12_shared_template_apply_own_{template_id}"
             elif is_unlocked:
                 button_label = t("shared_template_apply_unlocked")
+                button_key = f"v12_shared_template_apply_unlocked_{template_id}"
             else:
                 button_label = t("shared_template_apply_cost_button", cost=cost)
+                button_key = f"v12_shared_template_apply_purchase_{template_id}"
                 st.info(t("shared_template_cost_explainer", cost=cost))
-            if st.button(
-                button_label,
-                key=f"v12_shared_template_apply_{template_id}",
-                type="primary",
-                use_container_width=True,
-            ):
-                idempotency_state_key = (
-                    f"v12_shared_template_redemption_key_{template_id}"
+            if not is_owner and not is_unlocked and not marketplace_rights["marketplace_eligible"]:
+                st.button(
+                    "🔒 購買 7 次生成包或訂閱後可解鎖",
+                    key=f"v12_shared_template_apply_locked_{template_id}",
+                    disabled=True,
+                    use_container_width=True,
                 )
-                redemption_key = st.session_state.setdefault(
-                    idempotency_state_key, str(uuid4())
+            else:
+                _v12_render_shared_template_apply_button(
+                    session, template_id, title, button_label, button_key
                 )
-                try:
-                    with st.spinner(t("shared_template_redeeming")):
-                        redeemed = _beta_redeem_shared_template(
-                            session, template_id, redemption_key
-                        )
-                        style_reference_bytes = b""
-                        style_reference_path = str(
-                            redeemed.get("style_reference_path", "") or ""
-                        )
-                        if style_reference_path:
-                            style_reference_bytes = _beta_storage_download(
-                                session,
-                                style_reference_path,
-                                bucket="shared-template-assets",
-                            )
-                    _v12_apply_shared_template(
-                        redeemed.get("template_snapshot"),
-                        style_reference_bytes,
-                        redeemed.get("title", title),
-                    )
-                    st.session_state.pop(idempotency_state_key, None)
-                    st.session_state["v12_shared_template_apply_feedback"] = {
-                        "charged": max(
-                            0, int(redeemed.get("charged_cost", 0) or 0)
-                        ),
-                        "title": str(redeemed.get("title", title) or title),
-                    }
-                    st.rerun()
-                except Exception as exc:
-                    message = str(exc or "")
-                    if "shared_template_insufficient_credits" in message:
-                        st.warning(t("shared_template_insufficient_credits"))
-                    else:
-                        st.error(t("shared_template_apply_failed"))
         st.divider()
 
 
@@ -8750,6 +8942,7 @@ if st.session_state["v12_view"] == "library":
             type="primary",
             use_container_width=True,
         ):
+            st.session_state["v12_marketplace_shelf"] = "market"
             st.session_state["v12_view"] = "marketplace"
             st.rerun()
 
@@ -8775,6 +8968,13 @@ if st.session_state["v12_view"] == "library":
             ):
                 st.session_state["v12_library_section"] = "cloud"
                 st.rerun()
+        st.info(
+            "🎞️ 膠捲與市集規則\n\n"
+            "- 一般會員：未收藏膠捲 5 卷、已收藏 5 卷，未收藏保存 10 天；不可使用市集模板。\n"
+            "- 7 次生成包：未收藏膠捲 7 卷、已收藏／已解鎖共 5 卷，未收藏保存 10 天；可解鎖 5 組模板、發布 3 組模板。\n"
+            "- 基本／標準／進階：未收藏膠捲為 20／30／40 卷，已收藏／已解鎖共用同額度，未收藏保存 10 天；可發布 10／15／20 組模板。\n\n"
+            "未收藏膠捲超過上限時，會自動替換最早的一卷並循環保存。"
+        )
         st.stop()
 
     if _library_section == "reels":

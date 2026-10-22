@@ -88,7 +88,7 @@ _ZH = {
     "creator_reel_intro": "每次完成一張 4×2 原始生成圖，系統會自動保存一卷私人創作膠卷，方便日後挑選、收藏與發布為模板。",
     "creator_reel_subscription_only": "創作膠卷是訂閱會員功能。訂閱開通後，新的 4×2 生成圖會自動保存於此。",
     "creator_reel_status_unavailable": "創作膠卷容量暫時無法讀取，請稍後再試。",
-    "creator_reel_capacity": "🎞️ 自動創作膠卷：{count}／{limit} 卷｜每卷保存 {days} 天；超過上限時會自動替換最早的一卷。",
+    "creator_reel_capacity": "未收藏膠卷：{count}／{limit} 卷｜未收藏膠捲時效 {days} 天；超過上限時會自動替換最早的一卷，進行循環。",
     "creator_reel_policy": "可收藏 {collected} 卷、可發布 {publish} 組模板；收藏與公開模板不會被自動替換。",
     "creator_reel_list_unavailable": "創作膠卷暫時無法載入，請稍後再試。",
     "creator_reel_empty": "尚未有創作膠卷。完成下一張 4×2 生成圖後，會自動出現在這裡。",
