@@ -7284,7 +7284,21 @@ def _v12_render_shared_template_marketplace(session):
             except Exception:
                 st.info(t("shared_template_preview_unavailable"))
         with right:
-            st.markdown(f"### 🌐 {html.escape(title or t('untitled_project'))}")
+            title_col, top_report_col = st.columns([4.0, 0.72], vertical_alignment="top")
+            with title_col:
+                st.markdown(f"### 🌐 {html.escape(title or t('untitled_project'))}")
+            with top_report_col:
+                if not is_owner and st.button(
+                    t("shared_template_report"),
+                    key=f"v12_shared_template_report_{template_id}",
+                    use_container_width=True,
+                ):
+                    try:
+                        _beta_report_shared_template(session, template_id)
+                        st.session_state["v12_shared_template_market_feedback"] = "reported"
+                        st.rerun()
+                    except Exception:
+                        st.error(t("shared_template_report_failed"))
             if description:
                 st.caption(description)
             template_tags = [
@@ -7302,7 +7316,7 @@ def _v12_render_shared_template_marketplace(session):
                     else t("shared_template_no_style_reference"),
                 )
             )
-            favorite_col, report_col = st.columns([1.35, 0.85])
+            favorite_col, _favorite_spacer = st.columns([1.35, 2.65])
             with favorite_col:
                 if st.button(
                     t("shared_template_favorited")
@@ -7315,18 +7329,6 @@ def _v12_render_shared_template_marketplace(session):
                         st.rerun()
                     except Exception:
                         st.error("這個模板暫時無法更新收藏，請稍後再試。")
-            with report_col:
-                if not is_owner and st.button(
-                    t("shared_template_report"),
-                    key=f"v12_shared_template_report_{template_id}",
-                    use_container_width=True,
-                ):
-                    try:
-                        _beta_report_shared_template(session, template_id)
-                        st.session_state["v12_shared_template_market_feedback"] = "reported"
-                        st.rerun()
-                    except Exception:
-                        st.error(t("shared_template_report_failed"))
             if is_owner:
                 button_label = t("shared_template_apply_own")
                 button_key = f"v12_shared_template_apply_own_{template_id}"
@@ -7337,17 +7339,19 @@ def _v12_render_shared_template_marketplace(session):
                 button_label = t("shared_template_apply_cost_button", cost=cost)
                 button_key = f"v12_shared_template_apply_purchase_{template_id}"
                 st.info(t("shared_template_cost_explainer", cost=cost))
-            if not is_owner and not is_unlocked and not marketplace_rights["marketplace_eligible"]:
-                st.button(
-                    "🔒 購買 7 次生成包或訂閱後可解鎖",
-                    key=f"v12_shared_template_apply_locked_{template_id}",
-                    disabled=True,
-                    use_container_width=True,
-                )
-            else:
-                _v12_render_shared_template_apply_button(
-                    session, template_id, title, button_label, button_key
-                )
+            apply_col, _apply_spacer = st.columns([1.35, 2.65])
+            with apply_col:
+                if not is_owner and not is_unlocked and not marketplace_rights["marketplace_eligible"]:
+                    st.button(
+                        "🔒 購買 7 次生成包或訂閱後可解鎖",
+                        key=f"v12_shared_template_apply_locked_{template_id}",
+                        disabled=True,
+                        use_container_width=True,
+                    )
+                else:
+                    _v12_render_shared_template_apply_button(
+                        session, template_id, title, button_label, button_key
+                    )
         st.divider()
 
 
