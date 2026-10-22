@@ -6364,8 +6364,13 @@ def _v12_render_creator_reels(session, shelf="active"):
     ]
     shelf_title = "⭐ 已收藏的膠卷" if desired_status == "collected" else "🎞️ 未收藏的膠卷"
     st.markdown(f"#### {shelf_title}")
+    search_label = (
+        "搜尋作品名稱（收藏膠卷後可重新命名）"
+        if desired_status == "active"
+        else "搜尋作品名稱"
+    )
     search_text = st.text_input(
-        "搜尋作品名稱",
+        search_label,
         placeholder="輸入作品名稱快速搜尋",
         key=f"v12_creator_reel_search_{desired_status}",
     ).strip()
@@ -6437,7 +6442,7 @@ def _v12_render_creator_reels(session, shelf="active"):
                 # reel should never leave a confusing visible number gap.
                 st.markdown(f"### 🎞️ {html.escape(source_name)}")
             with rename_col:
-                if reel_status == "collected" and not template_source_locked:
+                if reel_status == "collected":
                     rename_key = f"v12_creator_reel_rename_draft_{reel_id}"
                     if st.button(
                         "✏️ 重新命名",
@@ -6450,7 +6455,6 @@ def _v12_render_creator_reels(session, shelf="active"):
             rename_key = f"v12_creator_reel_rename_draft_{reel_id}"
             if (
                 reel_status == "collected"
-                and not template_source_locked
                 and st.session_state.get("v12_creator_reel_rename_open") == reel_id
             ):
                 with st.form(f"v12_creator_reel_rename_form_{reel_id}"):
@@ -6629,6 +6633,12 @@ def _v12_render_creator_reels(session, shelf="active"):
                             args=(session, reel_id),
                         )
             elif template_source_locked or reel_status == "published":
+                st.button(
+                    "🔒 已鎖定刪除這卷",
+                    key=f"v12_creator_reel_delete_locked_{reel_id}",
+                    disabled=True,
+                    use_container_width=True,
+                )
                 st.caption("🔒 此卷已發布到市集分享模板，已鎖定刪除功能。")
             if style_name:
                 st.caption(t("creator_reel_style", style=style_name))
