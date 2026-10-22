@@ -8566,6 +8566,15 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
     st.session_state.setdefault(
         "v12_use_custom_style", style_mode == V8_STYLE_CUSTOM_OPTION
     )
+    # 模板／舊草稿可能跨過多個 UI 版本；checkbox 只能接收 bool，先在
+    # 元件建立前正規化，避免非布林快照值導致 Streamlit TypeError。
+    _custom_style_toggle_state = st.session_state.get("v12_use_custom_style")
+    if not isinstance(_custom_style_toggle_state, bool):
+        st.session_state["v12_use_custom_style"] = str(
+            _custom_style_toggle_state or ""
+        ).strip().lower() in {"1", "true", "yes", "on"} or (
+            style_mode == V8_STYLE_CUSTOM_OPTION
+        )
     # 對齊下方的「貼圖風格」欄位，避免模式切換落在整個頁面的最左側。
     with st.container(key="v12_custom_style_toggle"):
         _use_custom_style = st.checkbox(
