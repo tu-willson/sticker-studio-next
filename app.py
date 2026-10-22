@@ -3065,6 +3065,17 @@ def _beta_report_shared_template(session, template_id):
     }
 
 
+def _v12_report_shared_template_callback(session, template_id):
+    """Run the report request before Streamlit's single automatic rerun."""
+    try:
+        _beta_report_shared_template(session, template_id)
+        st.session_state["v12_shared_template_market_feedback"] = "reported"
+    except Exception:
+        st.session_state["v12_shared_template_market_feedback"] = {
+            "type": "report_error",
+        }
+
+
 def _beta_list_my_unlocked_templates(session, limit=5, offset=0):
     response = _beta_rpc(
         "list_my_unlocked_shared_templates",
@@ -7217,6 +7228,8 @@ def _v12_render_shared_template_marketplace(session):
             st.info(f"已從我的最愛名單移除「{feedback_title}」。")
     elif isinstance(market_feedback, dict) and market_feedback.get("type") == "favorite_error":
         st.error("這個模板暫時無法更新最愛名單，請稍後再試。")
+    elif isinstance(market_feedback, dict) and market_feedback.get("type") == "report_error":
+        st.error(t("shared_template_report_failed"))
     st.markdown(
         f'<div class="v12-marketplace-intro">{html.escape(t("shared_template_market_intro"))}</div>',
         unsafe_allow_html=True,
@@ -7328,17 +7341,14 @@ def _v12_render_shared_template_marketplace(session):
             with title_col:
                 st.markdown(f"### 🌐 {html.escape(title or t('untitled_project'))}")
             with top_report_col:
-                if not is_owner and st.button(
-                    t("shared_template_report"),
-                    key=f"v12_shared_template_report_{template_id}",
-                    use_container_width=True,
-                ):
-                    try:
-                        _beta_report_shared_template(session, template_id)
-                        st.session_state["v12_shared_template_market_feedback"] = "reported"
-                        st.rerun()
-                    except Exception:
-                        st.error(t("shared_template_report_failed"))
+                if not is_owner:
+                    st.button(
+                        t("shared_template_report"),
+                        key=f"v12_shared_template_report_{template_id}",
+                        use_container_width=True,
+                        on_click=_v12_report_shared_template_callback,
+                        args=(session, template_id),
+                    )
             if description:
                 st.caption(description)
             template_tags = [
