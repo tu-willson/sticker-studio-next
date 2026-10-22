@@ -2037,7 +2037,7 @@ html{scroll-behavior:smooth;}
 .v12-pricing-contact strong{color:#fff;font-weight:900;letter-spacing:.02em;}
 .v12-pricing-card{
   position:relative;
-  min-height:258px;
+  min-height:322px;
   margin-bottom:.6rem;
   padding:1.1rem .9rem .92rem;
   overflow:hidden;
@@ -2071,7 +2071,7 @@ html{scroll-behavior:smooth;}
   background:rgba(255,79,103,.11);
 }
 .v12-pricing-selection h3{text-align:center;margin:.1rem 0 .65rem;}
-@media (max-width:900px){.v12-pricing-card{min-height:232px;padding:.9rem .72rem;}.v12-pricing-plan-name{font-size:1.08rem;}.v12-pricing-price{font-size:1.42rem;}.v12-pricing-benefit{font-size:.78rem;}}
+@media (max-width:900px){.v12-pricing-card{min-height:288px;padding:.9rem .72rem;}.v12-pricing-plan-name{font-size:1.08rem;}.v12-pricing-price{font-size:1.42rem;}.v12-pricing-benefit{font-size:.78rem;}}
 @media (max-width:640px){.v12-pricing-hero{padding:1rem .8rem;border-radius:16px;}.v12-pricing-hero p{font-size:.9rem;}.v12-pricing-contact{font-size:.72rem;}.v12-pricing-card{min-height:0;margin-bottom:.42rem;padding:.78rem .55rem;}.v12-pricing-plan-name{font-size:.95rem;}.v12-pricing-price{font-size:1.16rem;}.v12-pricing-benefit{font-size:.7rem;}.v12-pricing-badge,.v12-pricing-current{padding:.15rem .32rem;font-size:.57rem;}}
 
 /* V12｜STEP 01B③｜125 種帶圖字型響應式圖卡牆 */
@@ -8662,6 +8662,8 @@ def _v12_render_pricing_page():
             "credits": t("benefit_credits", count=20, suffix=_v12_generation_suffix()),
             "copy": t("benefit_copy", count=15),
             "library": t("benefit_library", count=20),
+            "reels": t("benefit_reels", count=20),
+            "market_publish": t("benefit_market_publish", count=10),
             "button": t("pricing_choose_basic"),
         },
         {
@@ -8672,6 +8674,8 @@ def _v12_render_pricing_page():
             "credits": t("benefit_credits", count=30, suffix=_v12_generation_suffix()),
             "copy": t("benefit_copy", count=20),
             "library": t("benefit_library", count=30),
+            "reels": t("benefit_reels", count=30),
+            "market_publish": t("benefit_market_publish", count=15),
             "button": t("pricing_choose_standard"),
             "recommended": True,
         },
@@ -8683,6 +8687,8 @@ def _v12_render_pricing_page():
             "credits": t("benefit_credits", count=40, suffix=_v12_generation_suffix()),
             "copy": t("benefit_copy", count=25),
             "library": t("benefit_library", count=40),
+            "reels": t("benefit_reels", count=40),
+            "market_publish": t("benefit_market_publish", count=20),
             "button": t("pricing_choose_advanced"),
         },
         {
@@ -8693,6 +8699,8 @@ def _v12_render_pricing_page():
             "credits": t("benefit_credits", count=7, suffix=""),
             "copy": t("benefit_copy", count=7),
             "library": t("benefit_library", count=7),
+            "reels": t("benefit_reels", count=5),
+            "market_publish": t("benefit_market_publish", count=3),
             "button": t("pricing_choose_pack"),
         },
     ]
@@ -8742,6 +8750,8 @@ def _v12_render_pricing_page():
                   <div class="v12-pricing-benefit">🖼️ {product['credits']}</div>
                   <div class="v12-pricing-benefit">✨ {product['copy']}</div>
                   <div class="v12-pricing-benefit">☁️ {product['library']}</div>
+                  <div class="v12-pricing-benefit">⭐ {product['reels']}</div>
+                  <div class="v12-pricing-benefit">🌐 {product['market_publish']}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,

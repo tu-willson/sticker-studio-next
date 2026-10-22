@@ -161,6 +161,8 @@ _ZH = {
     "benefit_credits": "圖片生成 {count} 次{suffix}",
     "benefit_copy": "AI幫想每日 {count} 次",
     "benefit_library": "雲端作品庫 {count} 組",
+    "benefit_reels": "可保留膠捲 {count} 卷",
+    "benefit_market_publish": "可發布市集 {count} 組",
     "entitlement_subscription": "目前訂閱方案：{name}{expiry}",
     "entitlement_pack": "目前使用：{name}{expiry}",
     "entitlement_free": "目前權益：免費體驗",
@@ -222,7 +224,7 @@ _EN = {
     "pricing_rules_heading": "📌 Plan details", "pricing_rules_title": "View subscription, generation, and cloud-library rules",
     "pricing_footer": "The service provides AI-assisted sticker creation, individual/ZIP downloads, and private cloud storage. Payment, renewal, cancellation, and refund details will appear on checkout.",
     "plan_basic": "Basic", "plan_standard": "Standard", "plan_advanced": "Advanced", "plan_pack": "7-Generation Pack", "period_monthly": "Monthly subscription", "period_pack": "One-time purchase · valid for 30 days",
-    "benefit_credits": "{count} image generations{suffix}", "benefit_copy": "{count} AI Ideas per day", "benefit_library": "{count} cloud projects",
+    "benefit_credits": "{count} image generations{suffix}", "benefit_copy": "{count} AI Ideas per day", "benefit_library": "{count} cloud projects", "benefit_reels": "Keep {count} reels", "benefit_market_publish": "Publish {count} marketplace templates",
     "entitlement_subscription": "Current subscription: {name}{expiry}", "entitlement_pack": "Current benefit: {name}{expiry}", "entitlement_free": "Current benefit: Free trial",
 }
 
@@ -282,7 +284,7 @@ _JA = {
     "pricing_rules_heading": "📌 プラン利用ルール", "pricing_rules_title": "サブスクリプション・生成回数・クラウド作品庫のルールを見る",
     "pricing_footer": "AIによるステッカー作成、単体／ZIP ダウンロード、プライベートなクラウド保存を提供します。決済、更新、解約、返金の説明は正式な決済画面で表示されます。",
     "plan_basic": "ベーシック", "plan_standard": "スタンダード", "plan_advanced": "アドバンス", "plan_pack": "7回生成パック", "period_monthly": "月額サブスクリプション", "period_pack": "単発購入・30日間有効",
-    "benefit_credits": "画像生成 {count} 回{suffix}", "benefit_copy": "AIアイデア 毎日 {count} 回", "benefit_library": "クラウド作品 {count} 組",
+    "benefit_credits": "画像生成 {count} 回{suffix}", "benefit_copy": "AIアイデア 毎日 {count} 回", "benefit_library": "クラウド作品 {count} 組", "benefit_reels": "保存できる膠巻 {count} 巻", "benefit_market_publish": "市集に公開 {count} 組",
     "entitlement_subscription": "現在のサブスクリプション：{name}{expiry}", "entitlement_pack": "現在の特典：{name}{expiry}", "entitlement_free": "現在の特典：無料体験",
 }
 
