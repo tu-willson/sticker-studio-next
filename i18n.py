@@ -125,7 +125,7 @@ _ZH = {
     "shared_template_market_unavailable": "模板市集暫時無法載入，請稍後再試。", "shared_template_market_empty": "目前尚未有可套用的分享模板。",
     "shared_template_market_no_match": "目前沒有符合這組搜尋或分類條件的模板。",
     "shared_template_market_search": "🔎 搜尋模板", "shared_template_market_search_placeholder": "輸入模板名稱或介紹關鍵字",
-    "shared_template_market_sort": "排序方式", "shared_template_market_sort_newest": "最新發布", "shared_template_market_sort_popular": "最多人解鎖", "shared_template_market_sort_low_cost": "消耗次數最低", "shared_template_market_sort_favorites": "收藏的名單",
+    "shared_template_market_sort": "排序方式", "shared_template_market_sort_newest": "最新發布", "shared_template_market_sort_popular": "最多人解鎖", "shared_template_market_sort_low_cost": "消耗次數最低", "shared_template_market_sort_favorites": "我的最愛名單",
     "shared_template_market_filter_tags": "快速篩選分類（可複選）", "shared_template_market_filter_tags_help": "選擇一個或多個固定分類，市集會顯示符合其中任一分類的模板。",
     "shared_template_preview_caption": "模板預覽", "shared_template_preview_unavailable": "預覽圖暫時無法載入。",
     "shared_template_has_style_reference": "包含畫風參考", "shared_template_no_style_reference": "使用風格快選／自定義風格",
@@ -366,7 +366,7 @@ CATALOG["ja"].update({
 CATALOG["zh-TW"].update({
     "shared_template_publish_content_warning": "請勿刊登不雅圖像，違者將停權處理。",
     "shared_template_market_return": "← 返回模版市集",
-    "shared_template_market_sort_favorites": "收藏的名單",
+    "shared_template_market_sort_favorites": "我的最愛名單",
     "shared_template_favorite": "⭐ 加入最愛", "shared_template_favorited": "★ 已加入最愛", "shared_template_report": "🚩 檢舉",
     "shared_template_report_success": "已檢舉並從你的市集隱藏；若累積 3 位不同使用者檢舉，系統會列入管理員待審查清單。",
     "shared_template_report_failed": "這個模板暫時無法檢舉，請稍後再試。",
