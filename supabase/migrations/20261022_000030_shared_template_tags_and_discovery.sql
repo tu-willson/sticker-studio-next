@@ -18,6 +18,7 @@ alter table public.shared_templates
   check (cardinality(tags) between 1 and 3);
 
 drop function if exists public.reserve_shared_template(uuid, uuid, text, text, integer);
+drop function if exists public.reserve_shared_template(uuid, uuid, text, text, integer, text[]);
 
 create function public.reserve_shared_template(
   p_template_id uuid,
