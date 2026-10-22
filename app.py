@@ -1838,6 +1838,55 @@ div[class*="st-key-v12_market_unlocked_tab"] button{
   border-color:#63b8f3 !important;
   color:#fff !important;
 }
+.v12-reel-rules{
+  margin:1.1rem 0 .7rem;
+  color:#fff;
+  font-weight:750;
+}
+.v12-reel-rules-title{
+  margin:0 0 .7rem;
+  color:#fff;
+  font-size:1.08rem;
+  font-weight:950;
+  letter-spacing:.02em;
+}
+.v12-reel-rules table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  overflow:hidden;
+  border:1px solid rgba(191,220,255,.54);
+  border-radius:12px;
+  background:transparent;
+}
+.v12-reel-rules th,
+.v12-reel-rules td{
+  padding:.75rem .85rem;
+  text-align:left;
+  vertical-align:top;
+  border-bottom:1px solid rgba(191,220,255,.24);
+  background:transparent;
+}
+.v12-reel-rules th{
+  color:#fff;
+  font-size:.92rem;
+  font-weight:950;
+  border-bottom-color:rgba(191,220,255,.54);
+}
+.v12-reel-rules tr:last-child td{border-bottom:0;}
+.v12-reel-rules-plan{font-weight:950;white-space:nowrap;}
+.v12-reel-rules-free{color:#ffd18b;}
+.v12-reel-rules-pack{color:#a9d8ff;}
+.v12-reel-rules-sub{color:#9bf3c1;}
+.v12-reel-rules-note{
+  margin:.72rem 0 0;
+  color:#fff;
+  font-weight:850;
+}
+@media(max-width:680px){
+  .v12-reel-rules th,.v12-reel-rules td{padding:.62rem .58rem;font-size:.87rem;}
+  .v12-reel-rules th:nth-child(2),.v12-reel-rules td:nth-child(2){display:none;}
+}
 html{scroll-behavior:smooth;}
 [id^="v12-step-"]{scroll-margin-top:1rem;}
 .v12-font-gallery-note{
@@ -6432,7 +6481,7 @@ def _v12_render_creator_reels(session, shelf="active"):
     if desired_status == "collected":
         st.caption("已解鎖模板與已收藏膠捲共用數量上限。")
         st.info(
-            f"已收藏／已解鎖：{status['shared_reel_count']}／"
+            f"已收藏+已解鎖：{status['shared_reel_count']}／"
             f"{status['collected_reel_limit']} 卷"
         )
     search_label = (
@@ -8971,12 +9020,39 @@ if st.session_state["v12_view"] == "library":
             ):
                 st.session_state["v12_library_section"] = "cloud"
                 st.rerun()
-        st.info(
-            "🎞️ 膠捲與市集規則\n\n"
-            "- 一般會員：未收藏膠捲 5 卷、已收藏 5 卷，未收藏保存 10 天；不可使用市集模板。\n"
-            "- 7 次生成包：未收藏膠捲 7 卷、已收藏／已解鎖共 5 卷，未收藏保存 10 天；可解鎖 5 組模板、發布 3 組模板。\n"
-            "- 基本／標準／進階：未收藏膠捲為 20／30／40 卷，已收藏／已解鎖共用同額度，未收藏保存 10 天；可發布 10／15／20 組模板。\n\n"
-            "未收藏膠捲超過上限時，會自動替換最早的一卷並循環保存。"
+        st.markdown(
+            """
+            <section class="v12-reel-rules">
+              <div class="v12-reel-rules-title">🎞️ 膠捲與市集規則</div>
+              <table>
+                <thead>
+                  <tr><th>方案</th><th>未收藏膠捲</th><th>已收藏＋已解鎖</th><th>市集功能</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="v12-reel-rules-plan v12-reel-rules-free">一般會員</td>
+                    <td>上限 5 卷｜保存 10 天</td>
+                    <td>上限 5 卷</td>
+                    <td>無法使用市集模板</td>
+                  </tr>
+                  <tr>
+                    <td class="v12-reel-rules-plan v12-reel-rules-pack">7 次生成包</td>
+                    <td>上限 7 卷｜保存 10 天</td>
+                    <td>共用上限 5 卷</td>
+                    <td>可解鎖 5 組｜可發布 3 組</td>
+                  </tr>
+                  <tr>
+                    <td class="v12-reel-rules-plan v12-reel-rules-sub">基本／標準／進階</td>
+                    <td>上限 20／30／40 卷｜保存 10 天</td>
+                    <td>共用上限 20／30／40 卷</td>
+                    <td>可發布 10／15／20 組</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="v12-reel-rules-note">未收藏膠捲超過上限時，會自動替換最早的一卷並循環保存。</p>
+            </section>
+            """,
+            unsafe_allow_html=True,
         )
         st.stop()
 
