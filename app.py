@@ -1933,10 +1933,50 @@ div[class*="st-key-v12_market_unlocked_tab"] button{
   line-height:1.62;
 }
 .v12-reel-market-guide strong{color:#ffe0a3;}
+/* 購買方案的使用說明沿用市集說明的彩色重點閱讀方式。 */
+.st-key-v12_pricing_rules_guide{
+  margin-top:1.1rem;
+  padding:1rem 1.05rem;
+  border:1px solid rgba(137,196,255,.52);
+  border-radius:12px;
+  background:transparent;
+}
+.st-key-v12_pricing_rules_guide h3{
+  margin:.05rem 0 .7rem !important;
+  color:#a9d8ff !important;
+  font-size:1.08rem !important;
+  font-weight:950 !important;
+}
+.st-key-v12_pricing_rules_guide [data-testid="stExpander"]{
+  border-color:rgba(137,196,255,.44) !important;
+  background:rgba(26,66,103,.20) !important;
+}
+.st-key-v12_pricing_rules_guide [data-testid="stExpander"] summary{
+  color:#a9d8ff !important;
+  font-weight:900 !important;
+}
+.st-key-v12_pricing_rules_guide [data-testid="stMarkdownContainer"] h4{
+  color:#9bf3c1 !important;
+  font-weight:950 !important;
+}
+.st-key-v12_pricing_rules_guide [data-testid="stMarkdownContainer"] strong{
+  color:#ffe0a3 !important;
+}
+.st-key-v12_pricing_rules_guide [data-testid="stMarkdownContainer"] blockquote{
+  border-left-color:#a9d8ff !important;
+  color:#d8ecff !important;
+  background:rgba(49,132,194,.14) !important;
+  border-radius:0 8px 8px 0;
+  padding:.5rem .75rem;
+}
+.st-key-v12_pricing_rules_guide [data-testid="stCaptionContainer"]{
+  color:rgba(224,235,248,.86) !important;
+}
 @media(max-width:680px){
   .v12-reel-rules th,.v12-reel-rules td{padding:.62rem .58rem;font-size:.87rem;}
   .v12-reel-rules th:nth-child(2),.v12-reel-rules td:nth-child(2){display:none;}
   .v12-reel-market-guide{padding:.85rem .8rem;}
+  .st-key-v12_pricing_rules_guide{padding:.85rem .8rem;}
 }
 html{scroll-behavior:smooth;}
 [id^="v12-step-"],#v12-sticker-basket{scroll-margin-top:1rem;}
@@ -8736,10 +8776,11 @@ def _v12_render_pricing_page():
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown(f"### {t('pricing_rules_heading')}")
-    with st.expander(t("pricing_rules_title"), expanded=True):
-        st.markdown(_v12_pricing_rules_markdown())
-    st.caption(t("pricing_footer"))
+    with st.container(key="v12_pricing_rules_guide"):
+        st.markdown(f"### {t('pricing_rules_heading')}")
+        with st.expander(t("pricing_rules_title"), expanded=True):
+            st.markdown(_v12_pricing_rules_markdown())
+        st.caption(t("pricing_footer"))
 
 
 # ------------------------------------------------------------
