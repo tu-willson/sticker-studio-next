@@ -1796,7 +1796,8 @@ div[data-testid="stCheckbox"] label{
 .v12-quick-nav-label{font-size:.65rem;font-weight:950;}
 .v12-quick-nav-number{margin-top:2px;font-size:.72rem;opacity:.94;}
 div[class*="st-key-v12_quick_library"],
-div[class*="st-key-v12_quick_step_"]{
+div[class*="st-key-v12_quick_step_"],
+div[class*="st-key-v12_quick_basket"]{
   position:fixed !important;
   right:24px;
   bottom:calc(170px + env(safe-area-inset-bottom, 0px));
@@ -1806,9 +1807,11 @@ div[class*="st-key-v12_quick_step_"]{
   margin:0 !important;
 }
 body:has(.v12-quick-nav details[open]) div[class*="st-key-v12_quick_library"],
-body:has(.v12-quick-nav details[open]) div[class*="st-key-v12_quick_step_"]{display:block !important;}
+body:has(.v12-quick-nav details[open]) div[class*="st-key-v12_quick_step_"],
+body:has(.v12-quick-nav details[open]) div[class*="st-key-v12_quick_basket"]{display:block !important;}
 div[class*="st-key-v12_quick_library"] button,
-div[class*="st-key-v12_quick_step_"] button{
+div[class*="st-key-v12_quick_step_"] button,
+div[class*="st-key-v12_quick_basket"] button{
   width:48px !important;
   min-width:48px !important;
   height:48px !important;
@@ -1825,7 +1828,8 @@ div[class*="st-key-v12_quick_step_"] button{
   white-space:pre-line !important;
 }
 div[class*="st-key-v12_quick_library"] button p,
-div[class*="st-key-v12_quick_step_"] button p{
+div[class*="st-key-v12_quick_step_"] button p,
+div[class*="st-key-v12_quick_basket"] button p{
   color:#fff !important;
   font-size:.65rem !important;
   font-weight:950 !important;
@@ -1844,6 +1848,7 @@ div[class*="st-key-v12_quick_step_05"]{bottom:calc(440px + env(safe-area-inset-b
 div[class*="st-key-v12_quick_step_06"]{bottom:calc(494px + env(safe-area-inset-bottom, 0px));}
 div[class*="st-key-v12_quick_step_07"]{bottom:calc(548px + env(safe-area-inset-bottom, 0px));}
 div[class*="st-key-v12_quick_step_08"]{bottom:calc(602px + env(safe-area-inset-bottom, 0px));}
+div[class*="st-key-v12_quick_basket"]{bottom:calc(656px + env(safe-area-inset-bottom, 0px));}
 div[class*="st-key-v12_quick_step_01"] button{background:linear-gradient(145deg,#ff9aac,#ff5c7a) !important;}
 div[class*="st-key-v12_quick_step_02"] button{background:linear-gradient(145deg,#ffc078,#ff9f43) !important;}
 div[class*="st-key-v12_quick_step_03"] button{background:linear-gradient(145deg,#75e3a0,#2ecc71) !important;}
@@ -1934,7 +1939,7 @@ div[class*="st-key-v12_market_unlocked_tab"] button{
   .v12-reel-market-guide{padding:.85rem .8rem;}
 }
 html{scroll-behavior:smooth;}
-[id^="v12-step-"]{scroll-margin-top:1rem;}
+[id^="v12-step-"],#v12-sticker-basket{scroll-margin-top:1rem;}
 .v12-font-gallery-note{
   text-align:center;
   opacity:.9;
@@ -2118,12 +2123,14 @@ html{scroll-behavior:smooth;}
     transform-origin:bottom right;
   }
   div[class*="st-key-v12_quick_library"],
-  div[class*="st-key-v12_quick_step_"]{
+  div[class*="st-key-v12_quick_step_"],
+  div[class*="st-key-v12_quick_basket"]{
     right:14px;
     bottom:calc(171px + env(safe-area-inset-bottom, 0px));
   }
   div[class*="st-key-v12_quick_library"] button,
-  div[class*="st-key-v12_quick_step_"] button{
+  div[class*="st-key-v12_quick_step_"] button,
+  div[class*="st-key-v12_quick_basket"] button{
     width:46px !important;
     min-width:46px !important;
     height:46px !important;
@@ -2137,6 +2144,7 @@ html{scroll-behavior:smooth;}
   div[class*="st-key-v12_quick_step_06"]{bottom:calc(468px + env(safe-area-inset-bottom, 0px));}
   div[class*="st-key-v12_quick_step_07"]{bottom:calc(517px + env(safe-area-inset-bottom, 0px));}
   div[class*="st-key-v12_quick_step_08"]{bottom:calc(566px + env(safe-area-inset-bottom, 0px));}
+  div[class*="st-key-v12_quick_basket"]{bottom:calc(615px + env(safe-area-inset-bottom, 0px));}
 }
 
 /* V12｜STEP 01B③-5｜手機字型圖卡強制雙欄
@@ -2528,6 +2536,7 @@ st.markdown(f"""
       <a class="v12-quick-nav-link" style="--nav-accent:#e67e22" href="#v12-step-06" title="06 {t('quick_nav_06')}"><span class="v12-quick-nav-label">{t('quick_nav_06')}</span><span class="v12-quick-nav-number">06</span></a>
       <a class="v12-quick-nav-link" style="--nav-accent:#32c6c0" href="#v12-step-07" title="07 {t('quick_nav_07')}"><span class="v12-quick-nav-label">{t('quick_nav_07')}</span><span class="v12-quick-nav-number">07</span></a>
       <a class="v12-quick-nav-link" style="--nav-accent:#e74c3c" href="#v12-step-08" title="08 {t('quick_nav_08')}"><span class="v12-quick-nav-label">{t('quick_nav_08')}</span><span class="v12-quick-nav-number">08</span></a>
+      <a class="v12-quick-nav-link" style="--nav-accent:#9b59b6" href="#v12-sticker-basket"><span class="v12-quick-nav-label">暫存<br>區</span></a>
     </nav>
   </details>
 </div>
@@ -8868,6 +8877,10 @@ if st.session_state.get("v12_view") == "library":
             st.session_state["v12_view"] = "create"
             st.session_state["v12_scroll_target"] = f"v12-step-{_v12_step_number:02d}"
             st.rerun()
+    if st.button("暫存\n區", key="v12_quick_basket"):
+        st.session_state["v12_view"] = "create"
+        st.session_state["v12_scroll_target"] = "v12-sticker-basket"
+        st.rerun()
 
 st.session_state.setdefault("v12_view", "create")
 
@@ -11308,6 +11321,7 @@ if (
     and _v12_get_sticker_basket()
 ):
     st.divider()
+    st.markdown('<div id="v12-sticker-basket"></div>', unsafe_allow_html=True)
     v10_section(t("basket_section"), "#9b59b6")
     st.caption(t("basket_loaded_intro"))
     _v12_render_sticker_basket_workspace()
@@ -11553,6 +11567,7 @@ function saveBlob(blob,name){''',
             pass
 
     st.divider()
+    st.markdown('<div id="v12-sticker-basket"></div>', unsafe_allow_html=True)
     v10_section(t("basket_section"), "#9b59b6")
     _crop_basket_feedback = st.session_state.pop("v12_crop_basket_feedback", None)
     if isinstance(_crop_basket_feedback, dict):
@@ -12151,7 +12166,10 @@ _public02a_settings_panel()
 # A shortcut selected from My Works returns through Streamlit's normal
 # in-page navigation, then scrolls to the requested creation step.
 _v12_scroll_target = str(st.session_state.pop("v12_scroll_target", "") or "")
-if re.fullmatch(r"v12-step-0[1-8]", _v12_scroll_target):
+if (
+    re.fullmatch(r"v12-step-0[1-8]", _v12_scroll_target)
+    or _v12_scroll_target == "v12-sticker-basket"
+):
     components.html(
         f"""
         <script>
