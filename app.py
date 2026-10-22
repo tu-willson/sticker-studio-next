@@ -1042,6 +1042,12 @@ div[class*="st-key-v12_basket_remove_"] button:hover{
   background:#e9486d !important;
   border-color:#e9486d !important;
 }
+div[class*="st-key-v12_basket_download_"] button{
+  padding-left:.55rem !important;
+  padding-right:.55rem !important;
+  font-size:15px !important;
+  white-space:nowrap !important;
+}
 .v12-project-save-divider{
   height:1px;
   margin:22px 0 18px;
@@ -5350,24 +5356,26 @@ def _v12_render_sticker_basket_workspace():
                     )
                     st.session_state.setdefault(f"v12_basket_select_{item_id}", True)
                     st.checkbox(t("basket_keep"), key=f"v12_basket_select_{item_id}")
-                    # 操作區集中在卡片左側；下載較大、粉紅刪除較小且保持安全距離。
-                    download_col, remove_col, _action_spacer = st.columns([2.3, 1.35, 1.3])
-                    with download_col:
-                        st.download_button(
-                            t("basket_png"),
-                            data=item["image_bytes"],
-                            file_name=(
-                                f"LINE貼圖_{item['batch_label'].replace(' ', '')}_"
-                                f"{item['source_slot']:02d}.png"
-                            ),
-                            mime="image/png",
-                            use_container_width=True,
-                            key=f"v12_basket_download_{item_id}",
-                        )
-                    with remove_col:
-                        if st.button("刪除", key=f"v12_basket_remove_{item_id}", use_container_width=True):
-                            _v12_remove_sticker_basket_item(item_id)
-                            st.rerun(scope="fragment")
+                    # 操作列對準圖片中心；下載較大、粉紅刪除較小且保持安全距離。
+                    _action_gutter, action_area = st.columns([0.65, 4.35])
+                    with action_area:
+                        download_col, remove_col = st.columns([2.65, 1.15])
+                        with download_col:
+                            st.download_button(
+                                t("basket_png"),
+                                data=item["image_bytes"],
+                                file_name=(
+                                    f"LINE貼圖_{item['batch_label'].replace(' ', '')}_"
+                                    f"{item['source_slot']:02d}.png"
+                                ),
+                                mime="image/png",
+                                use_container_width=True,
+                                key=f"v12_basket_download_{item_id}",
+                            )
+                        with remove_col:
+                            if st.button("刪除", key=f"v12_basket_remove_{item_id}", use_container_width=True):
+                                _v12_remove_sticker_basket_item(item_id)
+                                st.rerun(scope="fragment")
 
     selected = _v12_selected_sticker_basket_items()
     st.divider()
