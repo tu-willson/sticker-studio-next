@@ -2642,7 +2642,7 @@ def _beta_list_library_projects(session):
         "/rest/v1/library_projects?select=id,title,metadata,grid_path,package_path,"
         "preview_path,sticker_prefix,source_photo_path,style_reference_path,"
         "created_at,updated_at,completed_at&status=eq.active"
-        "&order=created_at.desc"
+        "&order=updated_at.desc"
     )
     response = _beta_http("GET", query, access_token=session["access_token"])
     return response if isinstance(response, list) else []
@@ -8407,7 +8407,17 @@ if st.session_state["v12_view"] == "library":
                         st.info(t("preview_unavailable"))
                 with _cloud_right:
                     st.markdown(f"### 🏷️ {html.escape(_cloud_title)}")
-                    st.caption(t("cloud_saved_at", time=_v12_format_display_time(_cloud_project.get("created_at", ""))))
+                    _cloud_saved_time = (
+                        _cloud_project.get("updated_at")
+                        or _cloud_project.get("completed_at")
+                        or _cloud_project.get("created_at", "")
+                    )
+                    st.caption(
+                        t(
+                            "cloud_saved_at",
+                            time=_v12_format_display_time(_cloud_saved_time),
+                        )
+                    )
                     st.caption(t("cloud_assets_note"))
                     _cloud_act1, _cloud_act2 = st.columns(2)
                     with _cloud_act1:
