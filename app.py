@@ -6201,6 +6201,8 @@ def _v12_render_shared_template_manager(session):
                         else "shared_template_status_withdrawn"
                     )
                 )
+                if not published:
+                    st.caption("（完整刪除請至已收藏膠捲區）")
                 action_label = _v12_management_t(
                     "shared_template_withdraw_button"
                     if published
