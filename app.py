@@ -1265,33 +1265,26 @@ st.markdown("""
   font-size:.8rem;
 }
 .v12-generation-showtime-track{
-  position:relative;
-  height:10px;
-  overflow:hidden;
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:.36rem;
+  height:11px;
   margin:.65rem 0 .5rem;
+}
+.v12-generation-showtime-segment{
+  height:100%;
+  min-width:0;
   border-radius:999px;
+  overflow:hidden;
   background:rgba(9,18,35,.62);
   box-shadow:inset 0 0 0 1px rgba(255,220,163,.23);
 }
-.v12-generation-showtime-fill{
-  position:relative;
-  height:100%;
-  border-radius:inherit;
-  overflow:hidden;
-  background:linear-gradient(90deg,#ff9f43,#ffcf5a,#ff6e91,#9d7dff,#ff9f43);
-  background-size:220% 100%;
-  box-shadow:0 0 14px rgba(255,180,83,.76);
-  animation:v12-generation-stage-breathe 5.8s ease-in-out infinite,
-            v12-generation-color-flow 7s linear infinite;
+.v12-generation-showtime-segment.is-done{
+  background:linear-gradient(90deg,#ff9f43,#ffcf5a,#ff6e91,#9d7dff);
+  box-shadow:0 0 12px rgba(255,180,83,.58);
 }
-.v12-generation-showtime-fill::after{
-  content:"";
-  position:absolute;
-  inset:0;
-  width:42%;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.64),transparent);
-  transform:translateX(-155%) skewX(-18deg);
-  animation:v12-generation-shimmer 2.65s ease-in-out infinite;
+.v12-generation-showtime-segment.is-active{
+  animation:v12-generation-segment-pulse 1.45s ease-in-out infinite;
 }
 .v12-generation-showtime-note{
   display:flex;
@@ -1312,25 +1305,16 @@ st.markdown("""
 }
 .v12-generation-showtime-dots i:nth-child(2){ animation-delay:.16s; }
 .v12-generation-showtime-dots i:nth-child(3){ animation-delay:.32s; }
-@keyframes v12-generation-stage-breathe{
-  0%,100%{ width:var(--v12-stage-start); }
-  50%{ width:var(--v12-stage-end); }
-}
-@keyframes v12-generation-color-flow{
-  from{ background-position:0% 50%; }
-  to{ background-position:220% 50%; }
-}
-@keyframes v12-generation-shimmer{
-  0%,24%{ transform:translateX(-155%) skewX(-18deg); opacity:0; }
-  32%{ opacity:1; }
-  74%,100%{ transform:translateX(330%) skewX(-18deg); opacity:0; }
+@keyframes v12-generation-segment-pulse{
+  0%,100%{ filter:brightness(.92); transform:scaleY(.82); }
+  50%{ filter:brightness(1.2); transform:scaleY(1); }
 }
 @keyframes v12-generation-dot-bounce{
   0%,100%{ transform:translateY(0); opacity:.4; }
   50%{ transform:translateY(-.24rem); opacity:1; }
 }
 @media (prefers-reduced-motion: reduce){
-  .v12-generation-showtime-fill,.v12-generation-showtime-fill::after,
+  .v12-generation-showtime-segment.is-active,
   .v12-generation-showtime-dots i{ animation:none !important; }
 }
 .v11-success-next{
@@ -8682,7 +8666,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 _loaded_style_name = str(_loaded_project_style.get("name", "") or "").strip()
                 _loaded_style_source = str(_loaded_project_style.get("source", "") or "")
                 _loaded_style_label = (
-                    "📦 已載入分享模板的自定義風格（不會覆蓋你的 01～10）"
+                    "📦 已載入分享模板的自定義風格（不會覆蓋你的 01～10；請勿再點選自己的已儲存風格，否則會覆蓋目前套用的風格）"
                     if _loaded_style_source == "shared_template"
                     else "📦 已載入作品當時的自定義風格"
                 )
@@ -10199,14 +10183,36 @@ if st.session_state.get("v11_generation_pending", False):
             _started_at = time.monotonic()
 
             def _show_generation_scene(scene, title, note, percent):
-                _stage_end = min(100, percent + (3 if percent < 96 else 0))
+                # 這是「製作階段」而不是假裝知道 AI 的精準百分比。
+                # 每一幕點亮一格；等待同一幕時只讓該格輕微呼吸，不再讓
+                # 進度條在中段前後擺動，使用者能一眼看出目前第幾步。
+                if percent >= 100:
+                    _active_stage, _finished_stages = 0, 5
+                elif percent <= 15:
+                    _active_stage, _finished_stages = 1, 0
+                elif percent <= 40:
+                    _active_stage, _finished_stages = 2, 1
+                elif percent <= 65:
+                    _active_stage, _finished_stages = 3, 2
+                elif percent <= 88:
+                    _active_stage, _finished_stages = 4, 3
+                else:
+                    _active_stage, _finished_stages = 5, 4
+                _segments = "".join(
+                    '<i class="v12-generation-showtime-segment{}"></i>'.format(
+                        " is-done" if _stage <= _finished_stages else (
+                            " is-done is-active" if _stage == _active_stage else ""
+                        )
+                    )
+                    for _stage in range(1, 6)
+                )
                 _showtime.markdown(
                     f"""
                     <div class="v12-generation-showtime">
                       <div class="v12-generation-showtime-top">
                         <span>{title}</span><span class="v12-generation-showtime-scene">{scene}</span>
                       </div>
-                      <div class="v12-generation-showtime-track"><div class="v12-generation-showtime-fill" style="--v12-stage-start:{percent}%;--v12-stage-end:{_stage_end}%"></div></div>
+                      <div class="v12-generation-showtime-track" aria-label="目前製作階段">{_segments}</div>
                       <div class="v12-generation-showtime-note"><span>{note}</span><span class="v12-generation-showtime-dots" aria-label="製作中"><i></i><i></i><i></i></span></div>
                     </div>
                     """,
