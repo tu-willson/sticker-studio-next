@@ -3654,6 +3654,25 @@ def _beta_render_admin_console(session):
 
         st.markdown("#### 🧪 管理員測試購買")
         st.info("此操作只用於驗證方案權益：不會收款、不會寄送付款通知，也不會對外顯示為正式訂單。")
+        # 測試購買不再默默沿用上方「補次／扣次」的選取會員。明確列出
+        # 授權對象，避免管理員在切換測試帳號時把方案給錯人。
+        _test_purchase_labels = list(options.keys())
+        _test_purchase_default = (
+            _test_purchase_labels.index(selected_label)
+            if selected_label in _test_purchase_labels else 0
+        )
+        test_purchase_target_label = st.selectbox(
+            "指定授權使用者",
+            _test_purchase_labels,
+            index=_test_purchase_default,
+            key="beta_admin_test_purchase_target",
+            help="先在上方搜尋會員；此方案只會授與這裡顯示的使用者。",
+        )
+        test_purchase_target = options[test_purchase_target_label]
+        st.caption(
+            "將授與："
+            f"{test_purchase_target.get('email') or '未提供 Email'}"
+        )
         product_options = {
             "7 次生成包｜圖片生成 7 次／AI幫想每日 7 次／作品集 7 組｜效期 30 天": "credit_pack_7",
             "基本方案｜圖片生成 20 次／AI幫想每日 15 次／作品集 20 組｜週期 1 個月": "basic_monthly",
@@ -3669,14 +3688,15 @@ def _beta_render_admin_console(session):
             max_chars=160,
             key="beta_admin_test_purchase_note",
         )
-        if st.button("建立管理員測試購買", type="primary", key="beta_admin_test_purchase"):
+        st.caption("訂閱方案會直接成為該使用者目前有效的測試訂閱權益。")
+        if st.button("授與指定使用者測試方案", type="primary", key="beta_admin_test_purchase"):
             if len(purchase_note.strip()) < 3:
                 st.warning("請填寫至少 3 個字的測試備註。")
             else:
                 try:
                     result = _beta_admin_grant_test_purchase(
                         session,
-                        selected["user_id"],
+                        test_purchase_target["user_id"],
                         product_options[selected_product_label],
                         purchase_note,
                     )
@@ -3685,7 +3705,8 @@ def _beta_render_admin_console(session):
                     capacity = int(result.get("library_capacity", 0) or 0)
                     expiry = str(result.get("credit_expires_at", "") or "")[:10]
                     st.success(
-                        f"測試購買已建立：加入圖片生成 {credits} 次、AI幫想每日 {daily} 次、"
+                        f"已授與 {test_purchase_target.get('email') or '指定使用者'}："
+                        f"圖片生成 {credits} 次、AI幫想每日 {daily} 次、"
                         f"作品集上限 {capacity} 組；圖片生成次數效期至 {expiry}。"
                     )
                     st.session_state["beta_admin_members"] = _beta_admin_list_members(
