@@ -2587,7 +2587,7 @@ def _beta_raw_http(method, path, body=None, access_token=None,
 
 
 def _beta_storage_upload(session, object_path, content, content_type,
-                         bucket="member-projects"):
+                         bucket="member-projects", upsert=False):
     if not content:
         raise RuntimeError("library_asset_empty")
     return _beta_raw_http(
@@ -2597,7 +2597,7 @@ def _beta_storage_upload(session, object_path, content, content_type,
         body=bytes(content),
         access_token=session["access_token"],
         content_type=content_type,
-        extra_headers={"x-upsert": "false"},
+        extra_headers={"x-upsert": "true" if upsert else "false"},
     )
 
 
@@ -3020,7 +3020,30 @@ def _beta_library_metadata(record):
     return result
 
 
-def _beta_save_library_project(session, record, progress_callback=None):
+def _beta_update_library_project(session, project_id, title, metadata,
+                                 preview_bytes, sticker_bytes,
+                                 source_photo_bytes, style_reference_bytes):
+    """Commit a completed overwrite of an existing member cloud project."""
+    response = _beta_rpc(
+        "update_library_project",
+        {
+            "p_project_id": str(project_id),
+            "p_title": str(title)[:80],
+            "p_metadata": metadata,
+            "p_preview_bytes": int(preview_bytes),
+            "p_sticker_bytes": int(sticker_bytes),
+            "p_source_photo_bytes": int(source_photo_bytes),
+            "p_style_reference_bytes": int(style_reference_bytes),
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
+
+
+def _beta_save_library_project(session, record, progress_callback=None,
+                               overwrite_project_id=None):
     """Save only selected final assets plus optional private creation materials."""
     def _report(progress, message):
         if progress_callback:
@@ -3042,9 +3065,17 @@ def _beta_save_library_project(session, record, progress_callback=None):
     if not selected_stickers:
         raise RuntimeError("library_selected_stickers_missing")
 
-    _report(5, "正在建立雲端作品保存空間…")
     metadata = _beta_library_metadata(record)
-    project_id = str(metadata.get("project_id") or __import__("uuid").uuid4())
+    overwrite_project_id = str(overwrite_project_id or "").strip()
+    is_overwrite = bool(overwrite_project_id)
+    project_id = overwrite_project_id or str(
+        metadata.get("project_id") or __import__("uuid").uuid4()
+    )
+    metadata["project_id"] = project_id
+    _report(
+        5,
+        "正在更新雲端作品…" if is_overwrite else "正在建立雲端作品保存空間…",
+    )
     title = str(metadata.get("project_name") or _v12_default_project_name())[:80]
     source_photo = bytes(record.get("source_photo_bytes") or b"")
     style_reference = bytes(record.get("style_reference_bytes") or b"")
@@ -3060,21 +3091,23 @@ def _beta_save_library_project(session, record, progress_callback=None):
         "tab_asset_index": int(record.get("cloud_tab_asset_index", 1) or 1),
     }
     metadata["cloud_asset_manifest"] = manifest
-    slot = _beta_rpc(
-        "create_library_project_slot",
-        {"p_project_id": project_id, "p_title": title, "p_metadata": metadata},
-        access_token=session["access_token"],
-    )
-    if isinstance(slot, list):
-        slot = slot[0] if slot else {}
-    if not isinstance(slot, dict):
-        raise RuntimeError("library_slot_invalid")
-    if not slot.get("project_id"):
-        return {
-            "saved": False,
-            "saved_count": int(slot.get("saved_count", 0) or 0),
-            "library_capacity": int(slot.get("library_capacity", 5) or 5),
-        }
+    slot = {}
+    if not is_overwrite:
+        slot = _beta_rpc(
+            "create_library_project_slot",
+            {"p_project_id": project_id, "p_title": title, "p_metadata": metadata},
+            access_token=session["access_token"],
+        )
+        if isinstance(slot, list):
+            slot = slot[0] if slot else {}
+        if not isinstance(slot, dict):
+            raise RuntimeError("library_slot_invalid")
+        if not slot.get("project_id"):
+            return {
+                "saved": False,
+                "saved_count": int(slot.get("saved_count", 0) or 0),
+                "library_capacity": int(slot.get("library_capacity", 5) or 5),
+            }
 
     user_id = str(session.get("user", {}).get("id", "") or "")
     if not user_id:
@@ -3098,41 +3131,62 @@ def _beta_save_library_project(session, record, progress_callback=None):
         for index, ((_, image_bytes), path) in enumerate(
             zip(selected_stickers, sticker_paths), start=1
         ):
-            _beta_storage_upload(session, path, image_bytes, "image/png")
+            _beta_storage_upload(
+                session, path, image_bytes, "image/png", upsert=is_overwrite
+            )
             progress = 25 + round(50 * index / len(selected_stickers))
             _report(progress, f"正在上傳已選貼圖 {index}／{len(selected_stickers)}…")
         _report(78, "正在上傳作品預覽圖…")
-        _beta_storage_upload(session, prefix + "preview.webp", preview_webp, "image/webp")
+        _beta_storage_upload(
+            session, prefix + "preview.webp", preview_webp, "image/webp",
+            upsert=is_overwrite,
+        )
         if source_webp:
             _report(85, "正在保存私人創作素材…")
-            _beta_storage_upload(session, prefix + "source-photo.webp", source_webp, "image/webp")
+            _beta_storage_upload(
+                session, prefix + "source-photo.webp", source_webp, "image/webp",
+                upsert=is_overwrite,
+            )
         if style_webp:
             _report(89, "正在保存畫風參考…")
-            _beta_storage_upload(session, prefix + "style-reference.webp", style_webp, "image/webp")
+            _beta_storage_upload(
+                session, prefix + "style-reference.webp", style_webp, "image/webp",
+                upsert=is_overwrite,
+            )
         _report(94, "正在確認雲端作品資料…")
-        _beta_rpc(
-            "complete_library_project_upload",
-            {
-                "p_project_id": project_id,
-                "p_preview_bytes": len(preview_webp),
-                "p_sticker_bytes": total_sticker_bytes,
-                "p_source_photo_bytes": len(source_webp),
-                "p_style_reference_bytes": len(style_webp),
-            },
-            access_token=session["access_token"],
-        )
-    except Exception:
-        # The slot remains only if cleanup itself fails; it is reclaimed server-side
-        # after 30 minutes and never appears as a finished member project.
-        try:
-            _beta_storage_delete(session, paths)
+        if is_overwrite:
+            slot = _beta_update_library_project(
+                session, project_id, title, metadata, len(preview_webp),
+                total_sticker_bytes, len(source_webp), len(style_webp),
+            )
+            if not slot.get("project_id"):
+                raise RuntimeError("library_project_update_invalid")
+        else:
             _beta_rpc(
-                "finalize_my_library_project_delete",
-                {"p_project_id": project_id},
+                "complete_library_project_upload",
+                {
+                    "p_project_id": project_id,
+                    "p_preview_bytes": len(preview_webp),
+                    "p_sticker_bytes": total_sticker_bytes,
+                    "p_source_photo_bytes": len(source_webp),
+                    "p_style_reference_bytes": len(style_webp),
+                },
                 access_token=session["access_token"],
             )
-        except Exception:
-            pass
+    except Exception:
+        # A newly allocated slot can be reclaimed.  An overwrite must not
+        # delete the member's original cloud project when a network error
+        # happens midway through updating it.
+        if not is_overwrite:
+            try:
+                _beta_storage_delete(session, paths)
+                _beta_rpc(
+                    "finalize_my_library_project_delete",
+                    {"p_project_id": project_id},
+                    access_token=session["access_token"],
+                )
+            except Exception:
+                pass
         raise
     _report(100, "雲端作品保存完成！")
     return {
@@ -3156,6 +3210,7 @@ def _beta_load_library_project_record(session, project):
             raise RuntimeError("library_assets_missing")
         record = dict(metadata)
         record.update(project)
+        record["cloud_project_id"] = str(project.get("id") or "")
         grid_webp = _beta_storage_download(session, grid_path)
         record["grid_bytes"] = _v12_png_bytes(Image.open(BytesIO(grid_webp)))
         return record
@@ -3208,6 +3263,7 @@ def _beta_load_library_project_record(session, project):
 
     record = dict(metadata)
     record.update(project)
+    record["cloud_project_id"] = str(project.get("id") or "")
     record["grid_bytes"] = b""
     record["sticker_bytes"] = sticker_bytes
     record["cloud_asset_manifest"] = manifest
@@ -4746,10 +4802,11 @@ def _v12_normalize_project_metadata(metadata):
     # V12｜畫風參考改為單一自訂說明，不再保存已移除的多選元素。
     style_reference_elements = []
     style_reference_elements_enabled = False
-    style_reference_custom_elements = str(data.get(
-        "style_reference_custom_elements",
-        creative.get("style_reference_custom_elements", ""),
-    ) or "")[:1200]
+    style_reference_custom_elements = str(
+        data.get("style_reference_custom_elements")
+        or creative.get("style_reference_custom_elements", "")
+        or ""
+    )[:1200]
 
     project_id = str(data.get("project_id") or identity.get("project_id") or base["project_id"])
     project_name = _v12_normalize_project_name(
@@ -5247,9 +5304,19 @@ def _v12_render_sticker_basket_workspace():
         st.caption(t("materials_private"))
 
     # 直接存入「我的作品」不建立 ZIP，使用與一般雲端同步相同的素材選項。
+    _loaded_cloud_project_id = str(
+        st.session_state.get("v12_loaded_cloud_project_id", "") or ""
+    ).strip()
+    _cloud_save_label = t("save_to_library")
+    if _loaded_cloud_project_id:
+        _cloud_save_label = "🔄 儲存並覆蓋目前雲端作品"
+        st.info(
+            "目前正編輯從雲端載回的作品。完成修改或累積新貼圖後，"
+            "按此按鈕會更新同一份雲端作品，不會另外占用作品集名額。"
+        )
     with st.container(key="v12_basket_save_to_library"):
         if st.button(
-            t("save_to_library"),
+            _cloud_save_label,
             use_container_width=True,
             key="v12_basket_save_to_library_button",
             disabled=not bool(cloud_session),
@@ -5273,6 +5340,7 @@ def _v12_render_sticker_basket_workspace():
                     progress_callback=lambda progress, message: cloud_progress.progress(
                         progress, text=message + " " + t("do_not_refresh")
                     ),
+                    overwrite_project_id=_loaded_cloud_project_id or None,
                 )
                 if cloud_save.get("saved"):
                     cloud_progress.progress(
@@ -5283,13 +5351,16 @@ def _v12_render_sticker_basket_workspace():
                             limit=cloud_save["library_capacity"],
                         ),
                     )
-                    st.success(
-                        t(
-                            "cloud_saved",
-                            count=cloud_save["saved_count"],
-                            limit=cloud_save["library_capacity"],
+                    if _loaded_cloud_project_id:
+                        st.success("✅ 雲端作品已更新，新的設定與已選貼圖已覆蓋舊版本。")
+                    else:
+                        st.success(
+                            t(
+                                "cloud_saved",
+                                count=cloud_save["saved_count"],
+                                limit=cloud_save["library_capacity"],
+                            )
                         )
-                    )
                 else:
                     cloud_progress.empty()
                     st.warning(
@@ -5465,6 +5536,11 @@ def _v12_load_history_record(record):
 
     # 使用者主動載入另一組作品時，以該作品為準，不能再套回離開前的草稿。
     st.session_state.pop("v12_restore_creation_draft", None)
+    loaded_cloud_project_id = str(record.get("cloud_project_id") or "").strip()
+    if loaded_cloud_project_id:
+        st.session_state["v12_loaded_cloud_project_id"] = loaded_cloud_project_id
+    else:
+        st.session_state.pop("v12_loaded_cloud_project_id", None)
     st.session_state["v12_current_project"] = metadata
     # A saved project must replace the browser draft, never merge with it.
     st.session_state["v12_step04_frontend_revision"] = (
@@ -6658,7 +6734,13 @@ def _v12_update_navigation_safe_creation_draft(**values):
 
 
 def _v12_restore_durable_style_reference():
-    """Restore an active reference from the durable draft, never from uploader state."""
+    """Restore a missing reference from a navigation draft without overwriting edits."""
+    # A form submission already puts the new textarea value into Session State
+    # before this script reruns.  If we restore unconditionally here, a cloud
+    # project's old durable draft immediately overwrites what the member just
+    # typed and pressed 「套用」 for.
+    if st.session_state.get("v12_style_reference_image_bytes"):
+        return
     draft = st.session_state.get("v12_navigation_safe_creation_draft")
     if not isinstance(draft, dict) or not draft.get("v12_style_reference_image_bytes"):
         return
@@ -8441,6 +8523,18 @@ if isinstance(_shared_template_apply_feedback, dict):
     _shared_template_charged = max(
         0, int(_shared_template_apply_feedback.get("charged", 0) or 0)
     )
+
+
+def _v12_capture_style_reference_details_draft():
+    """Commit editable reference notes before a form-submit rerun."""
+    _v12_update_navigation_safe_creation_draft(
+        v12_style_reference_strength=st.session_state.get(
+            "v12_style_reference_strength"
+        ),
+        v12_style_reference_custom_elements=str(
+            st.session_state.get("v12_style_reference_custom_elements", "") or ""
+        ).strip()[:1200],
+    )
     st.success(
         t(
             "shared_template_apply_success",
@@ -8838,6 +8932,7 @@ else:
                     t("style_apply"),
                     type="primary",
                     use_container_width=True,
+                    on_click=_v12_capture_style_reference_details_draft,
                 )
         if _apply_style_reference_details:
             st.success(t("style_applied"))
