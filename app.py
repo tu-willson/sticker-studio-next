@@ -2746,6 +2746,7 @@ def _beta_http(method, path, payload=None, access_token=None):
             "invalid_library_project_update",
             "library_project_not_found",
             "library_assets_missing",
+            "creator_reel_collection_limit",
             "creator_reel_delete_not_available",
             "creator_reel_has_published_template",
         }
@@ -2980,6 +2981,18 @@ def _v12_delete_creator_reel_callback(session, reel_id):
             st.session_state["v12_creator_reel_delete_error"] = "failed"
 
 
+def _v12_collect_creator_reel_callback(session, reel_id):
+    """Collect before Streamlit's single automatic rerun."""
+    try:
+        st.session_state["v12_creator_reel_collection_feedback"] = (
+            _beta_collect_creator_reel(session, reel_id)
+        )
+    except Exception as exc:
+        st.session_state["v12_creator_reel_collection_error"] = (
+            "limit" if "creator_reel_collection_limit" in str(exc or "") else "failed"
+        )
+
+
 def _beta_list_my_shared_template_sources(session):
     """Map a collected reel to its current sharing-template publication state."""
     try:
@@ -3086,6 +3099,30 @@ def _beta_list_my_unlocked_templates(session, limit=5, offset=0):
         access_token=session["access_token"],
     )
     return response if isinstance(response, list) else []
+
+
+def _beta_delete_my_unlocked_shared_template(session, template_id):
+    """Permanently remove the current member's private unlocked snapshot."""
+    deleted = _beta_rpc(
+        "delete_my_unlocked_shared_template",
+        {"p_template_id": str(template_id)},
+        access_token=session["access_token"],
+    )
+    if deleted is not True:
+        raise RuntimeError("unlocked_template_delete_not_available")
+
+
+def _v12_delete_unlocked_shared_template_callback(session, template_id, title):
+    """Delete before the form's single Streamlit submission rerun."""
+    confirmation_key = f"v12_unlocked_template_delete_confirm_{template_id}"
+    if not bool(st.session_state.get(confirmation_key, False)):
+        st.session_state["v12_unlocked_template_delete_error"] = "confirmation"
+        return
+    try:
+        _beta_delete_my_unlocked_shared_template(session, template_id)
+        st.session_state["v12_unlocked_template_delete_feedback"] = str(title or "")
+    except Exception:
+        st.session_state["v12_unlocked_template_delete_error"] = "failed"
 
 
 def _beta_list_my_shared_template_management(session, limit=4, offset=0):
@@ -6551,6 +6588,15 @@ def _v12_render_creator_reels(session, shelf="active"):
                 limit=collection_feedback.get("limit", 0),
             )
         )
+    collection_error = str(
+        st.session_state.pop("v12_creator_reel_collection_error", "") or ""
+    )
+    if collection_error == "limit":
+        st.warning(
+            t("creator_reel_collect_limit", limit=status["collected_reel_limit"])
+        )
+    elif collection_error == "failed":
+        st.error(t("creator_reel_collect_failed"))
     if st.session_state.pop("v12_creator_reel_delete_feedback", False):
         st.success("🗑️ 創作膠卷已刪除。")
     rename_feedback = str(
@@ -6905,29 +6951,14 @@ def _v12_render_creator_reels(session, shelf="active"):
             elif reel_status == "active":
                 collect_button, collect_note = st.columns([1.05, 1.95])
                 with collect_button:
-                    if st.button(
+                    st.button(
                         t("creator_reel_collect_button"),
                         key=f"v12_creator_reel_collect_{reel_id}",
                         type="primary",
                         use_container_width=True,
-                    ):
-                        try:
-                            collected = _beta_collect_creator_reel(session, reel_id)
-                            st.session_state[
-                                "v12_creator_reel_collection_feedback"
-                            ] = collected
-                            st.rerun()
-                        except Exception as exc:
-                            message = str(exc or "")
-                            if "creator_reel_collection_limit" in message:
-                                st.warning(
-                                    t(
-                                        "creator_reel_collect_limit",
-                                        limit=status["collected_reel_limit"],
-                                    )
-                                )
-                            else:
-                                st.error(t("creator_reel_collect_failed"))
+                        on_click=_v12_collect_creator_reel_callback,
+                        args=(session, reel_id),
+                    )
                 with collect_note:
                     st.caption(t("creator_reel_collect_help"))
             if reel_status in {"active", "collected"} and not template_source_locked:
@@ -7140,6 +7171,18 @@ def _v12_render_shared_template_apply_button(
 
 def _v12_render_unlocked_template_shelf(session):
     """Show the member's own redeemed templates, five at a time."""
+    delete_feedback = str(
+        st.session_state.pop("v12_unlocked_template_delete_feedback", "") or ""
+    )
+    delete_error = str(
+        st.session_state.pop("v12_unlocked_template_delete_error", "") or ""
+    )
+    if delete_feedback:
+        st.success(f"🗑️ 已永久刪除「{delete_feedback}」。")
+    elif delete_error == "confirmation":
+        st.warning("請先勾選「確認永久刪除」。")
+    elif delete_error == "failed":
+        st.error("這個已解鎖模板暫時無法刪除，請稍後再試。")
     try:
         status = _beta_creator_reel_status(session)
         page_size = 5
@@ -7202,6 +7245,23 @@ def _v12_render_unlocked_template_shelf(session):
                 session, template_id, title, t("shared_template_apply_unlocked"),
                 f"v12_unlocked_template_apply_{template_id}",
             )
+            # A form keeps the acknowledgement and submit action within one
+            # event, so this permanent delete only triggers one rerun.
+            with st.form(f"v12_unlocked_template_delete_form_{template_id}"):
+                confirm_col, delete_col = st.columns([1.15, 1], vertical_alignment="center")
+                with confirm_col:
+                    st.checkbox(
+                        "確認永久刪除",
+                        key=f"v12_unlocked_template_delete_confirm_{template_id}",
+                    )
+                with delete_col:
+                    st.form_submit_button(
+                        "🗑️ 永久刪除",
+                        use_container_width=True,
+                        on_click=_v12_delete_unlocked_shared_template_callback,
+                        args=(session, template_id, title),
+                    )
+            st.caption("永久刪除後如要再次使用，需重新購入。")
         st.divider()
 
     if total_pages > 1:
