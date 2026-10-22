@@ -7353,6 +7353,7 @@ def _v12_render_shared_template_marketplace(session):
                         on_click=_v12_report_shared_template_callback,
                         args=(session, template_id),
                     )
+                    st.caption("檢舉後會自動遮蔽")
             if description:
                 st.caption(description)
             template_tags = [
