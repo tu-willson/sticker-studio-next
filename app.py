@@ -9072,6 +9072,7 @@ if st.session_state["v12_view"] == "library":
             if st.button(
                 "☁️ 雲端作品",
                 key="v12_library_open_cloud",
+                type="primary",
                 use_container_width=True,
             ):
                 st.session_state["v12_library_section"] = "cloud"
