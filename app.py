@@ -1013,6 +1013,32 @@ st.markdown("""
   background:#17639c !important;
   border-color:#17639c !important;
 }
+/* 作品暫存區：壓縮卡片內的留白，40 張作品也能更快瀏覽。 */
+[class*="st-key-v12_basket_item_"] [data-testid="stVerticalBlock"]{
+  gap:.18rem !important;
+}
+[class*="st-key-v12_basket_item_"] [data-testid="stImage"]{
+  margin-bottom:-.38rem !important;
+}
+[class*="st-key-v12_basket_item_"] [data-testid="stCaptionContainer"]{
+  margin:0 0 -.18rem !important;
+}
+[class*="st-key-v12_basket_item_"] [data-testid="stCheckbox"]{
+  margin-top:-.1rem !important;
+  margin-bottom:-.24rem !important;
+}
+/* 刪除維持文字辨識並用粉紅色提示；按鈕與下載相鄰但不貼近下一張卡片。 */
+div[class*="st-key-v12_basket_remove_"] button{
+  min-width:0 !important;
+  background:#ff5b7f !important;
+  border-color:#ff5b7f !important;
+  color:#fff !important;
+  font-weight:850 !important;
+}
+div[class*="st-key-v12_basket_remove_"] button:hover{
+  background:#e9486d !important;
+  border-color:#e9486d !important;
+}
 .v12-project-save-divider{
   height:1px;
   margin:22px 0 18px;
@@ -5313,31 +5339,32 @@ def _v12_render_sticker_basket_workspace():
             item = basket[index]
             item_id = item["id"]
             with column:
-                st.image(
-                    item["image_bytes"],
-                    caption=t("basket_source", batch=_v12_basket_batch_display(item["batch_label"]), slot=item["source_slot"]),
-                    use_container_width=True,
-                )
-                st.session_state.setdefault(f"v12_basket_select_{item_id}", True)
-                st.checkbox(t("basket_keep"), key=f"v12_basket_select_{item_id}")
-                # 下載與移除放在同一排並刻意拉開距離，降低誤觸刪除的機率。
-                download_col, action_gap, remove_col = st.columns([3.3, 0.5, 1.5])
-                with download_col:
-                    st.download_button(
-                        t("basket_png"),
-                        data=item["image_bytes"],
-                        file_name=(
-                            f"LINE貼圖_{item['batch_label'].replace(' ', '')}_"
-                            f"{item['source_slot']:02d}.png"
-                        ),
-                        mime="image/png",
+                with st.container(key=f"v12_basket_item_{item_id}"):
+                    st.image(
+                        item["image_bytes"],
+                        caption=t("basket_source", batch=_v12_basket_batch_display(item["batch_label"]), slot=item["source_slot"]),
                         use_container_width=True,
-                        key=f"v12_basket_download_{item_id}",
                     )
-                with remove_col:
-                    if st.button(t("remove"), key=f"v12_basket_remove_{item_id}", use_container_width=True):
-                        _v12_remove_sticker_basket_item(item_id)
-                        st.rerun(scope="fragment")
+                    st.session_state.setdefault(f"v12_basket_select_{item_id}", True)
+                    st.checkbox(t("basket_keep"), key=f"v12_basket_select_{item_id}")
+                    # 操作區集中在卡片左側；下載較大、粉紅刪除較小且保持安全距離。
+                    download_col, remove_col, _action_spacer = st.columns([2.65, 1.0, 1.3])
+                    with download_col:
+                        st.download_button(
+                            t("basket_png"),
+                            data=item["image_bytes"],
+                            file_name=(
+                                f"LINE貼圖_{item['batch_label'].replace(' ', '')}_"
+                                f"{item['source_slot']:02d}.png"
+                            ),
+                            mime="image/png",
+                            use_container_width=True,
+                            key=f"v12_basket_download_{item_id}",
+                        )
+                    with remove_col:
+                        if st.button("刪除", key=f"v12_basket_remove_{item_id}", use_container_width=True):
+                            _v12_remove_sticker_basket_item(item_id)
+                            st.rerun(scope="fragment")
 
     selected = _v12_selected_sticker_basket_items()
     st.divider()
