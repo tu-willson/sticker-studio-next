@@ -10668,7 +10668,7 @@ st.caption("此名稱會同時用於「我的作品」內的所有紀錄。")
 st.text_input(
     "為這組作品命名",
     key="v12_project_name_top_input",
-    placeholder="例如：小屁孩日常",
+    placeholder="例如：生活日常篇",
     max_chars=80,
     on_change=_v12_project_name_top_on_change,
 )
@@ -10755,7 +10755,8 @@ if _sticker_mode == "text" and _selected_font_for_prompt:
         "若同時指定文字外框／形狀效果，兩者必須融合呈現、不可互相覆蓋。"
         "不要照搬參考圖中的人物或其他內容。"
     )
-_v12_prompt_view = st.expander(t("prompt_view"))
+_v12_prompt_view_placeholder = st.empty()
+_v12_prompt_view = _v12_prompt_view_placeholder.expander(t("prompt_view"))
 with _v12_prompt_view:
     st.markdown(
         """
@@ -10930,7 +10931,7 @@ with _v12_prompt_view:
 if not _v12_prompt_settings_admin:
     # 先完成共用 prompt 的建立，接著移除整個管理員檢視器；一般使用者
     # 不會留下空白標題、展開列或 Prompt 內容。
-    _v12_prompt_view.empty()
+    _v12_prompt_view_placeholder.empty()
 
 
 
@@ -11762,7 +11763,7 @@ function saveBlob(blob,name){''',
     st.text_input(
         "為這組作品命名",
         key="v12_project_name_input",
-        placeholder="例如：阿土的日常貼圖",
+        placeholder="例如：生活日常篇",
         max_chars=80,
         on_change=_v12_project_name_on_change,
     )
