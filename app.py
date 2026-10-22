@@ -1900,6 +1900,12 @@ div[class*="st-key-v12_shared_template_report_"] button{
   border-color:rgba(255,118,146,.72) !important;
   background:rgba(135,32,56,.26) !important;
 }
+div[class*="st-key-v12_shared_template_report_"] button:hover{
+  color:#fff !important;
+  border-color:#ff9bb2 !important;
+  background:linear-gradient(145deg,#ec4a70,#b91f49) !important;
+  box-shadow:0 7px 16px rgba(205,38,84,.32) !important;
+}
 .v12-reel-rules{
   margin:1.1rem 0 .7rem;
   color:#fff;
