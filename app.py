@@ -2704,7 +2704,7 @@ def _beta_collect_creator_reel(session, reel_id):
 
 
 def _beta_delete_creator_reel(session, reel_id):
-    """Delete one private reel and its private Storage objects."""
+    """Delete one private reel and any safely-removable withdrawn template assets."""
     response = _beta_rpc(
         "get_my_creator_reel_delete_paths",
         {"p_reel_id": str(reel_id)},
@@ -2714,10 +2714,17 @@ def _beta_delete_creator_reel(session, reel_id):
         response = response[0] if response else {}
     if not isinstance(response, dict):
         raise RuntimeError("creator_reel_delete_not_available")
-    paths = response.get("object_paths", [])
-    if not isinstance(paths, list):
+    creator_paths = response.get("creator_object_paths", response.get("object_paths", []))
+    template_paths = response.get("template_object_paths", [])
+    if not isinstance(creator_paths, list) or not isinstance(template_paths, list):
         raise RuntimeError("creator_reel_delete_not_available")
-    _beta_storage_delete(session, paths, bucket="creator-reels")
+    _beta_storage_delete(session, creator_paths, bucket="creator-reels")
+    # A withdrawn template with no prior unlocks can be removed completely.
+    # Templates already unlocked by another member keep their private snapshot
+    # so their paid reapply right is not lost.
+    _beta_storage_delete(
+        session, template_paths, bucket="shared-template-assets"
+    )
     deleted = _beta_rpc(
         "finalize_my_creator_reel_delete",
         {"p_reel_id": str(reel_id)},
@@ -6338,7 +6345,7 @@ def _v12_render_creator_reels(session, shelf="active"):
             st.rerun()
     with reel_manage_col:
         if st.button(
-            ("✓ " if shelf == "management" else "") + "發布市集的膠卷管理",
+            ("✓ " if shelf == "management" else "") + "管理發布市集的膠捲",
             key="v12_creator_reel_shelf_management",
             type="primary" if shelf == "management" else "secondary",
             use_container_width=True,
@@ -6418,7 +6425,9 @@ def _v12_render_creator_reels(session, shelf="active"):
             if reel_status == "collected"
             else ""
         )
-        template_source_locked = bool(published_status)
+        # A withdrawn template is no longer on the marketplace, so its source
+        # reel can be removed.  Public or in-progress listings remain locked.
+        template_source_locked = published_status in {"published", "uploading"}
         style_name = str(snapshot.get("style_name", "") or "").strip()
         labels = [label for label in _v12_creator_reel_slot_labels(snapshot) if label]
         left, right = st.columns([1.1, 2.2], vertical_alignment="top")
@@ -6512,6 +6521,10 @@ def _v12_render_creator_reels(session, shelf="active"):
                 st.success(t("creator_reel_collected_badge"))
                 if published_status == "published":
                     st.info(t("shared_template_published_badge"))
+                elif published_status == "withdrawn":
+                    st.caption(
+                        "⚪ 已從市集下架；刪除這卷時會同步移除市集管理紀錄。"
+                    )
                 elif published_status != "uploading":
                     with st.expander(t("shared_template_publish_expander"), expanded=False):
                         st.caption(t("shared_template_publish_intro"))
