@@ -1031,12 +1031,12 @@ st.markdown("""
   margin-bottom:-.24rem !important;
 }
 /* Streamlit 的 checkbox widget 會另有一層 key 容器；直接置中該層。 */
-div[class*="st-key-v12_basket_select_"]{
+div[class*="st-key-v12_basket_select_"]:not([class*="st-key-v12_basket_select_all"]){
   width:fit-content !important;
   margin-left:auto !important;
   margin-right:auto !important;
 }
-div[class*="st-key-v12_basket_select_"] [data-testid="stCheckbox"]{
+div[class*="st-key-v12_basket_select_"]:not([class*="st-key-v12_basket_select_all"]) [data-testid="stCheckbox"]{
   width:fit-content !important;
   margin-left:0 !important;
   margin-right:0 !important;
@@ -8884,10 +8884,44 @@ if st.session_state.get("v12_view") == "library":
 
 st.session_state.setdefault("v12_view", "create")
 
+
+def _v12_render_pending_creation_scroll():
+    """Scroll after a library shortcut, before the long creation page is painted."""
+    target = str(st.session_state.pop("v12_scroll_target", "") or "")
+    if not (
+        re.fullmatch(r"v12-step-0[1-8]", target)
+        or target == "v12-sticker-basket"
+    ):
+        return
+
+    components.html(
+        f"""
+        <script>
+        (() => {{
+          const targetId = {json.dumps(target)};
+          const scrollToTarget = (behavior) => {{
+            const target = window.parent.document.getElementById(targetId);
+            if (target) target.scrollIntoView({{behavior, block: "start"}});
+          }};
+          // 此元件刻意放在製作頁頂端；首次回到長頁面時也能等待目標建立。
+          [180, 550, 1200, 2200, 3800, 5800].forEach((delay, index) => {{
+            window.setTimeout(
+              () => scrollToTarget(index === 0 ? "smooth" : "auto"),
+              delay,
+            );
+          }});
+        }})();
+        </script>
+        """,
+        height=0,
+    )
+
+
 # 必須在 create 頁面的 widgets 被重新建立前執行，否則 Streamlit 會以空白的
 # widget state 蓋掉原本草稿。
 if st.session_state["v12_view"] == "create":
     _v12_restore_creation_draft_after_navigation()
+    _v12_render_pending_creation_scroll()
 
 if st.session_state["v12_view"] == "pricing":
     _v12_render_pricing_page()
@@ -12161,36 +12195,3 @@ def _public02a_settings_panel():
 
 # PUBLIC STEP 02A｜顯示個人設定匯出／匯入
 _public02a_settings_panel()
-
-
-# A shortcut selected from My Works returns through Streamlit's normal
-# in-page navigation, then scrolls to the requested creation step.
-_v12_scroll_target = str(st.session_state.pop("v12_scroll_target", "") or "")
-if (
-    re.fullmatch(r"v12-step-0[1-8]", _v12_scroll_target)
-    or _v12_scroll_target == "v12-sticker-basket"
-):
-    components.html(
-        f"""
-        <script>
-        (() => {{
-          const targetId = {json.dumps(_v12_scroll_target)};
-          const scrollToTarget = (behavior) => {{
-            const target = window.parent.document.getElementById(targetId);
-            if (target) {{
-              target.scrollIntoView({{behavior, block: "start"}});
-            }}
-          }};
-          // 製作頁首次從「我的作品」切回時，Streamlit 還會分段重建元件。
-          // 因此在短時間內重複校正捲動位置，避免第一次點擊只換頁卻沒跳到區段。
-          [180, 550, 1200, 2200, 3800, 5800].forEach((delay, index) => {{
-            window.setTimeout(
-              () => scrollToTarget(index === 0 ? "smooth" : "auto"),
-              delay,
-            );
-          }});
-        }})();
-        </script>
-        """,
-        height=0,
-    )
