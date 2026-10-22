@@ -2727,6 +2727,17 @@ def _beta_delete_creator_reel(session, reel_id):
         raise RuntimeError("creator_reel_delete_not_available")
 
 
+def _beta_rename_collected_creator_reel(session, reel_id, title):
+    """Rename a private collected reel without changing its immutable assets."""
+    renamed = _beta_rpc(
+        "rename_my_collected_creator_reel",
+        {"p_reel_id": str(reel_id), "p_title": str(title or "").strip()},
+        access_token=session["access_token"],
+    )
+    if renamed is not True:
+        raise RuntimeError("creator_reel_rename_not_available")
+
+
 def _v12_delete_creator_reel_callback(session, reel_id):
     """Handle reel deletion before the form's single Streamlit rerun.
 
@@ -6259,6 +6270,11 @@ def _v12_render_creator_reels(session, shelf="active"):
         )
     if st.session_state.pop("v12_creator_reel_delete_feedback", False):
         st.success("🗑️ 創作膠卷已刪除。")
+    rename_feedback = str(
+        st.session_state.pop("v12_creator_reel_rename_feedback", "") or ""
+    )
+    if rename_feedback:
+        st.success(f"✏️ 已重新命名為「{rename_feedback}」。")
     delete_error = str(
         st.session_state.pop("v12_creator_reel_delete_error", "") or ""
     )
@@ -6391,7 +6407,13 @@ def _v12_render_creator_reels(session, shelf="active"):
         source_name = str(reel.get("source_project_name", "") or "").strip()
         if not source_name:
             source_name = str(snapshot.get("project_name", "") or t("untitled_project"))
-        reel_number = max(1, int(reel.get("reel_number", 1) or 1))
+        reel_status = str(reel.get("status", "") or "")
+        published_status = (
+            str(published_sources.get(reel_id, "") or "")
+            if reel_status == "collected"
+            else ""
+        )
+        template_source_locked = bool(published_status)
         style_name = str(snapshot.get("style_name", "") or "").strip()
         labels = [label for label in _v12_creator_reel_slot_labels(snapshot) if label]
         left, right = st.columns([1.1, 2.2], vertical_alignment="top")
@@ -6408,9 +6430,66 @@ def _v12_render_creator_reels(session, shelf="active"):
             except Exception:
                 st.info(t("creator_reel_preview_unavailable"))
         with right:
-            st.markdown(
-                f"### 🎞️ {html.escape(source_name)} · {t('creator_reel_number', number=reel_number)}"
-            )
+            title_col, rename_col = st.columns([3.2, 1])
+            with title_col:
+                # The database sequence remains immutable for auditing, but is
+                # deliberately not shown in the title: deleting an automatic
+                # reel should never leave a confusing visible number gap.
+                st.markdown(f"### 🎞️ {html.escape(source_name)}")
+            with rename_col:
+                if reel_status == "collected" and not template_source_locked:
+                    rename_key = f"v12_creator_reel_rename_draft_{reel_id}"
+                    if st.button(
+                        "✏️ 重新命名",
+                        key=f"v12_creator_reel_rename_open_{reel_id}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["v12_creator_reel_rename_open"] = reel_id
+                        st.session_state[rename_key] = source_name
+
+            rename_key = f"v12_creator_reel_rename_draft_{reel_id}"
+            if (
+                reel_status == "collected"
+                and not template_source_locked
+                and st.session_state.get("v12_creator_reel_rename_open") == reel_id
+            ):
+                with st.form(f"v12_creator_reel_rename_form_{reel_id}"):
+                    renamed_title = st.text_input(
+                        "新的膠卷名稱",
+                        key=rename_key,
+                        max_chars=80,
+                    )
+                    rename_save, rename_cancel = st.columns(2)
+                    with rename_save:
+                        rename_pressed = st.form_submit_button(
+                            "儲存新名稱",
+                            type="primary",
+                            use_container_width=True,
+                        )
+                    with rename_cancel:
+                        cancel_rename = st.form_submit_button(
+                            "取消",
+                            use_container_width=True,
+                        )
+                if cancel_rename:
+                    st.session_state.pop("v12_creator_reel_rename_open", None)
+                    st.session_state.pop(rename_key, None)
+                    st.rerun()
+                if rename_pressed:
+                    clean_title = str(renamed_title or "").strip()
+                    if not clean_title:
+                        st.warning("請輸入膠卷名稱。")
+                    else:
+                        try:
+                            _beta_rename_collected_creator_reel(
+                                session, reel_id, clean_title
+                            )
+                            st.session_state["v12_creator_reel_rename_feedback"] = clean_title
+                            st.session_state.pop("v12_creator_reel_rename_open", None)
+                            st.session_state.pop(rename_key, None)
+                            st.rerun()
+                        except Exception:
+                            st.error("這卷暫時無法重新命名，請稍後再試。")
             st.caption(
                 t(
                     "creator_reel_created_at",
@@ -6425,10 +6504,8 @@ def _v12_render_creator_reels(session, shelf="active"):
                         time=_v12_format_display_time(expires_at),
                     )
                 )
-            reel_status = str(reel.get("status", "") or "")
             if reel_status == "collected":
                 st.success(t("creator_reel_collected_badge"))
-                published_status = published_sources.get(reel_id, "")
                 if published_status == "published":
                     st.info(t("shared_template_published_badge"))
                 elif published_status != "uploading":
@@ -6437,7 +6514,7 @@ def _v12_render_creator_reels(session, shelf="active"):
                         with st.form(f"v12_shared_template_publish_{reel_id}"):
                             template_title = st.text_input(
                                 t("shared_template_title"),
-                                value=f"{source_name} · {t('creator_reel_number', number=reel_number)}",
+                                value=source_name,
                                 max_chars=80,
                                 key=f"v12_shared_template_title_{reel_id}",
                             )
@@ -6533,7 +6610,7 @@ def _v12_render_creator_reels(session, shelf="active"):
                                 st.error(t("creator_reel_collect_failed"))
                 with collect_note:
                     st.caption(t("creator_reel_collect_help"))
-            if reel_status in {"active", "collected"}:
+            if reel_status in {"active", "collected"} and not template_source_locked:
                 # Ticking stays inside the form, so it does not trigger a rerun.
                 # The callback completes deletion before this form's one and
                 # only submission rerun.
@@ -6551,8 +6628,8 @@ def _v12_render_creator_reels(session, shelf="active"):
                             on_click=_v12_delete_creator_reel_callback,
                             args=(session, reel_id),
                         )
-            elif reel_status == "published":
-                st.caption("此卷已發布為分享模板來源，為保障已套用者，不提供刪除。")
+            elif template_source_locked or reel_status == "published":
+                st.caption("🔒 此卷已發布到市集分享模板，已鎖定刪除功能。")
             if style_name:
                 st.caption(t("creator_reel_style", style=style_name))
             if labels:
