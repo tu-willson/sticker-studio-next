@@ -4707,9 +4707,12 @@ def _v12_normalize_project_metadata(metadata):
     style = creative.get("style") if isinstance(creative.get("style"), dict) else {}
     font = creative.get("font") if isinstance(creative.get("font"), dict) else {}
 
-    style_mode = str(data.get("style_mode", style.get("mode", "")) or "")
-    raw_custom_style = data.get(
-        "custom_style_snapshot", style.get("custom_snapshot", {})
+    # A creator reel/template may contain both the historical flat fields and
+    # the newer ``creative_settings`` contract.  Do not let an old empty flat
+    # value hide a real setting preserved in the nested contract.
+    style_mode = str(data.get("style_mode") or style.get("mode", "") or "")
+    raw_custom_style = (
+        data.get("custom_style_snapshot") or style.get("custom_snapshot", {})
     )
     custom_style_snapshot = dict(raw_custom_style) if isinstance(raw_custom_style, dict) else {}
     custom_style_snapshot = {
@@ -4719,10 +4722,10 @@ def _v12_normalize_project_metadata(metadata):
         "source": str(custom_style_snapshot.get("source", "") or "")[:40],
     }
     character_features = _v12_clean_character_features(
-        data.get("character_features", creative.get("character_features", []))
+        data.get("character_features") or creative.get("character_features", [])
     )
     custom_character = str(
-        data.get("custom_character", creative.get("custom_character", "")) or ""
+        data.get("custom_character") or creative.get("custom_character", "") or ""
     )[:2000]
     # 自訂人物／場景改為有內容即啟用；保留欄位只為相容舊作品資料。
     custom_character_enabled = bool(custom_character)
@@ -4795,9 +4798,14 @@ def _v12_normalize_project_metadata(metadata):
         "project_name": project_name,
         "created_at": created_at,
         "updated_at": updated_at,
-        "style_name": str(data.get("style_name", style.get("name", "")) or ""),
-        "font_name": str(data.get("font_name", font.get("name", "")) or ""),
-        "text_style": str(data.get("text_style", creative.get("text_style", "")) or ""),
+        "style_name": str(data.get("style_name") or style.get("name", "") or ""),
+        # Keep the selected outer/shape effect even when an older flat
+        # snapshot has a blank placeholder but the reel's nested setting is
+        # populated.
+        "font_name": str(data.get("font_name") or font.get("name", "") or ""),
+        "text_style": str(
+            data.get("text_style") or creative.get("text_style", "") or ""
+        ),
         "generation_method": str(data.get("generation_method", creative.get("generation_method", "")) or ""),
         "transparent_background": bool(data.get("transparent_background", creative.get("transparent_background", False))),
         "style_reference_strength": style_reference_strength,
@@ -5774,13 +5782,28 @@ def _v12_creator_reel_snapshot():
     later sharing flow can ask for explicit permission before exposing it.
     """
     snapshot = _beta_library_metadata(_v12_project_snapshot())
+    # This compact, explicit contract is used by shared templates.  Keeping it
+    # beside the general project metadata makes the user-facing creative
+    # directions resilient to future project-schema changes and old blank
+    # compatibility placeholders.
+    snapshot["template_transfer"] = {
+        "character_features": copy.deepcopy(
+            snapshot.get("character_features", []) or []
+        ),
+        "custom_character": str(snapshot.get("custom_character", "") or ""),
+        "text_style": str(snapshot.get("text_style", "") or ""),
+        "font_name": str(snapshot.get("font_name", "") or ""),
+        "custom_style_snapshot": copy.deepcopy(
+            snapshot.get("custom_style_snapshot", {}) or {}
+        ),
+    }
     resolved_expression_specs = st.session_state.get(
         "v12_expression_generation_specs"
     )
     if isinstance(resolved_expression_specs, list):
         snapshot["expression_specs"] = copy.deepcopy(resolved_expression_specs)
     grid_bytes = bytes(st.session_state.get("generated_4x2_bytes") or b"")
-    snapshot["schema_version"] = "v12.creator-reel.1"
+    snapshot["schema_version"] = "v12.creator-reel.2"
     snapshot["creator_reel"] = {
         "kind": "auto",
         "grid_sha256": hashlib.sha256(grid_bytes).hexdigest() if grid_bytes else "",
@@ -6293,6 +6316,20 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
     """Load a redeemed template while preserving the recipient's own photo."""
     metadata = copy.deepcopy(snapshot) if isinstance(snapshot, dict) else {}
     metadata.pop("source_photo_bytes", None)
+    transfer = metadata.get("template_transfer")
+    if isinstance(transfer, dict):
+        # Prefer the dedicated creator-reel transfer contract when present.
+        # It is intentionally only settings; no uploader photograph is ever
+        # part of this payload.
+        for field in (
+            "character_features",
+            "custom_character",
+            "text_style",
+            "font_name",
+            "custom_style_snapshot",
+        ):
+            if field in transfer:
+                metadata[field] = copy.deepcopy(transfer[field])
     # 固定勾選的特色與自由文字都是模板的創作指令，會套用到接收者自己
     # 的人物照；人物照片本身不會隨模板轉移。
     metadata["character_features"] = [
