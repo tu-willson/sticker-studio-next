@@ -1029,11 +1029,14 @@ st.markdown("""
 }
 /* 刪除維持文字辨識並用粉紅色提示；按鈕與下載相鄰但不貼近下一張卡片。 */
 div[class*="st-key-v12_basket_remove_"] button{
-  min-width:0 !important;
+  min-width:86px !important;
+  padding-left:.7rem !important;
+  padding-right:.7rem !important;
   background:#ff5b7f !important;
   border-color:#ff5b7f !important;
   color:#fff !important;
   font-weight:850 !important;
+  white-space:nowrap !important;
 }
 div[class*="st-key-v12_basket_remove_"] button:hover{
   background:#e9486d !important;
@@ -5348,7 +5351,7 @@ def _v12_render_sticker_basket_workspace():
                     st.session_state.setdefault(f"v12_basket_select_{item_id}", True)
                     st.checkbox(t("basket_keep"), key=f"v12_basket_select_{item_id}")
                     # 操作區集中在卡片左側；下載較大、粉紅刪除較小且保持安全距離。
-                    download_col, remove_col, _action_spacer = st.columns([2.65, 1.0, 1.3])
+                    download_col, remove_col, _action_spacer = st.columns([2.3, 1.35, 1.3])
                     with download_col:
                         st.download_button(
                             t("basket_png"),
