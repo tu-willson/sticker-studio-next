@@ -6434,19 +6434,25 @@ def _v12_render_creator_reels(session):
                 with collect_note:
                     st.caption(t("creator_reel_collect_help"))
             if reel_status in {"active", "collected"}:
-                _delete_confirm, _delete_action = st.columns([1.05, 1.25])
-                with _delete_confirm:
-                    delete_confirmed = st.checkbox(
-                        "確認刪除這卷",
-                        key=f"v12_creator_reel_delete_confirm_{reel_id}",
-                    )
-                with _delete_action:
-                    if st.button(
-                        "🗑️ 刪除這卷",
-                        key=f"v12_creator_reel_delete_{reel_id}",
-                        disabled=not delete_confirmed,
-                        use_container_width=True,
-                    ):
+                # Keep the confirmation control in a form so ticking it does not
+                # trigger Streamlit's full rerun. Only the actual delete action
+                # submits this small form and refreshes the reel list.
+                with st.form(f"v12_creator_reel_delete_form_{reel_id}"):
+                    _delete_confirm, _delete_action = st.columns([1.05, 1.25])
+                    with _delete_confirm:
+                        delete_confirmed = st.checkbox(
+                            "確認刪除這卷",
+                            key=f"v12_creator_reel_delete_confirm_{reel_id}",
+                        )
+                    with _delete_action:
+                        delete_pressed = st.form_submit_button(
+                            "🗑️ 刪除這卷",
+                            use_container_width=True,
+                        )
+                if delete_pressed:
+                    if not delete_confirmed:
+                        st.warning("請先勾選「確認刪除這卷」。")
+                    else:
                         try:
                             _beta_delete_creator_reel(session, reel_id)
                             st.session_state[
