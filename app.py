@@ -9710,12 +9710,15 @@ if _sticker_mode == "text" and st.session_state.v10_font_gallery_open:
                 # 禁止在同一次 rerun 中直接修改已建立的 selectbox key。
                 def _v12_pick_font_from_card(font_no=_i):
                     st.session_state["v8_selected_font"] = font_no
+                    # Callback runs before the selectbox is recreated on the
+                    # next rerun, so it is safe to update both controls here.
+                    # Without this, an older quick-pick value immediately
+                    # overwrites the font chosen from the visual gallery.
+                    st.session_state["v12_font_quick_pick"] = (
+                        f"{font_no:03d}｜{V8_TEXT_EFFECT_CATALOG[font_no]}"
+                    )
                     st.session_state["v10_scroll_to_font_result"] = True
                     st.session_state["v10_font_gallery_open"] = False
-
-                    # v12_font_quick_pick 是上方已建立的 widget key。
-                    # 不直接寫入它，改由後續初始化／同步邏輯依 v8_selected_font
-                    # 自動顯示目前選擇的字型，避免 StreamlitAPIException。
 
                 st.button(
                     f"{_i:03d}",
@@ -10240,23 +10243,7 @@ if st.session_state.get("v11_generation_pending", False):
                     unsafe_allow_html=True,
                 )
 
-            _show_generation_scene(
-                "第 1 幕／5", "🎬 導演正在替八格貼圖排戲",
-                "先把人物、文字和動作指令排成一場小劇場。", 8,
-            )
-            _status.info("🎨 正在分析你的照片……")
-            # 留出極短的畫面時間，讓使用者確實看見第一幕，而不是被後續
-            # 同步準備工作立即覆蓋。
-            time.sleep(0.45)
-
             try:
-                _show_generation_scene(
-                    "第 2 幕／5", "🎨 美術組正在調配這次的貼圖畫風",
-                    "畫面已送進 AI 畫室，這一幕會需要稍微等候。", 31,
-                )
-                _status.info("🖌️ 正在準備貼圖構圖……")
-                time.sleep(0.55)
-
                 # OpenAI SDK timeout：最長等待 180 秒。
                 # V12｜透明背景連動測試版
                 # 只有使用者勾選「使用透明背景 PNG」時，才送出 transparent 參數
@@ -10270,6 +10257,8 @@ if st.session_state.get("v11_generation_pending", False):
                     "size": "1536x1024",
                     "output_format": "png",
                 }
+                _stage_two_title = "🎨 美術組正在調配這次的貼圖畫風"
+                _stage_two_note = "畫面已送進 AI 畫室，正在準備貼圖構圖。"
 
                 if _style_reference_active:
                     _style_reference_bytes = bytes(
@@ -10281,11 +10270,8 @@ if st.session_state.get("v11_generation_pending", False):
                         ("person.png", ib, "image/png"),
                         ("style-reference.jpg", BytesIO(_style_reference_bytes), "image/jpeg"),
                     ]
-                    _show_generation_scene(
-                        "第 2 幕／5", "🖼️ 美術組正在對照人物與畫風參考",
-                        "人物身份以你的照片為準，畫風只負責幫這場戲上色。", 38,
-                    )
-                    _status.info("🖼️ 正在分析人物照片與畫風參考圖……")
+                    _stage_two_title = "🖼️ 美術組正在對照人物與畫風參考"
+                    _stage_two_note = "人物身份以你的照片為準，畫風只負責幫這場戲上色。"
 
                 if transparent:
                     _generation_prompt += (
@@ -10298,43 +10284,46 @@ if st.session_state.get("v11_generation_pending", False):
                     _image_edit_kwargs["background"] = "transparent"
 
                 _image_edit_kwargs["prompt"] = _generation_prompt
-                _show_generation_scene(
-                    "第 3 幕／5", "🪄 AI 正在畫布上施展貼圖魔法",
-                    "角色、表情與小動作正在合成為 4×2 的完整畫面。", 57,
-                )
                 # 圖片 API 本身不會回傳可用的真實百分比。改在背景等待，
-                # 讓畫面先依序顯示 1→2→3，接著停在第 4 幕直到 API 真正
-                # 回傳，最後才進入第 5 幕；這是清楚的等待階段，不冒充精準
-                # 的 AI 生成百分比。
+                # 請求會先立刻送出；畫面則以每幕 1～3 秒的節奏顯示
+                # 1→2→3→4，接著停在第 4 幕直到 API 真正回傳，最後才進
+                # 入第 5 幕。這是等待階段，不冒充精準的 AI 生成百分比。
                 with ThreadPoolExecutor(max_workers=1) as _image_executor:
                     _image_future = _image_executor.submit(
                         _generation_client.with_options(timeout=180).images.edit,
                         **_image_edit_kwargs,
                     )
-                    _waiting_stage_four = False
-                    _api_wait_started = time.monotonic()
+
+                    _show_generation_scene(
+                        "第 1 幕／5", "🎬 導演正在替八格貼圖排戲",
+                        "先把人物、文字和動作指令排成一場小劇場。", 8,
+                    )
+                    _status.info("🎨 正在分析你的照片……")
+                    time.sleep(random.uniform(1.0, 3.0))
+
+                    _show_generation_scene(
+                        "第 2 幕／5", _stage_two_title, _stage_two_note, 31,
+                    )
+                    _status.info(
+                        "🖼️ 正在分析人物照片與畫風參考圖……"
+                        if _style_reference_active else "🖌️ 正在準備貼圖構圖……"
+                    )
+                    time.sleep(random.uniform(1.0, 3.0))
+
+                    _show_generation_scene(
+                        "第 3 幕／5", "🪄 AI 正在畫布上施展貼圖魔法",
+                        "角色、表情與小動作正在合成為 4×2 的完整畫面。", 57,
+                    )
+                    _status.info("🪄 AI 正在繪製貼圖畫面……")
+                    time.sleep(random.uniform(1.0, 3.0))
+
+                    _show_generation_scene(
+                        "第 4 幕／5", "⏳ AI 正在完成最後幾筆",
+                        "畫面正在收尾；這一幕會停留到完整圖片送達。", 82,
+                    )
+                    _status.info("⏳ 正在等待 AI 完成畫面……")
                     while not _image_future.done():
-                        if (
-                            not _waiting_stage_four
-                            and time.monotonic() - _api_wait_started >= 1.6
-                        ):
-                            _show_generation_scene(
-                                "第 4 幕／5", "⏳ AI 正在完成最後幾筆",
-                                "畫面正在收尾；這一幕會停留到完整圖片送達。",
-                                82,
-                            )
-                            _status.info("⏳ 正在等待 AI 完成畫面……")
-                            _waiting_stage_four = True
                         time.sleep(0.35)
-                    # 即使 API 極快回傳，也完整呈現第 4 幕一次，讓五個
-                    # 等待階段不會跳格。
-                    if not _waiting_stage_four:
-                        _show_generation_scene(
-                            "第 4 幕／5", "⏳ AI 正在完成最後幾筆",
-                            "畫面正在收尾；完整圖片即將送達。", 82,
-                        )
-                        _status.info("⏳ 正在等待 AI 完成畫面……")
-                        time.sleep(0.45)
                     result = _image_future.result()
 
                 # V11｜02C-4④｜異常回應資料防護
