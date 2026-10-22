@@ -8848,7 +8848,7 @@ with _v12_nav_cols[2]:
 
 # This is a real Streamlit button, visually placed in the expanded floating
 # menu so it follows the exact same in-page navigation as "My Works" above.
-if st.button(t("quick_nav_library_button"), key="v12_quick_library", help=t("quick_nav_library_title")):
+if st.button(t("quick_nav_library_button"), key="v12_quick_library"):
     _v12_preserve_creation_draft_for_navigation()
     _public02a_sync_style_bank_from_widgets()
     _save_v10_presets()
@@ -8864,7 +8864,6 @@ if st.session_state.get("v12_view") == "library":
         if st.button(
             f"{t(_v12_step_key)}\n{_v12_step_number:02d}",
             key=f"v12_quick_step_{_v12_step_number:02d}",
-            help=f"{_v12_step_number:02d} {t(_v12_step_key)}",
         ):
             st.session_state["v12_view"] = "create"
             st.session_state["v12_scroll_target"] = f"v12-step-{_v12_step_number:02d}"
@@ -12158,16 +12157,20 @@ if re.fullmatch(r"v12-step-0[1-8]", _v12_scroll_target):
         <script>
         (() => {{
           const targetId = {json.dumps(_v12_scroll_target)};
-          let attempts = 0;
-          const scrollToTarget = () => {{
+          const scrollToTarget = (behavior) => {{
             const target = window.parent.document.getElementById(targetId);
             if (target) {{
-              target.scrollIntoView({{behavior: "smooth", block: "start"}});
-              return;
+              target.scrollIntoView({{behavior, block: "start"}});
             }}
-            if (attempts++ < 20) window.setTimeout(scrollToTarget, 100);
           }};
-          window.setTimeout(scrollToTarget, 100);
+          // 製作頁首次從「我的作品」切回時，Streamlit 還會分段重建元件。
+          // 因此在短時間內重複校正捲動位置，避免第一次點擊只換頁卻沒跳到區段。
+          [180, 550, 1200, 2200, 3800, 5800].forEach((delay, index) => {{
+            window.setTimeout(
+              () => scrollToTarget(index === 0 ? "smooth" : "auto"),
+              delay,
+            );
+          }});
         }})();
         </script>
         """,
