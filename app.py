@@ -8523,6 +8523,13 @@ if isinstance(_shared_template_apply_feedback, dict):
     _shared_template_charged = max(
         0, int(_shared_template_apply_feedback.get("charged", 0) or 0)
     )
+    st.success(
+        t(
+            "shared_template_apply_success",
+            title=str(_shared_template_apply_feedback.get("title", "") or ""),
+            cost=_shared_template_charged,
+        )
+    )
 
 
 def _v12_capture_style_reference_details_draft():
@@ -8534,13 +8541,6 @@ def _v12_capture_style_reference_details_draft():
         v12_style_reference_custom_elements=str(
             st.session_state.get("v12_style_reference_custom_elements", "") or ""
         ).strip()[:1200],
-    )
-    st.success(
-        t(
-            "shared_template_apply_success",
-            title=_shared_template_apply_feedback.get("title", ""),
-            cost=_shared_template_charged,
-        )
     )
 
 # OAuth redirects arrive with a short-lived code in the URL.  Handle it before
