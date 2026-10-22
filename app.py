@@ -1883,9 +1883,31 @@ div[class*="st-key-v12_market_unlocked_tab"] button{
   color:#fff;
   font-weight:850;
 }
+.v12-reel-market-guide{
+  margin-top:1rem;
+  padding:1rem 1.05rem;
+  border:1px solid rgba(137,196,255,.52);
+  border-radius:12px;
+  background:transparent;
+}
+.v12-reel-market-guide-title{
+  margin:0 0 .65rem;
+  color:#a9d8ff;
+  font-size:1.02rem;
+  font-weight:950;
+}
+.v12-reel-market-guide ol{margin:0;padding-left:1.45rem;}
+.v12-reel-market-guide li{
+  margin:.48rem 0;
+  color:#fff;
+  font-weight:800;
+  line-height:1.62;
+}
+.v12-reel-market-guide strong{color:#ffe0a3;}
 @media(max-width:680px){
   .v12-reel-rules th,.v12-reel-rules td{padding:.62rem .58rem;font-size:.87rem;}
   .v12-reel-rules th:nth-child(2),.v12-reel-rules td:nth-child(2){display:none;}
+  .v12-reel-market-guide{padding:.85rem .8rem;}
 }
 html{scroll-behavior:smooth;}
 [id^="v12-step-"]{scroll-margin-top:1rem;}
@@ -9050,6 +9072,15 @@ if st.session_state["v12_view"] == "library":
                 </tbody>
               </table>
               <p class="v12-reel-rules-note">未收藏膠捲超過上限時，會自動替換最早的一卷並循環保存。</p>
+              <section class="v12-reel-market-guide">
+                <div class="v12-reel-market-guide-title">🌐 市集功能說明</div>
+                <ol>
+                  <li>先在<strong>未收藏的膠捲</strong>挑選喜歡的創作，點選收藏；再到<strong>已收藏的膠捲</strong>將它發布到市集。</li>
+                  <li>發布時可設定其他使用者購入模板所需的<strong>次數</strong>。其他使用者以自己的生成次數購入後，即可把設定套回創作頁使用。</li>
+                  <li>市集模板只會帶入畫風、文字與創作設定，<strong>不會保留或傳送原創者的人物照片</strong>。</li>
+                  <li>購入者實際支付的次數，會直接回饋給原創者，作為可使用的生成次數。</li>
+                </ol>
+              </section>
             </section>
             """,
             unsafe_allow_html=True,
