@@ -2539,6 +2539,9 @@ def _beta_http(method, path, payload=None, access_token=None):
             "shared_template_publish_limit",
             "shared_templates_subscription_required",
             "shared_template_insufficient_credits",
+            "invalid_library_project_update",
+            "library_project_not_found",
+            "library_assets_missing",
         }
         if error_code in known_codes:
             raise RuntimeError(error_code) from exc
@@ -5370,8 +5373,20 @@ def _v12_render_sticker_basket_workspace():
                             limit=cloud_save["library_capacity"],
                         )
                     )
-            except Exception:
-                st.warning(t("cloud_failed"))
+            except Exception as exc:
+                cloud_progress.empty()
+                if str(exc) == "library_assets_missing":
+                    st.warning(
+                        "雲端覆蓋尚未完成：最後確認時缺少可驗證的素材。"
+                        "本機暫存與原有雲端作品都沒有被刪除；請稍後再試。"
+                    )
+                elif str(exc) == "library_project_not_found":
+                    st.warning(
+                        "雲端覆蓋尚未完成：原作品已不存在或目前登入帳號不符。"
+                        "請從「我的作品」重新載入後再試。"
+                    )
+                else:
+                    st.warning(t("cloud_failed"))
 
     # 把保存動作與 MAIN／TAB 選擇清楚分開，避免兩種用途混在同一區。
     st.markdown('<div class="v12-project-save-divider"></div>', unsafe_allow_html=True)
