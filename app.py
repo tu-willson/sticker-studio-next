@@ -10394,7 +10394,7 @@ if st.session_state.get("v11_generation_pending", False):
                         "先把人物、文字和動作指令排成一場小劇場。", 8,
                     )
                     _status.info("🎨 正在分析你的照片……")
-                    time.sleep(random.uniform(3.0, 5.0))
+                    time.sleep(random.uniform(4.0, 7.0))
 
                     _show_generation_scene(
                         "第 2 幕／5", _stage_two_title, _stage_two_note, 31,
@@ -10403,14 +10403,14 @@ if st.session_state.get("v11_generation_pending", False):
                         "🖼️ 正在分析人物照片與畫風參考圖……"
                         if _style_reference_active else "🖌️ 正在準備貼圖構圖……"
                     )
-                    time.sleep(random.uniform(3.0, 5.0))
+                    time.sleep(random.uniform(4.0, 7.0))
 
                     _show_generation_scene(
                         "第 3 幕／5", "🪄 AI 正在畫布上施展貼圖魔法",
                         "角色、表情與小動作正在合成為 4×2 的完整畫面。", 57,
                     )
                     _status.info("🪄 AI 正在繪製貼圖畫面……")
-                    time.sleep(random.uniform(3.0, 5.0))
+                    time.sleep(random.uniform(4.0, 7.0))
 
                     _show_generation_scene(
                         "第 4 幕／5", "⏳ AI 正在完成最後幾筆",
