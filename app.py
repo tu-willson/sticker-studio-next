@@ -9087,6 +9087,14 @@ if st.session_state["v12_view"] == "library":
                   <li>購入者實際支付的次數，會直接回饋給原創者，作為可使用的生成次數。</li>
                 </ol>
               </section>
+              <section class="v12-reel-market-guide">
+                <div class="v12-reel-market-guide-title">☁️ 雲端作品</div>
+                <ol>
+                  <li>創作系列作品時，可持續把每批裁切完成的貼圖加入<strong>作品暫存區</strong>，再挑選最多 <strong>40 張貼圖</strong>一次存成同一份雲端作品。</li>
+                  <li>雲端作品可讓你日後載回創作頁繼續製作，也能一次打包下載已選貼圖。</li>
+                  <li>儲存時勾選<strong>同時保存私人創作素材</strong>，便會一併保留原本上傳的人物照片、畫風參考與這份作品的完整設定，方便延續同一系列創作。</li>
+                </ol>
+              </section>
             </section>
             """,
             unsafe_allow_html=True,
