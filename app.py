@@ -6237,8 +6237,8 @@ def _v12_render_shared_template_manager(session):
                     st.rerun()
 
 
-def _v12_render_creator_reels(session):
-    """Render the private first-stage reel shelf inside My Works."""
+def _v12_render_creator_reels(session, shelf="active"):
+    """Render one private Creator Reel shelf inside My Works."""
     try:
         status = _beta_creator_reel_status(session)
     except Exception:
@@ -6299,20 +6299,90 @@ def _v12_render_creator_reels(session):
             publish=status["publish_template_limit"],
         )
     )
-    _v12_render_shared_template_manager(session)
+
+    shelf = str(shelf or "active")
+    reel_active_col, reel_collected_col, reel_manage_col = st.columns(3)
+    with reel_active_col:
+        if st.button(
+            ("✓ " if shelf == "active" else "") + "未收藏的膠卷",
+            key="v12_creator_reel_shelf_active",
+            type="primary" if shelf == "active" else "secondary",
+            use_container_width=True,
+        ):
+            st.session_state["v12_creator_reel_shelf"] = "active"
+            st.rerun()
+    with reel_collected_col:
+        if st.button(
+            ("✓ " if shelf == "collected" else "") + "已收藏的膠卷",
+            key="v12_creator_reel_shelf_collected",
+            type="primary" if shelf == "collected" else "secondary",
+            use_container_width=True,
+        ):
+            st.session_state["v12_creator_reel_shelf"] = "collected"
+            st.rerun()
+    with reel_manage_col:
+        if st.button(
+            ("✓ " if shelf == "management" else "") + "發布市集的膠卷管理",
+            key="v12_creator_reel_shelf_management",
+            type="primary" if shelf == "management" else "secondary",
+            use_container_width=True,
+        ):
+            st.session_state["v12_creator_reel_shelf"] = "management"
+            st.rerun()
+
+    if shelf == "management":
+        _v12_render_shared_template_manager(session)
+        return
+
     try:
         reels = _beta_list_creator_reels(session)
     except Exception:
         st.warning(t("creator_reel_list_unavailable"))
         return
 
+    desired_status = "collected" if shelf == "collected" else "active"
+    reels = [
+        reel for reel in reels
+        if isinstance(reel, dict)
+        and str(reel.get("status", "") or "") == desired_status
+    ]
+    shelf_title = "⭐ 已收藏的膠卷" if desired_status == "collected" else "🎞️ 未收藏的膠卷"
+    st.markdown(f"#### {shelf_title}")
+    search_text = st.text_input(
+        "搜尋作品名稱",
+        placeholder="輸入作品名稱快速搜尋",
+        key=f"v12_creator_reel_search_{desired_status}",
+    ).strip()
+    if search_text:
+        search_key = search_text.lower()
+        reels = [
+            reel for reel in reels
+            if search_key in str(
+                reel.get("source_project_name", "")
+                or (reel.get("snapshot") or {}).get("project_name", "")
+            ).lower()
+        ]
+
     if not reels:
-        st.caption(t("creator_reel_empty"))
+        st.caption("沒有符合條件的創作膠卷。")
         return
 
-    published_sources = _beta_list_my_shared_template_sources(session)
+    page_size = 5
+    page_key = f"v12_creator_reel_page_{desired_status}"
+    total_pages = max(1, (len(reels) + page_size - 1) // page_size)
+    page_number = max(0, int(st.session_state.get(page_key, 0) or 0))
+    page_number = min(page_number, total_pages - 1)
+    st.session_state[page_key] = page_number
+    visible_reels = reels[page_number * page_size:(page_number + 1) * page_size]
+    st.caption(f"共 {len(reels)} 卷｜第 {page_number + 1}／{total_pages} 頁｜每頁 {page_size} 卷")
 
-    for reel in reels:
+    published_sources = (
+        _beta_list_my_shared_template_sources(session)
+        if desired_status == "collected"
+        else {}
+    )
+
+    for reel in visible_reels:
         if not isinstance(reel, dict) or not reel.get("id"):
             continue
         reel_id = str(reel["id"])
@@ -6493,6 +6563,29 @@ def _v12_render_creator_reels(session):
             else:
                 st.caption(t("creator_reel_private_note"))
         st.divider()
+
+    if total_pages > 1:
+        previous_col, page_col, next_col = st.columns([1, 1.35, 1])
+        with previous_col:
+            if st.button(
+                "← 上一頁",
+                key=f"v12_creator_reel_previous_{desired_status}",
+                disabled=page_number <= 0,
+                use_container_width=True,
+            ):
+                st.session_state[page_key] = page_number - 1
+                st.rerun()
+        with page_col:
+            st.caption(f"第 {page_number + 1}／{total_pages} 頁")
+        with next_col:
+            if st.button(
+                "下一頁 →",
+                key=f"v12_creator_reel_next_{desired_status}",
+                disabled=page_number >= total_pages - 1,
+                use_container_width=True,
+            ):
+                st.session_state[page_key] = page_number + 1
+                st.rerun()
 
 
 def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
@@ -8444,23 +8537,168 @@ if st.session_state["v12_view"] == "marketplace":
             st.rerun()
     st.stop()
 
+
+def _v12_render_browser_workspace_projects():
+    """Render projects that only exist in this browser session."""
+    st.markdown("### 🧺 暫存作品")
+    st.caption("僅存在目前瀏覽器中；清除瀏覽器資料、換裝置或換瀏覽器後不會保留。")
+    projects_all = list(st.session_state.get("v12_projects_local_index", []))
+    top_a, top_b = st.columns([4, 1])
+    with top_a:
+        search_name = st.text_input(
+            t("project_search"),
+            placeholder=t("project_search_placeholder"),
+            key="v12_project_search",
+        )
+    with top_b:
+        st.metric(t("session_projects"), len(projects_all))
+
+    projects = list(projects_all)
+    if search_name.strip():
+        needle = search_name.strip().lower()
+        projects = [
+            project for project in projects
+            if needle in str(project.get("project_name", "")).lower()
+        ]
+
+    if not projects:
+        st.info(t("no_projects"))
+        return
+
+    for index, project in enumerate(projects):
+        project_id = str(project.get("project_id", index))
+        project_name = str(project.get("project_name") or _v12_default_project_name())
+        card_left, card_right = st.columns([1, 2.4], vertical_alignment="top")
+
+        with card_left:
+            if project.get("main_bytes"):
+                st.image(
+                    project["main_bytes"],
+                    caption=f"⭐ MAIN {project.get('main_no') or '—'}",
+                    use_container_width=True,
+                )
+            elif project.get("grid_bytes"):
+                st.image(project["grid_bytes"], caption="4×2 原始總圖", use_container_width=True)
+            else:
+                st.info("🖼️ 尚無預覽圖")
+
+        with card_right:
+            st.markdown(f"### 🏷️ {html.escape(project_name)}")
+            meta_parts = []
+            if project.get("style_name"):
+                meta_parts.append(f"🎨 {project['style_name']}")
+            if project.get("font_name"):
+                meta_parts.append(f"🔤 {project['font_name']}")
+            if project.get("transparent_background"):
+                meta_parts.append("🖼️ 透明背景 PNG")
+            if project.get("main_no"):
+                meta_parts.append(f"⭐ MAIN={project['main_no']}")
+            if project.get("tab_no"):
+                meta_parts.append(f"🏷️ TAB={project['tab_no']}")
+            if meta_parts:
+                st.caption("　｜　".join(meta_parts))
+            st.caption(f"最後打包：{_v12_format_display_time(project.get('updated_at', ''))}")
+
+            act1, act2, act3 = st.columns(3)
+            with act1:
+                if project.get("zip_bytes"):
+                    st.download_button(
+                        "⬇️ 重新下載 ZIP",
+                        data=project["zip_bytes"],
+                        file_name=f"{_v12_safe_download_stem(project_name)}.zip",
+                        mime="application/zip",
+                        use_container_width=True,
+                        key=f"v12_redownload_{project_id}",
+                    )
+            with act2:
+                if st.button("↩️ 載回創作頁", key=f"v12_load_{project_id}", use_container_width=True):
+                    _v12_load_history_record(project)
+                    st.session_state["v12_view"] = "create"
+                    st.rerun()
+            with act3:
+                if st.button("🗑️ 刪除", key=f"v12_delete_{project_id}", use_container_width=True):
+                    _v12_delete_history_record(project_id)
+                    st.rerun()
+
+            with st.expander("🔍 查看這組作品詳細設定", expanded=False):
+                st.write(f"**作品名稱：** {project_name}")
+                st.write(f"**生成方式：** {project.get('generation_method') or '未記錄'}")
+                st.write(f"**文字風格：** {project.get('text_style') or '未記錄'}")
+                st.write(f"**建立時間：** {project.get('created_at') or '未記錄'}")
+                texts = list(project.get("sticker_texts") or [])
+                if any(str(text).strip() for text in texts):
+                    st.markdown("**8 張貼圖文字：**")
+                    for number, text in enumerate(texts, start=1):
+                        st.write(f"{number:02d}. {text or '（未設定）'}")
+                if project.get("grid_bytes"):
+                    st.markdown("**4×2 原始總圖：**")
+                    st.image(project["grid_bytes"], use_container_width=True)
+        st.divider()
+
+
 if st.session_state["v12_view"] == "library":
     st.markdown(f'<div class="v10-main-title">{t("nav_library")}</div>', unsafe_allow_html=True)
     st.caption(t("library_intro"))
 
-    if st.button(
-        t("shared_template_market_nav"),
-        key="v12_shared_template_market_nav",
-        type="primary",
-        use_container_width=True,
-    ):
-        st.session_state["v12_view"] = "marketplace"
+    _market_spacer_left, _market_button_col, _market_spacer_right = st.columns([1, 2, 1])
+    with _market_button_col:
+        if st.button(
+            t("shared_template_market_nav"),
+            key="v12_shared_template_market_nav",
+            type="primary",
+            use_container_width=True,
+        ):
+            st.session_state["v12_view"] = "marketplace"
+            st.rerun()
+
+    st.session_state.setdefault("v12_library_section", "home")
+    _library_section = str(st.session_state.get("v12_library_section", "home") or "home")
+    if _library_section == "home":
+        st.markdown("#### 選擇要查看的作品")
+        _library_reels_col, _library_cloud_col = st.columns(2)
+        with _library_reels_col:
+            if st.button(
+                "🎞️ 創作膠卷",
+                key="v12_library_open_reels",
+                type="primary",
+                use_container_width=True,
+            ):
+                st.session_state["v12_library_section"] = "reels"
+                st.rerun()
+        with _library_cloud_col:
+            if st.button(
+                "☁️ 雲端作品",
+                key="v12_library_open_cloud",
+                use_container_width=True,
+            ):
+                st.session_state["v12_library_section"] = "cloud"
+                st.rerun()
+        st.stop()
+
+    if _library_section == "reels":
+        if st.button("← 返回我的作品", key="v12_library_reels_back"):
+            st.session_state["v12_library_section"] = "home"
+            st.rerun()
+
+        st.session_state.setdefault("v12_creator_reel_shelf", "active")
+        _reel_shelf = str(st.session_state.get("v12_creator_reel_shelf", "active") or "active")
+        _reel_session = _beta_current_user() if _beta_config() else None
+        if _reel_session:
+            _v12_render_creator_reels(_reel_session, shelf=_reel_shelf)
+        else:
+            st.info(t("cloud_login"))
+        st.stop()
+
+    if st.button("← 返回我的作品", key="v12_library_cloud_back"):
+        st.session_state["v12_library_section"] = "home"
         st.rerun()
+
+    _v12_render_browser_workspace_projects()
+    st.divider()
+    st.markdown(f"### {t('cloud_projects')}")
 
     _cloud_session = _beta_current_user() if _beta_config() else None
     if _cloud_session:
-        _v12_render_creator_reels(_cloud_session)
-        st.divider()
         try:
             _cloud_status = _beta_library_status(_cloud_session)
             st.info(t("cloud_library_status", count=_cloud_status["saved_count"], limit=_cloud_status["library_capacity"]))
@@ -8470,9 +8708,41 @@ if st.session_state["v12_view"] == "library":
             _cloud_projects = []
             st.warning(t("cloud_unavailable"))
 
+        _cloud_search = st.text_input(
+            "搜尋雲端作品名稱",
+            placeholder="輸入作品名稱快速搜尋",
+            key="v12_cloud_project_search",
+        ).strip()
+        if _cloud_search:
+            _cloud_needle = _cloud_search.lower()
+            _cloud_projects = [
+                _project for _project in _cloud_projects
+                if _cloud_needle in str(
+                    _project.get("title", "")
+                    or (_project.get("metadata") or {}).get("project_name", "")
+                ).lower()
+            ]
+
         if _cloud_projects:
-            st.markdown(f"### {t('cloud_projects')}")
-            for _cloud_project in _cloud_projects:
+            _cloud_page_size = 5
+            _cloud_page_key = "v12_cloud_project_page"
+            _cloud_total_pages = max(
+                1, (len(_cloud_projects) + _cloud_page_size - 1) // _cloud_page_size
+            )
+            _cloud_page_number = max(
+                0, int(st.session_state.get(_cloud_page_key, 0) or 0)
+            )
+            _cloud_page_number = min(_cloud_page_number, _cloud_total_pages - 1)
+            st.session_state[_cloud_page_key] = _cloud_page_number
+            _visible_cloud_projects = _cloud_projects[
+                _cloud_page_number * _cloud_page_size:
+                (_cloud_page_number + 1) * _cloud_page_size
+            ]
+            st.caption(
+                f"共 {len(_cloud_projects)} 組｜第 {_cloud_page_number + 1}／"
+                f"{_cloud_total_pages} 頁｜每頁 {_cloud_page_size} 組"
+            )
+            for _cloud_project in _visible_cloud_projects:
                 if not isinstance(_cloud_project, dict) or not _cloud_project.get("id"):
                     continue
                 _cloud_id = str(_cloud_project["id"])
@@ -8531,101 +8801,32 @@ if st.session_state["v12_view"] == "library":
                                 except Exception:
                                     st.error(t("delete_failed"))
                 st.divider()
+            if _cloud_total_pages > 1:
+                _cloud_previous, _cloud_page_label, _cloud_next = st.columns([1, 1.35, 1])
+                with _cloud_previous:
+                    if st.button(
+                        "← 上一頁",
+                        key="v12_cloud_project_previous",
+                        disabled=_cloud_page_number <= 0,
+                        use_container_width=True,
+                    ):
+                        st.session_state[_cloud_page_key] = _cloud_page_number - 1
+                        st.rerun()
+                with _cloud_page_label:
+                    st.caption(f"第 {_cloud_page_number + 1}／{_cloud_total_pages} 頁")
+                with _cloud_next:
+                    if st.button(
+                        "下一頁 →",
+                        key="v12_cloud_project_next",
+                        disabled=_cloud_page_number >= _cloud_total_pages - 1,
+                        use_container_width=True,
+                    ):
+                        st.session_state[_cloud_page_key] = _cloud_page_number + 1
+                        st.rerun()
         else:
             st.caption(t("cloud_empty"))
     else:
         st.info(t("cloud_login"))
-
-    _projects_all = list(st.session_state.get("v12_projects_local_index", []))
-    _top_a, _top_b = st.columns([4, 1])
-    with _top_a:
-        _search_name = st.text_input(
-            t("project_search"),
-            placeholder=t("project_search_placeholder"),
-            key="v12_project_search",
-        )
-    with _top_b:
-        st.metric(t("session_projects"), len(_projects_all))
-
-    _projects = list(_projects_all)
-    if _search_name.strip():
-        needle = _search_name.strip().lower()
-        _projects = [p for p in _projects if needle in str(p.get("project_name", "")).lower()]
-
-    if not _projects:
-        st.info(t("no_projects"))
-    else:
-        for _idx, _project in enumerate(_projects):
-            _pid = str(_project.get("project_id", _idx))
-            _name = str(_project.get("project_name") or _v12_default_project_name())
-
-            _card_left, _card_right = st.columns([1, 2.4], vertical_alignment="top")
-
-            with _card_left:
-                if _project.get("main_bytes"):
-                    st.image(_project["main_bytes"], caption=f"⭐ MAIN {_project.get('main_no') or '—'}", use_container_width=True)
-                elif _project.get("grid_bytes"):
-                    st.image(_project["grid_bytes"], caption="4×2 原始總圖", use_container_width=True)
-                else:
-                    st.info("🖼️ 尚無預覽圖")
-
-            with _card_right:
-                st.markdown(f"### 🏷️ {_name}")
-
-                _meta_parts = []
-                if _project.get("style_name"):
-                    _meta_parts.append(f"🎨 {_project['style_name']}")
-                if _project.get("font_name"):
-                    _meta_parts.append(f"🔤 {_project['font_name']}")
-                if _project.get("transparent_background"):
-                    _meta_parts.append("🖼️ 透明背景 PNG")
-                if _project.get("main_no"):
-                    _meta_parts.append(f"⭐ MAIN={_project['main_no']}")
-                if _project.get("tab_no"):
-                    _meta_parts.append(f"🏷️ TAB={_project['tab_no']}")
-                if _meta_parts:
-                    st.caption("　｜　".join(_meta_parts))
-
-                st.caption(f"最後打包：{_v12_format_display_time(_project.get('updated_at', ''))}")
-
-                _act1, _act2, _act3 = st.columns(3)
-                with _act1:
-                    if _project.get("zip_bytes"):
-                        st.download_button(
-                            "⬇️ 重新下載 ZIP",
-                            data=_project["zip_bytes"],
-                            file_name=f"{_v12_safe_download_stem(_name)}.zip",
-                            mime="application/zip",
-                            use_container_width=True,
-                            key=f"v12_redownload_{_pid}",
-                        )
-                with _act2:
-                    if st.button("↩️ 載回創作頁", key=f"v12_load_{_pid}", use_container_width=True):
-                        _v12_load_history_record(_project)
-                        st.session_state["v12_view"] = "create"
-                        st.rerun()
-                with _act3:
-                    if st.button("🗑️ 刪除", key=f"v12_delete_{_pid}", use_container_width=True):
-                        _v12_delete_history_record(_pid)
-                        st.rerun()
-
-                with st.expander("🔍 查看這組作品詳細設定", expanded=False):
-                    st.write(f"**作品名稱：** {_name}")
-                    st.write(f"**生成方式：** {_project.get('generation_method') or '未記錄'}")
-                    st.write(f"**文字風格：** {_project.get('text_style') or '未記錄'}")
-                    st.write(f"**建立時間：** {_project.get('created_at') or '未記錄'}")
-
-                    _texts = list(_project.get("sticker_texts") or [])
-                    if any(str(x).strip() for x in _texts):
-                        st.markdown("**8 張貼圖文字：**")
-                        for _n, _txt in enumerate(_texts, start=1):
-                            st.write(f"{_n:02d}. {_txt or '（未設定）'}")
-
-                    if _project.get("grid_bytes"):
-                        st.markdown("**4×2 原始總圖：**")
-                        st.image(_project["grid_bytes"], use_container_width=True)
-
-            st.divider()
 
     st.stop()
 
