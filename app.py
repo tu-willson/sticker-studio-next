@@ -5490,6 +5490,26 @@ def _v12_load_history_record(record):
         metadata.get("style_reference_custom_elements", "") or ""
     )
 
+    # 字型與外框是模板可分享的固定創作設定。字型需同時回填實際值與
+    # 快速選擇元件，否則畫面會顯示「已選字型」但下拉框仍停在預設提示。
+    loaded_text_style = str(metadata.get("text_style", "") or "")
+    st.session_state["v8_text_style"] = (
+        loaded_text_style
+        if loaded_text_style in V8_TEXT_STYLE_OPTIONS
+        else V8_TEXT_STYLE_LEGACY_MAP.get(loaded_text_style, "不使用外框")
+    )
+    loaded_font_name = str(metadata.get("font_name", "") or "")
+    font_match = re.match(r"^\s*(\d{1,3})(?:\s*[｜|])?", loaded_font_name)
+    loaded_font_no = int(font_match.group(1)) if font_match else 0
+    if loaded_font_no in V8_TEXT_EFFECT_CATALOG:
+        st.session_state["v8_selected_font"] = loaded_font_no
+        st.session_state["v12_font_quick_pick"] = (
+            f"{loaded_font_no:03d}｜{V8_TEXT_EFFECT_CATALOG[loaded_font_no]}"
+        )
+    else:
+        st.session_state["v8_selected_font"] = None
+        st.session_state["v12_font_quick_pick"] = "— 快速選擇字型｜可直接輸入數字 —"
+
     # 已保存的精選成品可直接重新打包，不需重新生成 AI 圖片。
     stored_stickers = record.get("sticker_bytes")
     if isinstance(stored_stickers, dict) and stored_stickers:
@@ -6273,9 +6293,15 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
     """Load a redeemed template while preserving the recipient's own photo."""
     metadata = copy.deepcopy(snapshot) if isinstance(snapshot, dict) else {}
     metadata.pop("source_photo_bytes", None)
-    # A shared template carries the requested style/text directions, never the
-    # publisher's personal character or scene requirements.
-    metadata["character_features"] = []
+    # 固定勾選的特色是套用到接收者自己人物照的通用創作設定，允許帶入；
+    # 自由輸入的人物／場景描述則可能含上傳者私人內容，絕不轉移。
+    metadata["character_features"] = [
+        option
+        for option in _v12_clean_character_features(
+            metadata.get("character_features", [])
+        )
+        if option in CHARACTER_OPTIONS
+    ]
     metadata["custom_character"] = ""
     metadata["custom_character_enabled"] = False
     metadata["project_id"] = str(uuid4())
@@ -6308,7 +6334,25 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         v12_style_reference_fingerprint=st.session_state.get(
             "v12_style_reference_fingerprint"
         ),
+        v12_style_reference_strength=st.session_state.get(
+            "v12_style_reference_strength"
+        ),
+        v12_style_reference_custom_elements=st.session_state.get(
+            "v12_style_reference_custom_elements"
+        ),
+        v10_character_options=list(
+            st.session_state.get("v10_character_options", []) or []
+        ),
+        v10_character_custom_1="",
+        v10_character_enabled_1=False,
+        v8_text_style=st.session_state.get("v8_text_style"),
+        v8_selected_font=st.session_state.get("v8_selected_font"),
+        v12_font_quick_pick=st.session_state.get("v12_font_quick_pick"),
     )
+    st.session_state["v12_creation_draft_snapshot"] = copy.deepcopy(
+        st.session_state.get("v12_navigation_safe_creation_draft", {})
+    )
+    st.session_state["v12_restore_creation_draft"] = True
     st.session_state["v12_view"] = "create"
     st.session_state["v12_scroll_target"] = "v12-step-02"
 
@@ -6514,6 +6558,9 @@ _V12_CREATION_DRAFT_KEYS = (
     "v10_character_options",
     "v10_character_custom_1",
     "v10_character_enabled_1",
+    "v8_text_style",
+    "v8_selected_font",
+    "v12_font_quick_pick",
     "transparent_png_option",
     "v12_auto_crop_room_enabled",
 )
