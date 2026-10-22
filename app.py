@@ -1024,8 +1024,18 @@ st.markdown("""
   margin:0 0 -.18rem !important;
 }
 [class*="st-key-v12_basket_item_"] [data-testid="stCheckbox"]{
+  width:fit-content !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
   margin-top:-.1rem !important;
   margin-bottom:-.24rem !important;
+}
+.v12-basket-source-label{
+  margin:-.1rem 0 -.16rem !important;
+  color:rgba(224,235,248,.75) !important;
+  font-size:.88rem !important;
+  font-weight:650 !important;
+  text-align:center !important;
 }
 /* 刪除維持文字辨識並用粉紅色提示；按鈕與下載相鄰但不貼近下一張卡片。 */
 div[class*="st-key-v12_basket_remove_"] button{
@@ -5349,20 +5359,25 @@ def _v12_render_sticker_basket_workspace():
             item_id = item["id"]
             with column:
                 with st.container(key=f"v12_basket_item_{item_id}"):
-                    st.image(
-                        item["image_bytes"],
-                        caption=t("basket_source", batch=_v12_basket_batch_display(item["batch_label"]), slot=item["source_slot"]),
-                        use_container_width=True,
+                    source_label = t(
+                        "basket_source",
+                        batch=_v12_basket_batch_display(item["batch_label"]),
+                        slot=item["source_slot"],
                     )
+                    st.image(item["image_bytes"], use_container_width=True)
                     st.session_state.setdefault(f"v12_basket_select_{item_id}", True)
                     st.checkbox(t("basket_keep"), key=f"v12_basket_select_{item_id}")
+                    st.markdown(
+                        f'<div class="v12-basket-source-label">{html.escape(source_label)}</div>',
+                        unsafe_allow_html=True,
+                    )
                     # 操作列對準圖片中心；下載較大、粉紅刪除較小且保持安全距離。
-                    _action_gutter, action_area = st.columns([0.65, 4.35])
+                    _action_left_gutter, action_area, _action_right_gutter = st.columns([0.5, 3.8, 0.7])
                     with action_area:
                         download_col, remove_col = st.columns([2.65, 1.15])
                         with download_col:
                             st.download_button(
-                                t("basket_png"),
+                                "⬇️ 單張下載",
                                 data=item["image_bytes"],
                                 file_name=(
                                     f"LINE貼圖_{item['batch_label'].replace(' ', '')}_"
