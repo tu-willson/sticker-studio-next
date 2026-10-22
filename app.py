@@ -1455,6 +1455,22 @@ div[class*="st-key-v12_basket_download_"] button{
   letter-spacing:.015em;
   box-shadow:0 8px 22px rgba(0,0,0,.16);
 }
+.v12-template-publish-intro{
+  margin:.2rem 0 .8rem;
+  color:rgba(239,245,255,.94);
+  font-size:.9rem;
+  font-weight:720;
+  line-height:1.62;
+}
+.v12-template-publish-warning{
+  display:block;
+  margin-top:.6rem;
+  padding:.48rem .7rem;
+  border-radius:8px;
+  background:#ffd7a0;
+  color:#182236;
+  font-weight:950;
+}
 @media (max-width:640px){
   .v10-main-title{
     font-size:clamp(1.7rem,8vw,2.2rem);
@@ -1866,6 +1882,23 @@ div[class*="st-key-v12_market_unlocked_tab"] button{
   background:linear-gradient(145deg,#4aa8ec,#247fbd) !important;
   border-color:#63b8f3 !important;
   color:#fff !important;
+}
+div[class*="st-key-v12_market_return_tab"] button{
+  background:linear-gradient(145deg,#ff6b92,#ef3f6d) !important;
+  border-color:#ff9db6 !important;
+}
+div[class*="st-key-v12_shared_template_favorite_"] button{
+  color:#fff3c8 !important;
+  border-color:rgba(255,210,104,.75) !important;
+  background:rgba(164,117,17,.30) !important;
+}
+div[class*="st-key-v12_shared_template_favorite_"] button:hover{
+  background:rgba(205,151,26,.48) !important;
+}
+div[class*="st-key-v12_shared_template_report_"] button{
+  color:#ffd4dc !important;
+  border-color:rgba(255,118,146,.72) !important;
+  background:rgba(135,32,56,.26) !important;
 }
 .v12-reel-rules{
   margin:1.1rem 0 .7rem;
@@ -2967,6 +3000,37 @@ def _beta_list_shared_template_marketplace(session, tags=None, search="", sort="
         access_token=session["access_token"],
     )
     return response if isinstance(response, list) else []
+
+
+def _beta_toggle_shared_template_favorite(session, template_id):
+    """Toggle the current member's private marketplace bookmark."""
+    response = _beta_rpc(
+        "toggle_shared_template_favorite",
+        {"p_template_id": str(template_id)},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("shared_template_favorite_invalid")
+    return bool(response.get("is_favorited", False))
+
+
+def _beta_report_shared_template(session, template_id):
+    """Record one private report; the reporter's marketplace hides it on rerun."""
+    response = _beta_rpc(
+        "report_shared_template",
+        {"p_template_id": str(template_id)},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("shared_template_report_invalid")
+    return {
+        "report_count": max(0, int(response.get("report_count", 0) or 0)),
+        "queued_for_review": bool(response.get("queued_for_review", False)),
+    }
 
 
 def _beta_list_my_unlocked_templates(session, limit=5, offset=0):
@@ -6718,7 +6782,14 @@ def _v12_render_creator_reels(session, shelf="active"):
                     and status["publish_template_limit"] > 0
                 ):
                     with st.expander(t("shared_template_publish_expander"), expanded=False):
-                        st.caption(t("shared_template_publish_intro"))
+                        st.markdown(
+                            '<div class="v12-template-publish-intro">'
+                            f'{html.escape(t("shared_template_publish_intro"))}'
+                            '<span class="v12-template-publish-warning">'
+                            f'{html.escape(t("shared_template_publish_content_warning"))}'
+                            '</span></div>',
+                            unsafe_allow_html=True,
+                        )
                         with st.form(f"v12_shared_template_publish_{reel_id}"):
                             template_title = st.text_input(
                                 t("shared_template_title"),
@@ -7103,13 +7174,16 @@ def _v12_render_unlocked_template_shelf(session):
 def _v12_render_shared_template_marketplace(session):
     """Browse public templates without exposing protected template internals."""
     st.markdown(f'<div class="v10-main-title">{t("shared_template_market_title")}</div>', unsafe_allow_html=True)
+    market_feedback = st.session_state.pop("v12_shared_template_market_feedback", None)
+    if market_feedback == "reported":
+        st.success(t("shared_template_report_success"))
     st.markdown(
         f'<div class="v12-marketplace-intro">{html.escape(t("shared_template_market_intro"))}</div>',
         unsafe_allow_html=True,
     )
     st.session_state.setdefault("v12_marketplace_shelf", "market")
     market_shelf = str(st.session_state.get("v12_marketplace_shelf", "market") or "market")
-    back_col, unlocked_col, _market_spacer = st.columns([1, 1, 1])
+    back_col, unlocked_col, market_return_col = st.columns([1, 1, 1])
     with back_col:
         if st.button(
             t("shared_template_back_library"),
@@ -7126,6 +7200,15 @@ def _v12_render_shared_template_marketplace(session):
             use_container_width=True,
         ):
             st.session_state["v12_marketplace_shelf"] = "unlocked"
+            st.rerun()
+    with market_return_col:
+        if market_shelf == "unlocked" and st.button(
+            t("shared_template_market_return"),
+            key="v12_market_return_tab",
+            type="primary",
+            use_container_width=True,
+        ):
+            st.session_state["v12_marketplace_shelf"] = "market"
             st.rerun()
 
     if market_shelf == "unlocked":
@@ -7147,7 +7230,7 @@ def _v12_render_shared_template_marketplace(session):
     with sort_col:
         marketplace_sort = st.selectbox(
             t("shared_template_market_sort"),
-            options=["newest", "popular", "low_cost"],
+            options=["newest", "popular", "low_cost", "favorites"],
             format_func=lambda value: t(f"shared_template_market_sort_{value}"),
             key="v12_shared_template_market_sort",
         )
@@ -7185,6 +7268,7 @@ def _v12_render_shared_template_marketplace(session):
         cost = max(1, int(template.get("apply_cost", 1) or 1))
         is_owner = bool(template.get("is_owner", False))
         is_unlocked = bool(template.get("is_unlocked", False))
+        is_favorited = bool(template.get("is_favorited", False))
         preview_path = str(template.get("preview_path", "") or "")
         left, right = st.columns([1.05, 2.15], vertical_alignment="top")
         with left:
@@ -7218,6 +7302,31 @@ def _v12_render_shared_template_marketplace(session):
                     else t("shared_template_no_style_reference"),
                 )
             )
+            favorite_col, report_col = st.columns([1.35, 0.85])
+            with favorite_col:
+                if st.button(
+                    t("shared_template_favorited")
+                    if is_favorited else t("shared_template_favorite"),
+                    key=f"v12_shared_template_favorite_{template_id}",
+                    use_container_width=True,
+                ):
+                    try:
+                        _beta_toggle_shared_template_favorite(session, template_id)
+                        st.rerun()
+                    except Exception:
+                        st.error("這個模板暫時無法更新收藏，請稍後再試。")
+            with report_col:
+                if not is_owner and st.button(
+                    t("shared_template_report"),
+                    key=f"v12_shared_template_report_{template_id}",
+                    use_container_width=True,
+                ):
+                    try:
+                        _beta_report_shared_template(session, template_id)
+                        st.session_state["v12_shared_template_market_feedback"] = "reported"
+                        st.rerun()
+                    except Exception:
+                        st.error(t("shared_template_report_failed"))
             if is_owner:
                 button_label = t("shared_template_apply_own")
                 button_key = f"v12_shared_template_apply_own_{template_id}"
