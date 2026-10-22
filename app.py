@@ -7202,7 +7202,7 @@ def _v12_render_shared_template_marketplace(session):
             st.session_state["v12_marketplace_shelf"] = "unlocked"
             st.rerun()
     with market_return_col:
-        if market_shelf == "unlocked" and st.button(
+        if st.button(
             t("shared_template_market_return"),
             key="v12_market_return_tab",
             type="primary",

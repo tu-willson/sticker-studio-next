@@ -364,6 +364,12 @@ CATALOG["ja"].update({
 
 
 CATALOG["zh-TW"].update({
+    "shared_template_publish_content_warning": "請勿刊登不雅圖像，違者將停權處理。",
+    "shared_template_market_return": "← 返回模版市集",
+    "shared_template_market_sort_favorites": "收藏的名單",
+    "shared_template_favorite": "⭐ 收藏", "shared_template_favorited": "★ 已收藏", "shared_template_report": "🚩 檢舉",
+    "shared_template_report_success": "已檢舉並從你的市集隱藏；若累積 3 位不同使用者檢舉，系統會列入管理員待審查清單。",
+    "shared_template_report_failed": "這個模板暫時無法檢舉，請稍後再試。",
     "grid_spacing_experiment": "啟用人物縮小／安全邊距實驗（僅透明 PNG）",
     "grid_spacing_experiment_help": "只影響下一次生成。可分別選擇人物縮小比例與每格安全邊距；生成後也會依同一縮小比例把 8 格置中，方便比較間距效果。",
     "grid_shrink_percent": "人物縮小比例", "grid_margin_percent": "每格四周至少保留", "grid_percent_option": "{percent}%",
