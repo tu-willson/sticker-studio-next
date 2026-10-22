@@ -3033,6 +3033,21 @@ def _beta_toggle_shared_template_favorite(session, template_id):
     return bool(response.get("is_favorited", False))
 
 
+def _v12_toggle_shared_template_favorite_callback(session, template_id, title):
+    """Run before Streamlit's single automatic rerun for a favorite click."""
+    try:
+        now_favorited = _beta_toggle_shared_template_favorite(session, template_id)
+        st.session_state["v12_shared_template_market_feedback"] = {
+            "type": "favorite",
+            "title": title,
+            "is_favorited": now_favorited,
+        }
+    except Exception:
+        st.session_state["v12_shared_template_market_feedback"] = {
+            "type": "favorite_error",
+        }
+
+
 def _beta_report_shared_template(session, template_id):
     """Record one private report; the reporter's marketplace hides it on rerun."""
     response = _beta_rpc(
@@ -7200,6 +7215,8 @@ def _v12_render_shared_template_marketplace(session):
             st.success(f"⭐ 已將「{feedback_title}」加入我的最愛名單。")
         else:
             st.info(f"已從我的最愛名單移除「{feedback_title}」。")
+    elif isinstance(market_feedback, dict) and market_feedback.get("type") == "favorite_error":
+        st.error("這個模板暫時無法更新最愛名單，請稍後再試。")
     st.markdown(
         f'<div class="v12-marketplace-intro">{html.escape(t("shared_template_market_intro"))}</div>',
         unsafe_allow_html=True,
@@ -7345,24 +7362,14 @@ def _v12_render_shared_template_marketplace(session):
                     f"v12_shared_template_favorite_active_{template_id}"
                     if is_favorited else f"v12_shared_template_favorite_{template_id}"
                 )
-                if st.button(
+                st.button(
                     t("shared_template_favorited")
                     if is_favorited else t("shared_template_favorite"),
                     key=favorite_key,
                     use_container_width=True,
-                ):
-                    try:
-                        now_favorited = _beta_toggle_shared_template_favorite(
-                            session, template_id
-                        )
-                        st.session_state["v12_shared_template_market_feedback"] = {
-                            "type": "favorite",
-                            "title": title,
-                            "is_favorited": now_favorited,
-                        }
-                        st.rerun()
-                    except Exception:
-                        st.error("這個模板暫時無法更新收藏，請稍後再試。")
+                    on_click=_v12_toggle_shared_template_favorite_callback,
+                    args=(session, template_id, title),
+                )
             if is_owner:
                 button_label = t("shared_template_apply_own")
                 button_key = f"v12_shared_template_apply_own_{template_id}"
