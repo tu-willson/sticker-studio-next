@@ -1566,18 +1566,18 @@ st.markdown("""
   text-align:center;
 }
 /* V11｜02C-3D｜透明背景選項專用穩定 CSS scope */
-.st-key-transparent_png_option{
+.st-key-transparent_png_option_box{
   width:min(900px,100%);
   margin:.35rem auto 1.25rem;
   padding:.65rem 1rem;
   text-align:center;
 }
 
-.st-key-transparent_png_option [data-testid="stCheckbox"]{
+.st-key-transparent_png_option_box [data-testid="stCheckbox"]{
   width:100% !important;
 }
 
-.st-key-transparent_png_option [data-testid="stCheckbox"] label{
+.st-key-transparent_png_option_box [data-testid="stCheckbox"] label{
   display:flex !important;
   align-items:center !important;
   justify-content:center !important;
@@ -1586,19 +1586,19 @@ st.markdown("""
   cursor:pointer !important;
 }
 
-.st-key-transparent_png_option [data-testid="stCheckbox"] label p{
+.st-key-transparent_png_option_box [data-testid="stCheckbox"] label p{
   margin:0 !important;
   font-size:2rem !important;
   line-height:1.2 !important;
   font-weight:900 !important;
 }
 
-.st-key-transparent_png_option [data-testid="stCheckbox"] label span{
+.st-key-transparent_png_option_box [data-testid="stCheckbox"] label span{
   font-size:2rem !important;
   font-weight:900 !important;
 }
 
-.st-key-transparent_png_option [data-testid="stCheckbox"] [role="checkbox"]{
+.st-key-transparent_png_option_box [data-testid="stCheckbox"] [role="checkbox"]{
   min-width:2.1rem !important;
   width:2.1rem !important;
   min-height:2.1rem !important;
@@ -1607,7 +1607,7 @@ st.markdown("""
   transform-origin:center;
 }
 
-.st-key-transparent_png_option [data-testid="stCheckbox"] input{
+.st-key-transparent_png_option_box [data-testid="stCheckbox"] input{
   width:2rem !important;
   height:2rem !important;
   cursor:pointer !important;
@@ -2542,6 +2542,8 @@ def _beta_http(method, path, payload=None, access_token=None):
             "invalid_library_project_update",
             "library_project_not_found",
             "library_assets_missing",
+            "creator_reel_delete_not_available",
+            "creator_reel_has_published_template",
         }
         if error_code in known_codes:
             raise RuntimeError(error_code) from exc
@@ -2699,6 +2701,30 @@ def _beta_collect_creator_reel(session, reel_id):
         "count": max(0, int(response.get("collected_reel_count", 0) or 0)),
         "limit": max(0, int(response.get("collected_reel_limit", 0) or 0)),
     }
+
+
+def _beta_delete_creator_reel(session, reel_id):
+    """Delete one private reel and its private Storage objects."""
+    response = _beta_rpc(
+        "get_my_creator_reel_delete_paths",
+        {"p_reel_id": str(reel_id)},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("creator_reel_delete_not_available")
+    paths = response.get("object_paths", [])
+    if not isinstance(paths, list):
+        raise RuntimeError("creator_reel_delete_not_available")
+    _beta_storage_delete(session, paths, bucket="creator-reels")
+    deleted = _beta_rpc(
+        "finalize_my_creator_reel_delete",
+        {"p_reel_id": str(reel_id)},
+        access_token=session["access_token"],
+    )
+    if deleted is not True:
+        raise RuntimeError("creator_reel_delete_not_available")
 
 
 def _beta_list_my_shared_template_sources(session):
@@ -5898,6 +5924,9 @@ def _v12_creator_reel_snapshot():
         "custom_style_snapshot": copy.deepcopy(
             snapshot.get("custom_style_snapshot", {}) or {}
         ),
+        "transparent_background": bool(
+            snapshot.get("transparent_background", False)
+        ),
     }
     resolved_expression_specs = st.session_state.get(
         "v12_expression_generation_specs"
@@ -6207,6 +6236,8 @@ def _v12_render_creator_reels(session):
                 limit=collection_feedback.get("limit", 0),
             )
         )
+    if st.session_state.pop("v12_creator_reel_delete_feedback", False):
+        st.success("🗑️ 創作膠卷已刪除。")
     template_feedback = st.session_state.pop(
         "v12_shared_template_publish_feedback", None
     )
@@ -6402,6 +6433,35 @@ def _v12_render_creator_reels(session):
                                 st.error(t("creator_reel_collect_failed"))
                 with collect_note:
                     st.caption(t("creator_reel_collect_help"))
+            if reel_status in {"active", "collected"}:
+                _delete_confirm, _delete_action = st.columns([1.05, 1.25])
+                with _delete_confirm:
+                    delete_confirmed = st.checkbox(
+                        "確認刪除這卷",
+                        key=f"v12_creator_reel_delete_confirm_{reel_id}",
+                    )
+                with _delete_action:
+                    if st.button(
+                        "🗑️ 刪除這卷",
+                        key=f"v12_creator_reel_delete_{reel_id}",
+                        disabled=not delete_confirmed,
+                        use_container_width=True,
+                    ):
+                        try:
+                            _beta_delete_creator_reel(session, reel_id)
+                            st.session_state[
+                                "v12_creator_reel_delete_feedback"
+                            ] = True
+                            st.rerun()
+                        except Exception as exc:
+                            if "creator_reel_has_published_template" in str(exc):
+                                st.warning(
+                                    "這卷已作為分享模板來源，為保障已套用者，無法直接刪除。"
+                                )
+                            else:
+                                st.error("這卷暫時無法刪除，請稍後再試。")
+            elif reel_status == "published":
+                st.caption("此卷已發布為分享模板來源，為保障已套用者，不提供刪除。")
             if style_name:
                 st.caption(t("creator_reel_style", style=style_name))
             if labels:
@@ -6429,6 +6489,7 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
             "text_style",
             "font_name",
             "custom_style_snapshot",
+            "transparent_background",
         ):
             if field in transfer:
                 metadata[field] = copy.deepcopy(transfer[field])
@@ -6500,6 +6561,9 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         v8_text_style=st.session_state.get("v8_text_style"),
         v8_selected_font=st.session_state.get("v8_selected_font"),
         v12_font_quick_pick=st.session_state.get("v12_font_quick_pick"),
+        transparent_png_option=bool(
+            st.session_state.get("transparent_png_option", False)
+        ),
     )
     st.session_state["v12_creation_draft_snapshot"] = copy.deepcopy(
         st.session_state.get("v12_navigation_safe_creation_draft", {})
@@ -9908,10 +9972,10 @@ if _sticker_mode == "text":
 st.divider()
 v10_section(t("section_background"), "#16a085")
 st.markdown(f'<div class="v11-transparent-title">{t("background_transparent")}</div>', unsafe_allow_html=True)
-with st.container(key="transparent_png_option"):
+with st.container(key="transparent_png_option_box"):
     transparent = st.checkbox(
         t("transparent_png"),
-        value=bool(st.session_state.get("transparent_png_option", False)),
+        key="transparent_png_option",
     )
 
 _auto_crop_room = st.checkbox(
