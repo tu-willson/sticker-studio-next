@@ -6689,12 +6689,10 @@ def _v12_render_creator_reels(session, shelf="active"):
                                 max_chars=300,
                                 key=f"v12_shared_template_description_{reel_id}",
                             )
-                            template_cost = st.number_input(
+                            template_cost = st.selectbox(
                                 t("shared_template_apply_cost"),
-                                min_value=1,
-                                max_value=20,
-                                value=1,
-                                step=1,
+                                options=[1, 2, 3],
+                                index=0,
                                 key=f"v12_shared_template_cost_{reel_id}",
                             )
                             template_tags = st.multiselect(
@@ -9073,10 +9071,18 @@ if st.session_state["v12_view"] == "library":
               </table>
               <p class="v12-reel-rules-note">未收藏膠捲超過上限時，會自動替換最早的一卷並循環保存。</p>
               <section class="v12-reel-market-guide">
+                <div class="v12-reel-market-guide-title">🎞️ 膠捲如何產生</div>
+                <ol>
+                  <li>每次按下<strong>生成圖片</strong>並完成一組 4×2 原始生成圖時，系統會自動建立一卷<strong>未收藏膠捲</strong>。</li>
+                  <li>未收藏膠捲方便你回顧這次的畫風、文字與創作設定；喜歡的作品可先收藏，再隨時<strong>套回創作頁</strong>繼續製作。</li>
+                  <li>收藏後的膠捲也能發布到市集，讓其他使用者購入並套用你的創作模組。</li>
+                </ol>
+              </section>
+              <section class="v12-reel-market-guide">
                 <div class="v12-reel-market-guide-title">🌐 市集功能說明</div>
                 <ol>
                   <li>先在<strong>未收藏的膠捲</strong>挑選喜歡的創作，點選收藏；再到<strong>已收藏的膠捲</strong>將它發布到市集。</li>
-                  <li>發布時可設定其他使用者購入模板所需的<strong>次數</strong>。其他使用者以自己的生成次數購入後，即可把設定套回創作頁使用。</li>
+                  <li>發布時可設定其他使用者購入模板所需的<strong>次數</strong>。其他使用者消耗自己的<strong>生成次數</strong>購入後，即可把設定套回創作頁使用。</li>
                   <li>市集模板只會帶入畫風、文字與創作設定，<strong>不會保留或傳送原創者的人物照片</strong>。</li>
                   <li>購入者實際支付的次數，會直接回饋給原創者，作為可使用的生成次數。</li>
                 </ol>

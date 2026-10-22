@@ -110,7 +110,7 @@ _ZH = {
     "shared_template_publish_expander": "🌐 發布到市集分享模板",
     "shared_template_publish_intro": "會複製這卷已保存的文字、動作、字型、人物／場景指令、畫風設定與預覽圖；不會包含人物原始照片。公開模板需由登入會員套用。",
     "shared_template_title": "模板名稱", "shared_template_description": "模板介紹（選填）",
-    "shared_template_apply_cost": "其他使用者購入模組需花費次數", "shared_template_rights_confirm": "我確認擁有分享此模板與畫風參考素材的必要權利。",
+    "shared_template_apply_cost": "其他使用者購入模組需花費次數（上限為 3）", "shared_template_rights_confirm": "我確認擁有分享此模板與畫風參考素材的必要權利。",
     "shared_template_tags": "🏷️ 分類標籤（必選 1～3 個，增加被搜尋範圍）", "shared_template_tags_help": "請從固定分類中選擇，方便市集使用者快速篩選。", "shared_template_tags_required": "請至少選擇 1 個分類標籤。",
     "shared_template_publish_button": "🌐 發布到市集分享模板", "shared_template_publishing": "正在建立分享模板……",
     "shared_template_title_required": "模板名稱至少需要 3 個字。", "shared_template_rights_required": "請先確認你擁有必要的分享權利。",
