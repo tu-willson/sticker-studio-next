@@ -10245,6 +10245,9 @@ if st.session_state.get("v11_generation_pending", False):
                 "先把人物、文字和動作指令排成一場小劇場。", 8,
             )
             _status.info("🎨 正在分析你的照片……")
+            # 留出極短的畫面時間，讓使用者確實看見第一幕，而不是被後續
+            # 同步準備工作立即覆蓋。
+            time.sleep(0.45)
 
             try:
                 _show_generation_scene(
@@ -10252,6 +10255,7 @@ if st.session_state.get("v11_generation_pending", False):
                     "畫面已送進 AI 畫室，這一幕會需要稍微等候。", 31,
                 )
                 _status.info("🖌️ 正在準備貼圖構圖……")
+                time.sleep(0.55)
 
                 # OpenAI SDK timeout：最長等待 180 秒。
                 # V12｜透明背景連動測試版
@@ -10298,9 +10302,40 @@ if st.session_state.get("v11_generation_pending", False):
                     "第 3 幕／5", "🪄 AI 正在畫布上施展貼圖魔法",
                     "角色、表情與小動作正在合成為 4×2 的完整畫面。", 57,
                 )
-                result = _generation_client.with_options(timeout=180).images.edit(
-                    **_image_edit_kwargs
-                )
+                # 圖片 API 本身不會回傳可用的真實百分比。改在背景等待，
+                # 讓畫面先依序顯示 1→2→3，接著停在第 4 幕直到 API 真正
+                # 回傳，最後才進入第 5 幕；這是清楚的等待階段，不冒充精準
+                # 的 AI 生成百分比。
+                with ThreadPoolExecutor(max_workers=1) as _image_executor:
+                    _image_future = _image_executor.submit(
+                        _generation_client.with_options(timeout=180).images.edit,
+                        **_image_edit_kwargs,
+                    )
+                    _waiting_stage_four = False
+                    _api_wait_started = time.monotonic()
+                    while not _image_future.done():
+                        if (
+                            not _waiting_stage_four
+                            and time.monotonic() - _api_wait_started >= 1.6
+                        ):
+                            _show_generation_scene(
+                                "第 4 幕／5", "⏳ AI 正在完成最後幾筆",
+                                "畫面正在收尾；這一幕會停留到完整圖片送達。",
+                                82,
+                            )
+                            _status.info("⏳ 正在等待 AI 完成畫面……")
+                            _waiting_stage_four = True
+                        time.sleep(0.35)
+                    # 即使 API 極快回傳，也完整呈現第 4 幕一次，讓五個
+                    # 等待階段不會跳格。
+                    if not _waiting_stage_four:
+                        _show_generation_scene(
+                            "第 4 幕／5", "⏳ AI 正在完成最後幾筆",
+                            "畫面正在收尾；完整圖片即將送達。", 82,
+                        )
+                        _status.info("⏳ 正在等待 AI 完成畫面……")
+                        time.sleep(0.45)
+                    result = _image_future.result()
 
                 # V11｜02C-4④｜異常回應資料防護
                 # API 呼叫成功不代表一定取得有效圖片；空 data / 缺少 b64_json
@@ -10319,13 +10354,8 @@ if st.session_state.get("v11_generation_pending", False):
                 _beta_generation_returned = _using_beta_credit
 
                 _show_generation_scene(
-                    "第 4 幕／5", "📦 圖片快遞抵達，正在小心拆封",
-                    "八格原始總圖已送回，正在確認每一格都完整到位。", 82,
-                )
-                _status.info("🖼️ 原始總圖處理中……")
-                _show_generation_scene(
-                    "第 5 幕／5", "✂️ 剪刀手正在幫每格安排裁切空間",
-                    "最後整理完成後，就能直接進入裁切確認。", 96,
+                    "第 5 幕／5", "📦 圖片快遞抵達，正在準備裁切",
+                    "八格原始總圖已送回，最後整理後即可進入裁切確認。", 96,
                 )
                 _status.info("✂️ 正在準備 8 張貼圖……")
                 _show_generation_scene(
