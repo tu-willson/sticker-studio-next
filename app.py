@@ -1895,6 +1895,17 @@ div[class*="st-key-v12_shared_template_favorite_"] button{
 div[class*="st-key-v12_shared_template_favorite_"] button:hover{
   background:rgba(205,151,26,.48) !important;
 }
+/* 已加入最愛要一眼可辨識，避免只靠按鈕文字變化。 */
+div[class*="st-key-v12_shared_template_favorite_active_"] button{
+  color:#fff !important;
+  border-color:#f5a8ff !important;
+  background:linear-gradient(145deg,#c66be8,#864fd7) !important;
+  box-shadow:0 7px 18px rgba(182,89,224,.34) !important;
+}
+div[class*="st-key-v12_shared_template_favorite_active_"] button:hover{
+  background:linear-gradient(145deg,#d67cf1,#995ee5) !important;
+  box-shadow:0 9px 22px rgba(200,103,239,.46) !important;
+}
 div[class*="st-key-v12_shared_template_report_"] button{
   color:#ffd4dc !important;
   border-color:rgba(255,118,146,.72) !important;
@@ -7183,6 +7194,12 @@ def _v12_render_shared_template_marketplace(session):
     market_feedback = st.session_state.pop("v12_shared_template_market_feedback", None)
     if market_feedback == "reported":
         st.success(t("shared_template_report_success"))
+    elif isinstance(market_feedback, dict) and market_feedback.get("type") == "favorite":
+        feedback_title = str(market_feedback.get("title", "") or t("untitled_project"))
+        if bool(market_feedback.get("is_favorited", False)):
+            st.success(f"⭐ 已將「{feedback_title}」加入我的最愛名單。")
+        else:
+            st.info(f"已從我的最愛名單移除「{feedback_title}」。")
     st.markdown(
         f'<div class="v12-marketplace-intro">{html.escape(t("shared_template_market_intro"))}</div>',
         unsafe_allow_html=True,
@@ -7324,14 +7341,25 @@ def _v12_render_shared_template_marketplace(session):
             )
             favorite_col, _favorite_spacer = st.columns([1.35, 2.65])
             with favorite_col:
+                favorite_key = (
+                    f"v12_shared_template_favorite_active_{template_id}"
+                    if is_favorited else f"v12_shared_template_favorite_{template_id}"
+                )
                 if st.button(
                     t("shared_template_favorited")
                     if is_favorited else t("shared_template_favorite"),
-                    key=f"v12_shared_template_favorite_{template_id}",
+                    key=favorite_key,
                     use_container_width=True,
                 ):
                     try:
-                        _beta_toggle_shared_template_favorite(session, template_id)
+                        now_favorited = _beta_toggle_shared_template_favorite(
+                            session, template_id
+                        )
+                        st.session_state["v12_shared_template_market_feedback"] = {
+                            "type": "favorite",
+                            "title": title,
+                            "is_favorited": now_favorited,
+                        }
                         st.rerun()
                     except Exception:
                         st.error("這個模板暫時無法更新收藏，請稍後再試。")
