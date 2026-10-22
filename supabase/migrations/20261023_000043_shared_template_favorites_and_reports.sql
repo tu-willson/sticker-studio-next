@@ -215,17 +215,20 @@ begin
     group by t.id
   )
   select
-    template_id, title, description, apply_cost, tags, preview_path,
-    has_style_reference, published_at, is_favorited, is_owner, is_unlocked,
-    unlock_count
+    market_templates.template_id, market_templates.title,
+    market_templates.description, market_templates.apply_cost,
+    market_templates.tags, market_templates.preview_path,
+    market_templates.has_style_reference, market_templates.published_at,
+    market_templates.is_favorited, market_templates.is_owner,
+    market_templates.is_unlocked, market_templates.unlock_count
   from market_templates
-  where v_sort <> 'favorites' or is_favorited
+  where v_sort <> 'favorites' or market_templates.is_favorited
   order by
-    case when v_sort = 'favorites' then favorited_at end desc,
-    case when v_sort = 'popular' then unlock_count else 0 end desc,
-    case when v_sort = 'low_cost' then apply_cost else 0 end asc,
-    case when v_sort = 'newest' then published_at end desc,
-    template_id desc
+    case when v_sort = 'favorites' then market_templates.favorited_at end desc,
+    case when v_sort = 'popular' then market_templates.unlock_count else 0 end desc,
+    case when v_sort = 'low_cost' then market_templates.apply_cost else 0 end asc,
+    case when v_sort = 'newest' then market_templates.published_at end desc,
+    market_templates.template_id desc
   limit greatest(1, least(coalesce(p_limit, 24), 48))
   offset greatest(0, coalesce(p_offset, 0));
 end;
