@@ -2545,7 +2545,7 @@ def _beta_http(method, path, payload=None, access_token=None):
         }
         if error_code in known_codes:
             raise RuntimeError(error_code) from exc
-        raise RuntimeError("beta_request_failed") from exc
+        raise RuntimeError(f"beta_request_failed_http_{exc.code}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
         raise RuntimeError("beta_request_failed") from exc
 
@@ -5384,6 +5384,12 @@ def _v12_render_sticker_basket_workspace():
                     st.warning(
                         "雲端覆蓋尚未完成：原作品已不存在或目前登入帳號不符。"
                         "請從「我的作品」重新載入後再試。"
+                    )
+                elif str(exc).startswith("beta_request_failed_http_"):
+                    _http_code = str(exc).rsplit("_", 1)[-1]
+                    st.warning(
+                        "雲端覆蓋的最後確認未完成（系統診斷碼：HTTP "
+                        f"{_http_code}）。本機暫存與原有雲端作品都沒有被刪除。"
                     )
                 else:
                     st.warning(t("cloud_failed"))
