@@ -1030,6 +1030,17 @@ st.markdown("""
   margin-top:-.1rem !important;
   margin-bottom:-.24rem !important;
 }
+/* Streamlit 的 checkbox widget 會另有一層 key 容器；直接置中該層。 */
+div[class*="st-key-v12_basket_select_"]{
+  width:fit-content !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+div[class*="st-key-v12_basket_select_"] [data-testid="stCheckbox"]{
+  width:fit-content !important;
+  margin-left:0 !important;
+  margin-right:0 !important;
+}
 /* 刪除維持文字辨識並用粉紅色提示；按鈕與下載相鄰但不貼近下一張卡片。 */
 div[class*="st-key-v12_basket_remove_"] button{
   min-width:86px !important;
