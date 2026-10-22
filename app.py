@@ -10285,7 +10285,7 @@ if st.session_state.get("v11_generation_pending", False):
 
                 _image_edit_kwargs["prompt"] = _generation_prompt
                 # 圖片 API 本身不會回傳可用的真實百分比。改在背景等待，
-                # 請求會先立刻送出；畫面則以每幕 1～3 秒的節奏顯示
+                # 請求會先立刻送出；畫面則以每幕 3～5 秒的節奏顯示
                 # 1→2→3→4，接著停在第 4 幕直到 API 真正回傳，最後才進
                 # 入第 5 幕。這是等待階段，不冒充精準的 AI 生成百分比。
                 with ThreadPoolExecutor(max_workers=1) as _image_executor:
@@ -10299,7 +10299,7 @@ if st.session_state.get("v11_generation_pending", False):
                         "先把人物、文字和動作指令排成一場小劇場。", 8,
                     )
                     _status.info("🎨 正在分析你的照片……")
-                    time.sleep(random.uniform(1.0, 3.0))
+                    time.sleep(random.uniform(3.0, 5.0))
 
                     _show_generation_scene(
                         "第 2 幕／5", _stage_two_title, _stage_two_note, 31,
@@ -10308,14 +10308,14 @@ if st.session_state.get("v11_generation_pending", False):
                         "🖼️ 正在分析人物照片與畫風參考圖……"
                         if _style_reference_active else "🖌️ 正在準備貼圖構圖……"
                     )
-                    time.sleep(random.uniform(1.0, 3.0))
+                    time.sleep(random.uniform(3.0, 5.0))
 
                     _show_generation_scene(
                         "第 3 幕／5", "🪄 AI 正在畫布上施展貼圖魔法",
                         "角色、表情與小動作正在合成為 4×2 的完整畫面。", 57,
                     )
                     _status.info("🪄 AI 正在繪製貼圖畫面……")
-                    time.sleep(random.uniform(1.0, 3.0))
+                    time.sleep(random.uniform(3.0, 5.0))
 
                     _show_generation_scene(
                         "第 4 幕／5", "⏳ AI 正在完成最後幾筆",
