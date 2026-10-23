@@ -283,7 +283,7 @@ Sticker Studio Next 是一項 AI 輔助 LINE 貼圖創作服務。會員可上�
 
 #### 💳 方案與提供額度
 
-**免費會員權益：**可使用基礎貼圖創作、首次登入 **2 次**圖片生成體驗額度、每日 **2 次** AI 幫想，以及雲端作品庫 **5 組**。本段不包含膠捲與市集功能。
+<div class="v12-member-rules-callout v12-member-rules-callout-free"><strong>免費會員權益：</strong>可使用基礎貼圖創作、首次登入 <strong>2 次</strong>圖片生成體驗額度、每日 <strong>2 次</strong> AI 幫想，以及雲端作品庫 <strong>5 組</strong>。</div>
 
 | 方案 | 月費／售價 | 每月圖片生成次數 | AI幫想每日額度 | 雲端作品庫上限 |
 | --- | ---: | ---: | ---: | ---: |
@@ -306,7 +306,7 @@ Sticker Studio Next 是一項 AI 輔助 LINE 貼圖創作服務。會員可上�
 
 #### 📌 重要提醒
 
-**生成次數使用順序：**基本會員點數 → 推薦碼獎勵 → 訂閱方案／7 次生成包 → 市集創作者回饋。同一類別內，會優先使用較早到期的額度。
+<div class="v12-member-rules-callout v12-member-rules-callout-priority"><strong>生成次數使用順序：</strong>基本會員點數 → 推薦碼獎勵 → 訂閱方案／7 次生成包 → 市集創作者回饋。</div>
 
 本服務提供數位化 AI 創作與雲端保存功能。使用者須確認上傳照片、參考圖、文字與生成內容具有合法使用權，且不侵害他人權利。正式付款頁面將同步揭示付款、續訂、取消與退款相關說明。"""
     if locale == "en":
@@ -2028,11 +2028,92 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
 .st-key-v12_pricing_rules_guide [data-testid="stCaptionContainer"]{
   color:rgba(224,235,248,.86) !important;
 }
+/* 會員規則以與膠捲／市集規則一致的深色底、彩色重點呈現。 */
+.st-key-v12_member_rules{
+  margin-top:.6rem;
+  padding:1rem 1.05rem;
+  border:1px solid rgba(137,196,255,.5);
+  border-radius:14px;
+  background:rgba(12,30,54,.24);
+}
+.st-key-v12_member_rules [data-testid="stMarkdownContainer"]{
+  color:#f4f8ff !important;
+  font-weight:700;
+  line-height:1.72;
+}
+.st-key-v12_member_rules [data-testid="stMarkdownContainer"] h4{
+  margin:1.05rem 0 .62rem !important;
+  color:#a9d8ff !important;
+  font-weight:950 !important;
+  letter-spacing:.01em;
+}
+.st-key-v12_member_rules [data-testid="stMarkdownContainer"] h4:nth-of-type(even){
+  color:#9bf3c1 !important;
+}
+.st-key-v12_member_rules [data-testid="stMarkdownContainer"] strong{
+  color:#ffe0a3 !important;
+  font-weight:950 !important;
+}
+.st-key-v12_member_rules [data-testid="stMarkdownContainer"] ul,
+.st-key-v12_member_rules [data-testid="stMarkdownContainer"] ol{
+  color:#dcecff !important;
+}
+.st-key-v12_member_rules [data-testid="stMarkdownContainer"] table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  overflow:hidden;
+  border:1px solid rgba(191,220,255,.54);
+  border-radius:12px;
+  background:transparent;
+}
+.st-key-v12_member_rules [data-testid="stMarkdownContainer"] th,
+.st-key-v12_member_rules [data-testid="stMarkdownContainer"] td{
+  padding:.68rem .8rem;
+  border-bottom:1px solid rgba(191,220,255,.24);
+  background:transparent;
+  color:#edf6ff !important;
+}
+.st-key-v12_member_rules [data-testid="stMarkdownContainer"] th{
+  color:#fff !important;
+  font-weight:950;
+  border-bottom-color:rgba(191,220,255,.54);
+}
+.st-key-v12_member_rules [data-testid="stMarkdownContainer"] tr:last-child td{border-bottom:0;}
+.v12-member-rules-callout{
+  margin:.78rem 0 1rem;
+  padding:.78rem .9rem;
+  border-radius:10px;
+  font-weight:800;
+  line-height:1.65;
+}
+.v12-member-rules-callout-free{
+  color:#e8f7ff;
+  border:1px solid rgba(117,204,255,.58);
+  border-left:4px solid #4db7f2;
+  background:rgba(34,121,174,.2);
+}
+.v12-member-rules-callout-priority{
+  color:#f7fff9;
+  border:1px solid rgba(103,229,157,.56);
+  border-left:4px solid #4fdb8b;
+  background:rgba(35,133,81,.2);
+}
+.v12-referral-credit-note{
+  margin:.42rem 0 .1rem;
+  color:#fff0c2;
+  font-weight:900;
+  line-height:1.55;
+  text-shadow:0 1px 2px rgba(0,0,0,.45);
+}
 @media(max-width:680px){
   .v12-reel-rules th,.v12-reel-rules td{padding:.62rem .58rem;font-size:.87rem;}
   .v12-reel-rules th:nth-child(2),.v12-reel-rules td:nth-child(2){display:none;}
   .v12-reel-market-guide{padding:.85rem .8rem;}
   .st-key-v12_pricing_rules_guide{padding:.85rem .8rem;}
+  .st-key-v12_member_rules{padding:.85rem .8rem;}
+  .st-key-v12_member_rules [data-testid="stMarkdownContainer"] th,
+  .st-key-v12_member_rules [data-testid="stMarkdownContainer"] td{padding:.56rem .52rem;font-size:.87rem;}
 }
 html{scroll-behavior:smooth;}
 [id^="v12-step-"],#v12-sticker-basket{scroll-margin-top:1rem;}
@@ -4687,10 +4768,13 @@ def _beta_render_account_panel():
             else:
                 try:
                     credit_breakdown = _beta_credit_balance_breakdown(session)
-                    st.caption(
+                    st.markdown(
+                        "<p class=\"v12-referral-credit-note\">"
                         "🎁 推薦碼獎勵："
                         f"{credit_breakdown['referral_credits']} 次"
-                        "｜基本會員點數用完後優先使用，再使用訂閱／生成包額度。"
+                        "｜基本會員次數以及推薦碼次數會優先使用，再使用訂閱／生成包額度。"
+                        "</p>",
+                        unsafe_allow_html=True,
                     )
                 except Exception:
                     pass
@@ -4724,13 +4808,14 @@ def _beta_render_account_panel():
                 st.markdown(_v12_member_rules_markdown())
             return session
         with st.expander("📜 生成次數與雲端作品庫規則", expanded=False):
-            st.markdown(_v12_member_rules_markdown())
-            st.button(
-                "📚 前往我的作品了解膠捲與市集規則",
-                key="beta_rules_go_library",
-                on_click=_v12_navigate_callback,
-                kwargs={"view": "library", "library_section": "home", "preserve_creation": True},
-            )
+            with st.container(key="v12_member_rules"):
+                st.markdown(_v12_member_rules_markdown(), unsafe_allow_html=True)
+                st.button(
+                    "📚 前往我的作品了解膠捲與市集規則",
+                    key="beta_rules_go_library",
+                    on_click=_v12_navigate_callback,
+                    kwargs={"view": "library", "library_section": "home", "preserve_creation": True},
+                )
         return session
 
     login_error = st.session_state.pop("beta_login_error", "")
