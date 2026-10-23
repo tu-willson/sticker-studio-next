@@ -9446,7 +9446,7 @@ if st.session_state["v12_view"] == "library":
         st.stop()
 
     if _library_section == "reels":
-        if st.button("← 返回我的作品", key="v12_library_reels_back"):
+        if st.button("← 返回上一頁", key="v12_library_reels_back"):
             st.session_state["v12_library_section"] = "home"
             st.rerun()
 
@@ -9459,7 +9459,7 @@ if st.session_state["v12_view"] == "library":
             st.info(t("cloud_login"))
         st.stop()
 
-    if st.button("← 返回我的作品", key="v12_library_cloud_back"):
+    if st.button("← 返回上一頁", key="v12_library_cloud_back"):
         st.session_state["v12_library_section"] = "home"
         st.rerun()
 
