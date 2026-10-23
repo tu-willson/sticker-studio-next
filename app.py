@@ -1120,6 +1120,25 @@ div[class*="st-key-v12_basket_download_"] button{
   background:#e53e57 !important;
   border-color:#e53e57 !important;
 }
+/* 素材準備區的一鍵清空：維持低干擾的透明粉紅，滑過才提高警示感。 */
+.st-key-v12_clear_all_creation button{
+  min-height:34px !important;
+  padding:.3rem .72rem !important;
+  border:1px solid rgba(255,126,150,.68) !important;
+  border-radius:9px !important;
+  background:rgba(255,79,103,.18) !important;
+  color:#ffdce4 !important;
+  font-size:.82rem !important;
+  font-weight:800 !important;
+  white-space:nowrap !important;
+  box-shadow:none !important;
+}
+.st-key-v12_clear_all_creation button:hover{
+  background:rgba(255,79,103,.56) !important;
+  border-color:#ff9aac !important;
+  color:#fff !important;
+  box-shadow:0 5px 13px rgba(255,79,103,.26) !important;
+}
 /* 人物照與畫風參考共用醒目的粉紅色原生上傳按鈕。 */
 .st-key-v12_person_photo_upload [data-testid="stFileUploaderDropzone"] button,
 .st-key-v12_style_reference_upload [data-testid="stFileUploaderDropzone"] button{
@@ -8706,6 +8725,76 @@ def _v12_clear_expression_slot(i):
     st.session_state[f"v12_expression_effect_{i}"] = V12_EXPRESSION_EFFECTS[0]
 
 
+def _v12_clear_active_creation_callback():
+    """Clear only the current creation workspace, never member data or saved works."""
+    # 人物素材與畫風設定。
+    st.session_state["uploaded_image_bytes"] = None
+    st.session_state.pop("v12_person_photo_upload_widget", None)
+    st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
+    st.session_state["v10_style_mode"] = "↓ 請選擇風格"
+    st.session_state["v12_last_preset_style_mode"] = "↓ 請選擇風格"
+    st.session_state["v12_use_custom_style"] = False
+    st.session_state["v12_saved_custom_style_choice"] = "↓ 請選擇已儲存風格"
+    st.session_state["v12_style_reference_image_bytes"] = None
+    st.session_state["v12_style_reference_filename"] = ""
+    st.session_state["v12_style_reference_fingerprint"] = ""
+    st.session_state["v12_style_reference_strength"] = "柔和融入"
+    st.session_state["v12_style_reference_elements_enabled"] = False
+    st.session_state["v12_style_reference_elements"] = []
+    st.session_state["v12_style_reference_custom_elements"] = ""
+    st.session_state.pop("v12_style_reference_upload", None)
+    st.session_state.pop("v12_loaded_project_custom_style", None)
+    st.session_state.pop("v12_applied_template_style_name", None)
+    st.session_state.pop("v12_applied_template_style_prompt", None)
+    st.session_state.pop("v12_template_style_apply_pending", None)
+
+    # 人物、文字、動作、表情、字型與背景設定。
+    st.session_state["v10_character_options"] = []
+    st.session_state["v10_character_custom_1"] = ""
+    st.session_state["v10_character_enabled_1"] = False
+    for i in range(8):
+        _v12_clear_sticker_slot(i)
+        _v12_clear_expression_slot(i)
+    _v12_clear_sticker_action_prompts()
+    _v12_clear_text_color_segments()
+    st.session_state["v12_sticker_content_mode"] = V12_STICKER_TEXT_MODE
+    st.session_state["v12_step04_frontend_revision"] = (
+        int(st.session_state.get("v12_step04_frontend_revision", 0)) + 1
+    )
+    st.session_state["v12_step04_frontend_source_panel"] = ""
+    st.session_state["v8_text_style"] = "不使用外框"
+    st.session_state["v8_selected_font"] = None
+    st.session_state["v12_font_quick_pick"] = "— 快速選擇字型｜可直接輸入數字 —"
+    st.session_state["v10_font_gallery_open"] = False
+    st.session_state["v12_font_gallery_page"] = 1
+    st.session_state["v12_font_gallery_page_select"] = 1
+    st.session_state["transparent_png_option"] = False
+
+    # 本次生成與暫存區也一起歸零；已收藏膠捲、雲端作品與個人 01～10 風格庫不會受影響。
+    st.session_state["generated_4x2_bytes"] = None
+    st.session_state["last_prompt"] = ""
+    st.session_state["crop_boxes"] = None
+    st.session_state["v12_sticker_basket"] = []
+    st.session_state["v12_sticker_basket_batch_number"] = 0
+    st.session_state["v12_basket_last_zip_bytes"] = None
+    st.session_state["v12_basket_last_zip_name"] = ""
+    st.session_state["v12_ai_copy_candidates"] = []
+    st.session_state["v12_ai_copy_topic"] = ""
+    st.session_state["v12_ai_copy_selected"] = []
+    st.session_state["v12_ai_copy_picked"] = []
+    st.session_state["v12_ai_copy_topic_used"] = ""
+    st.session_state["v12_ai_copy_tone_used"] = ""
+    st.session_state["v12_selected_themes"] = []
+    st.session_state.pop("v12_loaded_cloud_project_id", None)
+    st.session_state["v12_current_project"] = _v12_new_project_metadata()
+    st.session_state["v12_project_name_input"] = ""
+    st.session_state["v12_project_name_top_input"] = ""
+    st.session_state["v12_creation_draft_snapshot"] = {}
+    st.session_state["v12_navigation_safe_creation_draft"] = {}
+    st.session_state["v12_restore_creation_draft"] = False
+    st.session_state["v12_reset_creation_feedback"] = True
+
+
 _v12_init_color_segment_state()
 _v12_init_sticker_action_state()
 
@@ -10792,8 +10881,22 @@ st.divider()
 
 v10_section(t("section_person"), "#ff5c7a")
 st.caption(t("photo_intro"))
+_photo_hint_col, _clear_creation_col = st.columns([6, 1.45], vertical_alignment="center")
+with _clear_creation_col:
+    st.button(
+        "🧹 一鍵清空全部設定",
+        key="v12_clear_all_creation",
+        help="清除本次創作的所有素材、設定、生成結果與作品暫存；不會影響已收藏膠捲、雲端作品、會員資料或自定義風格庫。",
+        on_click=_v12_clear_active_creation_callback,
+    )
+if st.session_state.pop("v12_reset_creation_feedback", False):
+    st.success("已清空本次創作設定與暫存內容；已收藏膠捲、雲端作品與個人風格庫都保留不變。")
 with st.container(key="v12_person_photo_upload"):
-    uploaded = st.file_uploader(t("photo_select"), type=["jpg","jpeg","png","webp"])
+    uploaded = st.file_uploader(
+        t("photo_select"),
+        type=["jpg", "jpeg", "png", "webp"],
+        key="v12_person_photo_upload_widget",
+    )
 if uploaded:
     try:
         uploaded.seek(0)
