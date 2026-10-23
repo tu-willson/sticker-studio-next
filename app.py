@@ -5889,9 +5889,14 @@ def _v12_normalize_project_metadata(metadata):
     if _v12_has_custom_style_snapshot(custom_style_snapshot):
         style_mode = V8_STYLE_CUSTOM_OPTION
         custom_style_snapshot["mode"] = V8_STYLE_CUSTOM_OPTION
-    character_features = _v12_clean_character_features(
-        data.get("character_features") or creative.get("character_features", [])
-    )
+    # An explicit empty list means the creator deliberately selected no
+    # feature.  Do not use ``or`` here: it would resurrect an obsolete nested
+    # value from ``creative_settings`` (for example 五官比例保留) after a
+    # template snapshot was intentionally corrected.
+    raw_character_features = data.get("character_features")
+    if not isinstance(raw_character_features, list):
+        raw_character_features = creative.get("character_features", [])
+    character_features = _v12_clean_character_features(raw_character_features)
     custom_character = str(
         data.get("custom_character") or creative.get("custom_character", "") or ""
     )[:2000]
