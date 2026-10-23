@@ -5700,6 +5700,39 @@ def _v12_normalize_custom_style_snapshot(
     }
 
 
+def _v12_prime_shared_template_style_for_render():
+    """Prime conditional STEP 02 widgets immediately after a template apply.
+
+    Streamlit clears widgets that were absent on the marketplace page.  Set
+    the custom-style controls before their checkbox/selectbox is created, so
+    an old false checkbox value cannot hide a valid template prompt.
+    """
+    if not st.session_state.pop("v12_template_style_apply_pending", False):
+        return
+    loaded = _v12_normalize_custom_style_snapshot(
+        st.session_state.get("v12_loaded_project_custom_style"),
+        fallback={
+            "prompt": st.session_state.get("v12_applied_template_style_prompt", ""),
+            "name": st.session_state.get("v12_applied_template_style_name", ""),
+        },
+    )
+    if not _v12_has_custom_style_snapshot(loaded):
+        return
+    loaded["mode"] = V8_STYLE_CUSTOM_OPTION
+    loaded["source"] = "shared_template"
+    st.session_state["v12_loaded_project_custom_style"] = loaded
+    st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
+    st.session_state["v10_style_mode"] = V8_STYLE_CUSTOM_OPTION
+    st.session_state["v12_use_custom_style"] = True
+    st.session_state["v12_saved_custom_style_choice"] = "↓ 請選擇已儲存風格"
+    st.session_state["v12_applied_template_style_name"] = str(
+        loaded.get("name", "") or ""
+    )
+    st.session_state["v12_applied_template_style_prompt"] = str(
+        loaded.get("prompt", "") or ""
+    )
+
+
 def _v12_template_transfer_contract(snapshot):
     """Create the explicit, photo-free settings contract for a template."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
@@ -6735,11 +6768,19 @@ def _v12_load_history_record(record):
             loaded_custom_style.get("prompt", "") or ""
         )
         st.session_state.pop("v12_applied_template_style_feedback", None)
+        if str(loaded_custom_style.get("source", "") or "") == "shared_template":
+            # The marketplace page did not render these conditional widgets.
+            # Mark the next create-page render so it primes them before they
+            # are constructed, rather than accepting stale widget defaults.
+            st.session_state["v12_template_style_apply_pending"] = True
+        else:
+            st.session_state.pop("v12_template_style_apply_pending", None)
     else:
         st.session_state.pop("v12_loaded_project_custom_style", None)
         st.session_state.pop("v12_applied_template_style_name", None)
         st.session_state.pop("v12_applied_template_style_prompt", None)
         st.session_state.pop("v12_applied_template_style_feedback", None)
+        st.session_state.pop("v12_template_style_apply_pending", None)
 
     loaded_sticker_mode = str(metadata.get("sticker_mode", "text") or "text")
     st.session_state["v12_sticker_content_mode"] = (
@@ -7841,6 +7882,9 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         v12_applied_template_style_prompt=st.session_state.get(
             "v12_applied_template_style_prompt"
         ),
+        v12_template_style_apply_pending=bool(
+            st.session_state.get("v12_template_style_apply_pending", False)
+        ),
         v10_character_options=list(
             st.session_state.get("v10_character_options", []) or []
         ),
@@ -8277,6 +8321,7 @@ _V12_CREATION_DRAFT_KEYS = (
     "v12_loaded_project_custom_style",
     "v12_applied_template_style_name",
     "v12_applied_template_style_prompt",
+    "v12_template_style_apply_pending",
     "v10_character_options",
     "v10_character_custom_1",
     "v10_character_enabled_1",
@@ -10768,6 +10813,7 @@ if _style_source_mode not in {V12_STYLE_PRESET_MODE, V12_STYLE_REFERENCE_MODE}:
 
 # 原生 file_uploader 的值不可靠；創作草稿中的圖片才是畫風參考的真實來源。
 _v12_restore_durable_style_reference()
+_v12_prime_shared_template_style_for_render()
 _style_source_mode = str(st.session_state.get(
     "v12_style_source_mode", V12_STYLE_PRESET_MODE
 ))
