@@ -7727,20 +7727,42 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
     metadata.pop("source_photo_bytes", None)
     transfer = metadata.get("template_transfer")
     if isinstance(transfer, dict):
-        # Prefer the dedicated creator-reel transfer contract when present.
-        # It is intentionally only settings; no uploader photograph is ever
-        # part of this payload.
+        # The complete project snapshot is authoritative.  A few early
+        # templates contain a newer top-level snapshot plus an older transfer
+        # object whose blank/default values would otherwise overwrite the
+        # creator's real settings during redemption.  Use transfer only as a
+        # fallback for fields that the old top-level snapshot truly lacks.
         for field in (
             "style_mode",
             "character_features",
             "custom_character",
             "text_style",
             "font_name",
-            "custom_style_snapshot",
             "transparent_background",
         ):
-            if field in transfer:
+            if field not in metadata and field in transfer:
                 metadata[field] = copy.deepcopy(transfer[field])
+
+        source_custom_style = _v12_normalize_custom_style_snapshot(
+            metadata.get("custom_style_snapshot"),
+            style_mode=str(metadata.get("style_mode", "") or ""),
+            style_name=str(metadata.get("style_name", "") or ""),
+            fallback=(
+                metadata.get("creative_settings", {}).get("style", {})
+                if isinstance(metadata.get("creative_settings"), dict)
+                else None
+            ),
+        )
+        transfer_custom_style = _v12_normalize_custom_style_snapshot(
+            transfer.get("custom_style_snapshot"),
+            style_mode=str(transfer.get("style_mode", "") or ""),
+            style_name=str(transfer.get("style_name", "") or ""),
+            fallback=transfer,
+        )
+        if _v12_has_custom_style_snapshot(source_custom_style):
+            metadata["custom_style_snapshot"] = source_custom_style
+        elif _v12_has_custom_style_snapshot(transfer_custom_style):
+            metadata["custom_style_snapshot"] = transfer_custom_style
     # 固定勾選的特色與自由文字都是模板的創作指令，會套用到接收者自己
     # 的人物照；人物照片本身不會隨模板轉移。
     metadata["character_features"] = [
