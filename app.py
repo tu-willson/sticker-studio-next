@@ -6431,13 +6431,9 @@ def _v12_save_selected_stickers_to_history(selected, options, main_label, tab_la
     return history_record
 
 
+@st.fragment
 def _v12_render_sticker_basket_workspace():
-    """Allow an unlimited session basket, then make one final limited-size project ZIP.
-
-    This intentionally runs in the normal page lifecycle.  Streamlit fragment
-    reruns can discard a text widget's pending browser value when a nearby
-    selectbox changes, which made the project title look as if it disappeared.
-    """
+    """Allow an unlimited session basket, then make one final limited-size project ZIP."""
     basket = _v12_get_sticker_basket()
     if not basket:
         st.info(t("basket_empty"))
@@ -6451,12 +6447,12 @@ def _v12_render_sticker_basket_workspace():
         if st.button(t("basket_select_all"), key="v12_basket_select_all", use_container_width=True):
             for item in basket:
                 st.session_state[f"v12_basket_select_{item['id']}"] = True
-            st.rerun()
+            st.rerun(scope="fragment")
     with control_right:
         if st.button(t("basket_deselect_all"), key="v12_basket_deselect_all", use_container_width=True):
             for item in basket:
                 st.session_state[f"v12_basket_select_{item['id']}"] = False
-            st.rerun()
+            st.rerun(scope="fragment")
 
     for row_start in range(0, len(basket), 4):
         columns = st.columns(4)
@@ -6498,7 +6494,7 @@ def _v12_render_sticker_basket_workspace():
                         with remove_col:
                             if st.button("刪除", key=f"v12_basket_remove_{item_id}", use_container_width=True):
                                 _v12_remove_sticker_basket_item(item_id)
-                                st.rerun()
+                                st.rerun(scope="fragment")
 
     selected = _v12_selected_sticker_basket_items()
     st.divider()
@@ -6563,6 +6559,7 @@ def _v12_render_sticker_basket_workspace():
         max_chars=80,
         on_change=_v12_project_name_on_change,
     )
+    _v12_render_project_name_browser_safety_net()
     name_preview = _v12_project_snapshot().get("project_name", "")
     if not name_preview:
         st.caption(t("project_default", name=_v12_default_project_name()))
@@ -7098,6 +7095,58 @@ def _v12_preserve_project_name_before_basket_choice():
     # The upper field is not re-created during a fragment-only rerun.  Keep a
     # durable mirror so the lower field can restore exactly what was entered.
     st.session_state["v12_project_name_top_input"] = value
+
+
+def _v12_render_project_name_browser_safety_net():
+    """Keep an in-progress title through a nearby fragment widget interaction.
+
+    Streamlit only sends a text input to Python when that widget change has
+    been committed.  A quick click on MAIN/TAB can otherwise replace the
+    browser DOM before its pending value reaches Session State.  This tiny
+    first-party bridge stores each keystroke per project in browser storage and
+    restores it to the native Streamlit input after the fragment redraws.
+    """
+    project_id = str(_v12_current_project().get("project_id", "") or "new")
+    storage_key = f"v12-project-title-draft:{project_id}"
+    label = t("project_label")
+    components.html(
+        f"""
+        <script>
+        (() => {{
+          const storageKey = {json.dumps(storage_key)};
+          const label = {json.dumps(label)};
+          const parentDocument = window.parent && window.parent.document;
+          if (!parentDocument) return;
+          const findInput = () => Array.from(parentDocument.querySelectorAll('input'))
+            .filter((element) => element.getAttribute('aria-label') === label)
+            .at(-1);
+          const writeNativeValue = (element, value) => {{
+            const setter = Object.getOwnPropertyDescriptor(
+              window.parent.HTMLInputElement.prototype, 'value'
+            )?.set;
+            if (!setter) return;
+            setter.call(element, value);
+            element.dispatchEvent(new window.parent.Event('input', {{ bubbles: true }}));
+            element.dispatchEvent(new window.parent.Event('change', {{ bubbles: true }}));
+          }};
+          const connect = () => {{
+            const input = findInput();
+            if (!input || input.dataset.v12ProjectTitleBridge === storageKey) return;
+            input.dataset.v12ProjectTitleBridge = storageKey;
+            const stored = window.parent.localStorage.getItem(storageKey);
+            if (stored && !input.value) writeNativeValue(input, stored);
+            const save = () => window.parent.localStorage.setItem(storageKey, input.value || '');
+            input.addEventListener('input', save);
+            input.addEventListener('change', save);
+            input.addEventListener('blur', save);
+          }};
+          connect();
+          [80, 260, 700].forEach((delay) => window.setTimeout(connect, delay));
+        }})();
+        </script>
+        """,
+        height=0,
+    )
 
 
 def _v12_project_name_on_change():
