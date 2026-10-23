@@ -1053,6 +1053,20 @@ st.markdown("""
   background:#17639c !important;
   border-color:#17639c !important;
 }
+/* 創作頁底部 LINE 官方網站捷徑：保持低干擾紫色，滑過時才加深。 */
+.st-key-v12_basket_line_creator_link a{
+  background:rgba(155,89,182,.24) !important;
+  border:1px solid rgba(202,146,237,.72) !important;
+  color:#f3e8ff !important;
+  font-weight:800 !important;
+  transition:background .18s ease,border-color .18s ease,transform .18s ease !important;
+}
+.st-key-v12_basket_line_creator_link a:hover{
+  background:rgba(155,89,182,.62) !important;
+  border-color:#e5b7ff !important;
+  color:#fff !important;
+  transform:translateY(-1px);
+}
 /* 作品暫存區：壓縮卡片內的留白，40 張作品也能更快瀏覽。 */
 [class*="st-key-v12_basket_item_"] [data-testid="stVerticalBlock"]{
   gap:.18rem !important;
@@ -13538,6 +13552,12 @@ function saveBlob(blob,name){''',
             on_click=_v12_navigate_callback,
             kwargs={"view": "library", "preserve_creation": True},
         )
+        with st.container(key="v12_basket_line_creator_link"):
+            st.link_button(
+                "開啟LINE貼圖官網",
+                "https://creator.line.me/zh-hant/",
+                use_container_width=True,
+            )
 
     # 舊版 01～08 立即打包區保留在原始碼中作為回溯參考，但不再執行。
     # 新版以作品暫存區作為唯一的裁切後工作流程。
