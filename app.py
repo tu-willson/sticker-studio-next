@@ -4418,6 +4418,86 @@ def _beta_admin_set_referral_code_active(session, code_id, is_active):
     return response if isinstance(response, dict) else {}
 
 
+_BETA_MARKETPLACE_MODERATION_ACTIONS = {
+    "確認無違規，結束本次審核": "dismiss_reports",
+    "下架這卷膠卷": "withdraw_listing",
+    "恢復這卷膠卷上架": "restore_listing",
+    "停用創作者的市集權限（同步下架其公開膠卷）": "suspend_creator_marketplace",
+    "恢復創作者的市集權限（不會自動恢復上架）": "restore_creator_marketplace",
+}
+
+
+def _beta_admin_list_marketplace_moderation_queue(session, status="pending_review"):
+    """Read the admin-only queue; reporter identities remain private."""
+    response = _beta_rpc(
+        "admin_list_marketplace_moderation_queue",
+        {"p_status": str(status or "pending_review"), "p_limit": 100},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_admin_moderate_shared_template(session, template_id, action, note):
+    """Apply one audited marketplace decision through the database."""
+    response = _beta_rpc(
+        "admin_moderate_shared_template",
+        {
+            "p_template_id": str(template_id),
+            "p_action": str(action),
+            "p_note": str(note or "").strip()[:300],
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
+
+
+def _beta_admin_list_marketplace_moderation_actions(session, limit=100):
+    response = _beta_rpc(
+        "admin_list_marketplace_moderation_actions",
+        {"p_limit": max(1, min(int(limit), 200))},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_admin_moderate_shared_template_callback(session, template_id, title):
+    """Submit a moderation decision in the form callback's sole rerun."""
+    action_key = f"beta_admin_marketplace_action_{template_id}"
+    note_key = f"beta_admin_marketplace_note_{template_id}"
+    confirm_key = f"beta_admin_marketplace_confirm_{template_id}"
+    action = str(st.session_state.get(action_key, "") or "")
+    note = str(st.session_state.get(note_key, "") or "").strip()
+    if not bool(st.session_state.get(confirm_key, False)):
+        st.session_state["beta_admin_marketplace_error"] = "請先勾選「我已確認本次處理」。"
+        return
+    if action not in _BETA_MARKETPLACE_MODERATION_ACTIONS.values():
+        st.session_state["beta_admin_marketplace_error"] = "請選擇一項市集審核處理方式。"
+        return
+    if not 3 <= len(note) <= 300:
+        st.session_state["beta_admin_marketplace_error"] = "請填寫 3～300 字的處理原因，會寫入審核紀錄。"
+        return
+    try:
+        result = _beta_admin_moderate_shared_template(session, template_id, action, note)
+        state = "已停用市集權限" if result.get("owner_marketplace_suspended") else "市集權限正常"
+        st.session_state["beta_admin_marketplace_notice"] = (
+            f"膠卷「{title}」已完成處理（{state}）。"
+        )
+        st.session_state.pop("beta_admin_marketplace_error", None)
+    except Exception as exc:
+        error_text = str(exc).lower()
+        if "creator_marketplace_suspended" in error_text:
+            message = "創作者目前已被停用市集權限；請先恢復權限，才可重新上架。"
+        elif "shared_template_not_withdrawn" in error_text:
+            message = "只有已下架的膠卷可以恢復上架。"
+        elif "cannot_moderate_administrator" in error_text:
+            message = "不可透過此處停用管理員帳號的市集權限。"
+        else:
+            message = "市集審核操作未完成，請確認資料庫遷移已執行後再試。"
+        st.session_state["beta_admin_marketplace_error"] = message
+
+
 def _beta_admin_toggle_referral_code_callback(session, code_id, code, next_active):
     """Use Streamlit's single callback pass for a code status change."""
     try:
@@ -4558,6 +4638,183 @@ def _beta_render_referral_redemption(session):
             st.error(st.session_state["beta_referral_redeem_error"])
 
 
+def _beta_render_marketplace_moderation_center(session):
+    """Render the private report queue and its auditable resolution history."""
+    with st.expander("🚩 市集審核中心", expanded=True):
+        st.caption(
+            "三位不同會員檢舉後，膠卷會進入此處。檢舉者身分不會顯示；"
+            "每一次管理操作都需要填寫原因並永久保留紀錄。"
+        )
+        st.info(
+            "市集權限停用會立即下架該創作者所有公開膠卷，但不會刪除既有購入者的私人快照，"
+            "也不影響創作者已保存的私人作品。"
+        )
+
+        status_filters = {
+            "待審核": "pending_review",
+            "已處理下架": "reviewed",
+            "確認無違規／已恢復": "dismissed",
+            "全部紀錄": "all",
+        }
+        selected_label = st.selectbox(
+            "審核狀態",
+            list(status_filters.keys()),
+            key="beta_admin_marketplace_queue_filter",
+        )
+        try:
+            queue_rows = _beta_admin_list_marketplace_moderation_queue(
+                session, status_filters[selected_label]
+            )
+        except Exception:
+            queue_rows = []
+            st.warning("市集審核資料暫時無法讀取；請確認市集審核 migration 已執行。")
+
+        if st.session_state.get("beta_admin_marketplace_notice"):
+            st.success(st.session_state.pop("beta_admin_marketplace_notice"))
+        if st.session_state.get("beta_admin_marketplace_error"):
+            st.error(st.session_state.pop("beta_admin_marketplace_error"))
+
+        if not queue_rows:
+            if status_filters[selected_label] == "pending_review":
+                st.success("目前沒有累積三人檢舉、等待處理的市集膠卷。")
+            else:
+                st.caption("此分類目前沒有膠卷。")
+        else:
+            st.markdown(f"#### 共有 {len(queue_rows)} 卷膠卷")
+            action_labels = {
+                value: label for label, value in _BETA_MARKETPLACE_MODERATION_ACTIONS.items()
+            }
+            status_labels = {
+                "published": "🟢 公開中",
+                "withdrawn": "⚪ 已下架",
+                "deleted": "⚫ 已刪除",
+                "uploading": "🟡 上傳中",
+            }
+            review_labels = {
+                "pending_review": "🔴 待審核",
+                "reviewed": "🟠 已處理",
+                "dismissed": "🟢 確認無違規／已恢復",
+            }
+            for row in queue_rows:
+                if not isinstance(row, dict) or not row.get("template_id"):
+                    continue
+                template_id = str(row["template_id"])
+                title = str(row.get("title", "") or "未命名膠卷").strip()
+                report_count = int(row.get("report_count", 0) or 0)
+                template_status = str(row.get("template_status", "") or "")
+                review_status = str(row.get("review_status", "") or "")
+                owner_email = str(row.get("owner_email", "") or "未提供 Email")
+                owner_name = str(row.get("owner_name", "") or "")
+                owner_suspended = bool(row.get("owner_marketplace_suspended", False))
+                with st.expander(
+                    f"{review_labels.get(review_status, review_status)}｜{title}｜{report_count} 人檢舉",
+                    expanded=review_status == "pending_review",
+                ):
+                    preview_col, detail_col = st.columns([1, 2], vertical_alignment="top")
+                    with preview_col:
+                        preview_path = str(row.get("preview_path", "") or "")
+                        if preview_path:
+                            try:
+                                st.image(
+                                    _beta_storage_download(
+                                        session,
+                                        preview_path,
+                                        bucket="shared-template-assets",
+                                    ),
+                                    caption="膠卷預覽",
+                                    use_container_width=True,
+                                )
+                            except Exception:
+                                st.caption("預覽圖暫時無法載入。")
+                    with detail_col:
+                        st.markdown(f"### {html.escape(title)}")
+                        st.caption(
+                            f"創作者：{owner_email}"
+                            + (f"｜{owner_name}" if owner_name else "")
+                        )
+                        metrics = st.columns(3)
+                        metrics[0].metric("累積檢舉", f"{report_count} 人")
+                        metrics[1].metric("膠卷狀態", status_labels.get(template_status, template_status or "－"))
+                        metrics[2].metric(
+                            "市集權限",
+                            "已停用" if owner_suspended else "正常",
+                        )
+                        st.caption(
+                            f"首次達門檻：{str(row.get('first_reported_at', '') or '-')[:16]}｜"
+                            f"最近檢舉：{str(row.get('last_reported_at', '') or '-')[:16]}"
+                        )
+                        if row.get("tags"):
+                            st.caption("分類：" + "、".join(str(tag) for tag in row["tags"]))
+                        if row.get("description"):
+                            st.write(str(row["description"]).strip())
+                        if row.get("review_note"):
+                            st.info(
+                                f"上次處理：{str(row.get('resolution', '') or '－')}｜"
+                                f"{str(row['review_note']).strip()}"
+                            )
+
+                    action_options = ["dismiss_reports"]
+                    if template_status == "published":
+                        action_options.append("withdraw_listing")
+                    if template_status == "withdrawn" and not owner_suspended:
+                        action_options.append("restore_listing")
+                    action_options.append(
+                        "restore_creator_marketplace"
+                        if owner_suspended else "suspend_creator_marketplace"
+                    )
+                    with st.form(f"beta_admin_marketplace_review_{template_id}", clear_on_submit=False):
+                        st.selectbox(
+                            "處理方式",
+                            action_options,
+                            format_func=lambda action: action_labels.get(action, action),
+                            key=f"beta_admin_marketplace_action_{template_id}",
+                        )
+                        st.text_area(
+                            "處理原因（3～300 字，會寫入操作紀錄）",
+                            max_chars=300,
+                            key=f"beta_admin_marketplace_note_{template_id}",
+                        )
+                        st.checkbox(
+                            "我已確認本次處理及其影響範圍",
+                            key=f"beta_admin_marketplace_confirm_{template_id}",
+                        )
+                        st.form_submit_button(
+                            "確認執行市集審核",
+                            type="primary",
+                            on_click=_beta_admin_moderate_shared_template_callback,
+                            args=(session, template_id, title),
+                        )
+
+        with st.expander("🧾 市集審核操作紀錄", expanded=False):
+            try:
+                action_rows = _beta_admin_list_marketplace_moderation_actions(session)
+            except Exception:
+                st.warning("市集審核操作紀錄暫時無法讀取。")
+                action_rows = []
+            if action_rows:
+                action_labels = {
+                    value: label for label, value in _BETA_MARKETPLACE_MODERATION_ACTIONS.items()
+                }
+                st.dataframe(
+                    [
+                        {
+                            "時間": str(item.get("occurred_at", "") or "-")[:16],
+                            "膠卷": str(item.get("template_title", "") or "已移除膠卷"),
+                            "創作者": str(item.get("owner_email", "") or "－"),
+                            "處理": action_labels.get(str(item.get("action", "") or ""), "－"),
+                            "原因": str(item.get("note", "") or "－"),
+                            "操作者": str(item.get("operator_label", "") or "管理員"),
+                        }
+                        for item in action_rows
+                        if isinstance(item, dict)
+                    ],
+                    hide_index=True,
+                    use_container_width=True,
+                )
+            else:
+                st.caption("尚無市集審核操作紀錄。")
+
+
 def _beta_render_admin_operations_policy():
     """Keep the current operational rules in one admin-only, maintainable view."""
     with st.expander("📜 管理者使用規章（內部版）", expanded=False):
@@ -4597,6 +4854,8 @@ def _beta_render_admin_operations_policy():
 
             - 禁止刊登不雅、違法、侵權、仇恨或不適合公開展示的內容；違規內容可下架或停權。
             - 使用者檢舉後，該膠卷會先對該使用者自動遮蔽；累積 3 位不同使用者檢舉後，進入管理端待審核清單。
+            - 市集審核中心必須填寫處理原因，並永久保留操作者、時間、原狀態與處理結果。可確認無違規、下架／恢復單一膠卷，或停用／恢復創作者的市集權限。
+            - 停用市集權限會立即下架該創作者全部公開膠卷，禁止新的市集發布、購入、最愛與檢舉；不刪除私人作品，也不影響既有購入者的私人快照。恢復權限後，膠卷仍需由管理員或創作者逐卷重新上架。
             - 創作者下架後不再出現在市集；已購買者保有私人快照，可繼續套用。完整刪除原始膠捲前，必須先下架。
 
             ### 5. 雲端作品、測試購買與管理權限
@@ -4621,7 +4880,7 @@ def _beta_render_admin_console(session):
     with overview_codes:
         st.info("🎁 推薦碼管理\n\n建立代碼、設定名額與獎勵，並查看兌換紀錄。")
     with overview_market:
-        st.info("🚩 市集審核\n\n下一階段將在此處理累積檢舉的膠卷。")
+        st.info("🚩 市集審核\n\n處理累積三人檢舉的膠卷、下架／恢復與市集權限停用。")
 
     _beta_render_admin_operations_policy()
 
@@ -4743,6 +5002,8 @@ def _beta_render_admin_console(session):
                         st.caption("目前尚無兌換紀錄。")
                 except Exception:
                     st.warning("兌換紀錄暫時無法讀取，請稍後再試。")
+
+    _beta_render_marketplace_moderation_center(session)
 
     with st.expander("👥 會員與權益管理", expanded=True):
         st.caption("可補回或扣除測試生成次數，也可建立不收款的測試購買。所有操作都會記錄操作者、原因與時間。")
