@@ -34,19 +34,19 @@ def t(key, **kwargs):
 
 
 _V12_SHARED_TEMPLATE_MANAGEMENT_FALLBACKS = {
-    "shared_template_management_title": "🧭 我的發布模板管理",
-    "shared_template_management_intro": "查看其他使用者的解鎖與回饋；下架後不會再出現在市集，但已解鎖者仍可免費再次套用。",
-    "shared_template_management_empty": "尚未有已發布或已下架的模板。",
-    "shared_template_management_unavailable": "模板管理資料暫時無法載入，請稍後再試。",
+    "shared_template_management_title": "🧭 我的發布膠卷管理",
+    "shared_template_management_intro": "查看其他使用者的購入與回饋；下架後不會再出現在市集，但已購入者仍可免費再次套用。",
+    "shared_template_management_empty": "尚未有已發布或已下架的膠卷。",
+    "shared_template_management_unavailable": "膠卷管理資料暫時無法載入，請稍後再試。",
     "shared_template_management_stats": "其他使用者套用購買｜設定消耗次數：{cost} 次",
-    "shared_template_management_activity": "目前他人解鎖：{unlocks} 次｜目前累積回饋：{rewards} 次",
+    "shared_template_management_activity": "目前他人購入：{unlocks} 次｜目前累積回饋：{rewards} 次",
     "shared_template_status_published": "🟢 市集公開中",
     "shared_template_status_withdrawn": "⚪ 已從市集下架",
     "shared_template_withdraw_button": "從市集下架",
     "shared_template_republish_button": "重新上架市集",
-    "shared_template_visibility_saving": "正在更新模板狀態……",
+    "shared_template_visibility_saving": "正在更新膠卷狀態……",
     "shared_template_visibility_success": "「{title}」已更新為：{status}",
-    "shared_template_visibility_failed": "暫時無法更新模板狀態，請稍後再試。",
+    "shared_template_visibility_failed": "暫時無法更新膠卷狀態，請稍後再試。",
     "shared_template_previous_page": "← 上一頁",
     "shared_template_next_page": "下一頁 →",
     "shared_template_management_page": "第 {page}／{pages} 頁｜每頁 {size} 組",
@@ -4512,11 +4512,11 @@ def _beta_render_admin_operations_policy():
 
             | 類別 | 現行規則 | 效期／優先順序 |
             | --- | --- | --- |
-            | 一般會員 | 可使用貼圖生成與膠捲功能；不可使用市集模板。 | 依帳號目前可用次數。 |
+            | 一般會員 | 可使用貼圖生成與膠捲功能；不可使用市集膠卷。 | 依帳號目前可用次數。 |
             | 7 次生成包 | 圖片生成 7 次、AI 幫想每日 7 次、雲端作品 7 組。 | 購買後 30 天。 |
             | 基本／標準／進階訂閱 | 每月圖片生成 20／30／40 次；AI 幫想每日 15／20／25 次；雲端作品 20／30／40 組。 | 訂閱額度可保留至下一個帳務週期結束；系統優先使用最早到期的次數。 |
             | 推薦碼獎勵 | 可使用不同推薦碼加點；同一組碼每帳號限兌換一次，舊推薦碼獎勵用完前不得再兌換下一組。推薦碼可設定名額、獎勵次數、截止日與停用狀態。 | 每次兌換後 60 天。 |
-            | 市集創作者回饋 | 購買者首次解鎖模板所支付的生成次數，全數回饋原創者。 | 回饋額度 90 天，且最後才消耗。 |
+            | 市集創作者回饋 | 購買者首次購入膠卷所支付的生成次數，全數回饋原創者。 | 回饋額度 90 天，且最後才消耗。 |
             | 管理員手動補次 | 僅限有明確原因的客服、測試或補償處理。 | 目前核發後 365 天；每筆都需留下原因。 |
 
             **生成次數扣除優先順序：**基本會員點數（含體驗／管理員補次） → 推薦碼獎勵 → 訂閱方案／7 次生成包 → 市集創作者回饋；同一類別內再優先使用較早到期的額度。
@@ -4532,15 +4532,15 @@ def _beta_render_admin_operations_policy():
             ### 3. 創作膠捲、收藏與市集
 
             - 每完成一張 4×2 原始生成圖，系統自動建立一卷未收藏膠捲；未收藏膠捲保存 10 天，超額時替換最早一卷。
-            - 一般會員未收藏／已收藏上限為 5／5；7 次生成包為 7／7；基本／標準／進階為 20／20、30／30、40／40。已收藏與已解鎖模板共用收藏額度。
-            - 只有訂閱方案與 7 次生成包可以使用市集：7 次生成包可發布 3 組、解鎖 5 組；基本／標準／進階可發布 10／15／20 組。
-            - 公開模板複製文字、動作、字型、人物／場景指令、畫風設定與預覽圖；不得包含原始人物照片。
-            - 模板購入價格限 1～3 次；首次解鎖才扣次，後續可免費重新載入同一模板。
+            - 一般會員未收藏／已收藏上限為 5／5；7 次生成包為 7／7；基本／標準／進階為 20／20、30／30、40／40。已收藏與已購入膠卷共用收藏額度。
+            - 只有訂閱方案與 7 次生成包可以使用市集：7 次生成包可發布 3 組、購入 5 組；基本／標準／進階可發布 10／15／20 組。
+            - 公開膠卷複製文字、動作、字型、人物／場景指令、畫風設定與預覽圖；不得包含原始人物照片。
+            - 膠卷購入價格限 1～3 次；首次購入才扣次，後續可免費重新載入同一膠卷。
 
             ### 4. 市集內容與審核
 
             - 禁止刊登不雅、違法、侵權、仇恨或不適合公開展示的內容；違規內容可下架或停權。
-            - 使用者檢舉後，該模板會先對該使用者自動遮蔽；累積 3 位不同使用者檢舉後，進入管理端待審核清單。
+            - 使用者檢舉後，該膠卷會先對該使用者自動遮蔽；累積 3 位不同使用者檢舉後，進入管理端待審核清單。
             - 創作者下架後不再出現在市集；已購買者保有私人快照，可繼續套用。完整刪除原始膠捲前，必須先下架。
 
             ### 5. 雲端作品、測試購買與管理權限
@@ -4565,7 +4565,7 @@ def _beta_render_admin_console(session):
     with overview_codes:
         st.info("🎁 推薦碼管理\n\n建立代碼、設定名額與獎勵，並查看兌換紀錄。")
     with overview_market:
-        st.info("🚩 市集審核\n\n下一階段將在此處理累積檢舉的模板。")
+        st.info("🚩 市集審核\n\n下一階段將在此處理累積檢舉的膠卷。")
 
     _beta_render_admin_operations_policy()
 
@@ -7437,7 +7437,7 @@ def _v12_render_creator_reels(session, shelf="active"):
     if delete_error == "confirmation":
         st.warning("請先勾選「確認刪除這卷」。")
     elif delete_error == "published":
-        st.warning("這卷已作為分享模板來源，為保障已套用者，無法直接刪除。")
+        st.warning("這卷已作為分享膠卷來源，為保障已套用者，無法直接刪除。")
     elif delete_error == "failed":
         st.error("這卷暫時無法刪除，請稍後再試。")
     template_feedback = st.session_state.pop(
@@ -7459,11 +7459,11 @@ def _v12_render_creator_reels(session, shelf="active"):
     )
     st.caption(
         (
-            "已收藏膠捲與已解鎖模板共用 "
+            "已收藏膠捲與已購入膠卷共用 "
             f"{status['collected_reel_limit']} 卷額度；可發布 "
-            f"{status['publish_template_limit']} 組模板。"
+            f"{status['publish_template_limit']} 組膠卷。"
             if status["marketplace_eligible"]
-            else "一般會員可使用膠捲與收藏功能；無法使用市集模板。"
+            else "一般會員可使用膠捲與收藏功能；無法使用市集膠卷。"
         )
     )
 
@@ -7544,9 +7544,9 @@ def _v12_render_creator_reels(session, shelf="active"):
                 st.warning(t("shared_template_already_published"))
             else:
                 st.error(t("shared_template_publish_failed"))
-        st.caption("已解鎖模板與已收藏膠捲共用數量上限。")
+        st.caption("已購入膠卷與已收藏膠捲共用數量上限。")
         st.info(
-            f"已收藏+已解鎖：{status['shared_reel_count']}／"
+            f"已收藏+已購入：{status['shared_reel_count']}／"
             f"{status['collected_reel_limit']} 卷"
         )
     search_label = (
@@ -7639,7 +7639,7 @@ def _v12_render_creator_reels(session, shelf="active"):
                         st.session_state["v12_creator_reel_rename_open"] = reel_id
                         st.session_state[rename_key] = source_name
                     st.button(
-                        "🔵 套用模板",
+                        "🔵 套用膠卷",
                         key=f"v12_creator_reel_apply_{reel_id}",
                         type="primary",
                         use_container_width=True,
@@ -7787,7 +7787,7 @@ def _v12_render_creator_reels(session, shelf="active"):
                     disabled=True,
                     use_container_width=True,
                 )
-                st.caption("🔒 此卷已發布到市集分享模板，已鎖定刪除功能。")
+                st.caption("🔒 此卷已發布到市集分享膠卷，已鎖定刪除功能。")
             if style_name:
                 st.caption(t("creator_reel_style", style=style_name))
             if labels:
@@ -7900,7 +7900,7 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         metadata["style_mode"] = V8_STYLE_CUSTOM_OPTION
     metadata["project_id"] = str(uuid4())
     metadata["project_name"] = _v12_normalize_project_name(
-        f"模板｜{str(title or '').strip()}"
+        f"膠卷｜{str(title or '').strip()}"
     )
     metadata["created_at"] = _v12_now_iso()
     metadata["updated_at"] = _v12_now_iso()
@@ -8056,7 +8056,7 @@ def _v12_render_unlocked_template_shelf(session):
     elif delete_error == "confirmation":
         st.warning("請先勾選「確認永久刪除」。")
     elif delete_error == "failed":
-        st.error("這個已購入模板暫時無法刪除，請稍後再試。")
+        st.error("這卷已購入膠卷暫時無法刪除，請稍後再試。")
     try:
         status = _beta_creator_reel_status(session)
         page_size = 5
@@ -8066,7 +8066,7 @@ def _v12_render_unlocked_template_shelf(session):
             session, limit=page_size, offset=page_number * page_size
         )
     except Exception:
-        st.warning("已購入模板暫時無法載入，請稍後再試。")
+        st.warning("已購入膠卷暫時無法載入，請稍後再試。")
         return
 
     total_count = max(
@@ -8077,14 +8077,14 @@ def _v12_render_unlocked_template_shelf(session):
         st.session_state[page_key] = page_number - 1
         st.rerun()
 
-    st.markdown("### 🛍️ 已購入模版區")
+    st.markdown("### 🛍️ 已購入膠卷區")
     st.info(
         f"自動創作膠卷：{status['shared_reel_count']}／"
         f"{status['collected_reel_limit']} 卷"
     )
-    st.caption("已購入模板與已收藏膠捲共用數量上限。")
+    st.caption("已購入膠卷與已收藏膠捲共用數量上限。")
     if not templates:
-        st.caption("尚未購入其他創作者的模板。")
+        st.caption("尚未購入其他創作者的膠卷。")
         return
 
     for template in templates:
@@ -8181,15 +8181,15 @@ def _v12_render_shared_template_marketplace(session):
         purchased_title = str(
             purchase_feedback.get("title", "") or t("untitled_project")
         )
-        st.success(f"已購入「{purchased_title}」，並已移至已購入模版區。")
+        st.success(f"已購入「{purchased_title}」，並已移至已購入膠卷區。")
     elif purchase_error == "insufficient_credits":
         st.warning(t("shared_template_insufficient_credits"))
     elif purchase_error == "collection_limit":
-        st.warning("已購入模板與已收藏膠捲共用數量上限，請先整理收藏區後再購入。")
+        st.warning("已購入膠卷與已收藏膠捲共用數量上限，請先整理收藏區後再購入。")
     elif purchase_error == "marketplace_required":
-        st.warning("一般會員無法使用市集模板；購買 7 次生成包或訂閱方案後即可購入。")
+        st.warning("一般會員無法使用市集膠卷；購買 7 次生成包或訂閱方案後即可購入。")
     elif purchase_error == "failed":
-        st.error("暫時無法購入這個模板，請稍後再試。")
+        st.error("暫時無法購入這卷膠卷，請稍後再試。")
     if market_feedback == "reported":
         st.success(t("shared_template_report_success"))
     elif isinstance(market_feedback, dict) and market_feedback.get("type") == "favorite":
@@ -8199,7 +8199,7 @@ def _v12_render_shared_template_marketplace(session):
         else:
             st.info(f"已從我的最愛名單移除「{feedback_title}」。")
     elif isinstance(market_feedback, dict) and market_feedback.get("type") == "favorite_error":
-        st.error("這個模板暫時無法更新最愛名單，請稍後再試。")
+        st.error("這卷膠卷暫時無法更新最愛名單，請稍後再試。")
     elif isinstance(market_feedback, dict) and market_feedback.get("type") == "report_error":
         st.error(t("shared_template_report_failed"))
     st.markdown(
@@ -8219,7 +8219,7 @@ def _v12_render_shared_template_marketplace(session):
         )
     with unlocked_col:
         st.button(
-            ("✓ " if market_shelf == "purchased" else "") + "已購入模版區",
+            ("✓ " if market_shelf == "purchased" else "") + "已購入膠卷區",
             key="v12_market_unlocked_tab",
             type="primary",
             use_container_width=True,
@@ -8244,7 +8244,7 @@ def _v12_render_shared_template_marketplace(session):
     except Exception:
         marketplace_rights = {"marketplace_eligible": False}
     if not marketplace_rights["marketplace_eligible"]:
-        st.caption("一般會員可瀏覽市集，但無法解鎖模板；購買 7 次生成包或訂閱方案後即可使用。")
+        st.caption("一般會員可瀏覽市集，但無法購入膠卷；購買 7 次生成包或訂閱方案後即可使用。")
     search_col, sort_col = st.columns([2.1, 1.0], vertical_alignment="bottom")
     with search_col:
         marketplace_search = st.text_input(
@@ -8293,7 +8293,7 @@ def _v12_render_shared_template_marketplace(session):
         st.info(
             t("shared_template_market_no_match")
             if marketplace_search or marketplace_tags
-            else "目前沒有尚未購入的市集模板；已購入模板請至已購入模版區查看。"
+            else "目前沒有尚未購入的市集膠卷；已購入膠卷請至已購入膠卷區查看。"
         )
         return
 
@@ -8427,7 +8427,7 @@ def _v12_render_shared_template_marketplace(session):
                 args=(page_key, page_number - 1),
             )
         with page_col:
-            st.caption(f"第 {page_number + 1}／{total_pages} 頁｜每頁 {page_size} 組模板")
+            st.caption(f"第 {page_number + 1}／{total_pages} 頁｜每頁 {page_size} 組膠卷")
         with next_col:
             st.button(
                 "下一頁 →",
@@ -10329,6 +10329,7 @@ st.markdown(
     }
 
     /* V12｜01B① UI 微調：主導航與 LINE 連結按鈕使用同一套紅色視覺。 */
+    .st-key-v12_nav_contact a,
     .st-key-v12_nav_create button,
     .st-key-v12_nav_pricing button,
     .st-key-v12_nav_library button,
@@ -10345,6 +10346,7 @@ st.markdown(
       border:1px solid #FF4B4B !important;
       box-shadow:none !important;
     }
+    .st-key-v12_nav_contact a:hover,
     .st-key-v12_nav_create button:hover,
     .st-key-v12_nav_pricing button:hover,
     .st-key-v12_nav_library button:hover,
@@ -10355,6 +10357,7 @@ st.markdown(
       border-color:#FF3333 !important;
       color:#FFFFFF !important;
     }
+    .st-key-v12_nav_contact a p,
     .st-key-v12_nav_create button p,
     .st-key-v12_nav_pricing button p,
     .st-key-v12_nav_library button p,
@@ -10384,11 +10387,15 @@ with _v12_nav_cols[0]:
             kwargs={"view": "create"},
         )
     else:
-        st.link_button(
-            t("nav_contact"),
-            "https://www.threads.com/@tuwillson",
-            use_container_width=True,
-        )
+        # st.link_button has no widget key of its own.  A keyed container
+        # gives it the same stable pink navigation treatment after a page
+        # switch as the neighbouring Streamlit buttons.
+        with st.container(key="v12_nav_contact"):
+            st.link_button(
+                t("nav_contact"),
+                "https://www.threads.com/@tuwillson",
+                use_container_width=True,
+            )
 with _v12_nav_cols[1]:
     st.button(
         t("nav_pricing"),
@@ -10672,14 +10679,14 @@ if st.session_state["v12_view"] == "library":
               <div class="v12-reel-rules-title">🎞️ 膠捲與市集規則</div>
               <table>
                 <thead>
-                  <tr><th>方案</th><th>未收藏膠捲</th><th>已收藏＋已解鎖</th><th>市集功能</th></tr>
+                  <tr><th>方案</th><th>未收藏膠捲</th><th>已收藏＋已購入</th><th>市集功能</th></tr>
                 </thead>
                 <tbody>
                   <tr>
                     <td class="v12-reel-rules-plan v12-reel-rules-free">一般會員</td>
                     <td>上限 5 卷｜保存 10 天</td>
                     <td>上限 5 卷</td>
-                    <td>無法使用市集模板</td>
+                    <td>無法使用市集膠卷</td>
                   </tr>
                   <tr>
                     <td class="v12-reel-rules-plan v12-reel-rules-pack">7 次生成包</td>
@@ -10701,15 +10708,15 @@ if st.session_state["v12_view"] == "library":
                 <ol>
                   <li>每次按下<strong>生成圖片</strong>並完成一組 4×2 原始生成圖時，系統會自動建立一卷<strong>未收藏膠捲</strong>。</li>
                   <li>未收藏膠捲方便你回顧這次的畫風、文字與創作設定；喜歡的作品可先收藏，再隨時<strong>套回創作頁</strong>繼續製作。</li>
-                  <li>收藏後的膠捲也能發布到市集，讓其他使用者購入並套用你的創作模組。</li>
+                  <li>收藏後的膠捲也能發布到市集，讓其他使用者購入並套用你的創作膠卷。</li>
                 </ol>
               </section>
               <section class="v12-reel-market-guide">
                 <div class="v12-reel-market-guide-title">🌐 市集功能說明</div>
                 <ol>
                   <li>先在<strong>未收藏的膠捲</strong>挑選喜歡的創作，點選收藏；再到<strong>已收藏的膠捲</strong>將它發布到市集。</li>
-                  <li>發布時可設定其他使用者購入模板所需的<strong>次數</strong>。其他使用者消耗自己的<strong>生成次數</strong>購入後，即可把設定套回創作頁使用。</li>
-                  <li>市集模板只會帶入畫風、文字與創作設定，<strong>不會保留或傳送原創者的人物照片</strong>。</li>
+                  <li>發布時可設定其他使用者購入膠卷所需的<strong>次數</strong>。其他使用者消耗自己的<strong>生成次數</strong>購入後，即可把設定套回創作頁使用。</li>
+                  <li>市集膠卷只會帶入畫風、文字與創作設定，<strong>不會保留或傳送原創者的人物照片</strong>。</li>
                   <li>購入者實際支付的次數，會直接回饋給原創者，作為可使用的生成次數。</li>
                 </ol>
               </section>
@@ -10924,9 +10931,9 @@ if isinstance(_shared_template_apply_feedback, dict):
 elif _shared_template_apply_error == "insufficient_credits":
     st.warning(t("shared_template_insufficient_credits"))
 elif _shared_template_apply_error == "collection_limit":
-    st.warning("已解鎖模板與已收藏膠捲共用數量上限，請先整理收藏區後再套用。")
+    st.warning("已購入膠卷與已收藏膠捲共用數量上限，請先整理收藏區後再套用。")
 elif _shared_template_apply_error == "marketplace_required":
-    st.warning("一般會員無法使用市集模板；購買 7 次生成包或訂閱方案後即可解鎖。")
+    st.warning("一般會員無法使用市集膠卷；購買 7 次生成包或訂閱方案後即可購入。")
 elif _shared_template_apply_error == "failed":
     st.error(t("shared_template_apply_failed"))
 
@@ -11199,7 +11206,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 _loaded_style_name = str(_loaded_project_style.get("name", "") or "").strip()
                 _loaded_style_source = str(_loaded_project_style.get("source", "") or "")
                 _loaded_style_label = (
-                    "📦 已載入分享模板的自定義風格（不會覆蓋你的 01～10；請勿再點選自己的已儲存風格，否則會覆蓋目前套用的風格）"
+                    "📦 已載入分享膠卷的自定義風格（不會覆蓋你的 01～10；請勿再點選自己的已儲存風格，否則會覆蓋目前套用的風格）"
                     if _loaded_style_source == "shared_template"
                     else "📦 已載入作品當時的自定義風格"
                 )
@@ -11213,12 +11220,12 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                     elif _template_style_feedback == "empty":
                         st.warning("請保留至少一段自定義風格指令，才能儲存。")
                     elif _template_style_feedback == "missing":
-                        st.warning("套用中的自定義風格已失效，請重新套用模板。")
+                        st.warning("套用中的自定義風格已失效，請重新套用膠卷。")
 
                     with st.expander("✏️ 套用中的自定義風格（可編輯）", expanded=True):
                         st.caption(
-                            "這是本次購買模板專用的暫存位置。可查看並修改上傳者的風格指令；"
-                            "修改後只會用在你目前這份創作與後續保存的作品／膠捲，不會改動原模板，也不會覆蓋你的 01～10。"
+                            "這是本次購入膠卷專用的暫存位置。可查看並修改上傳者的風格指令；"
+                            "修改後只會用在你目前這份創作與後續保存的作品／膠捲，不會改動原膠卷，也不會覆蓋你的 01～10。"
                         )
                         with st.form("v12_applied_template_style_form", border=False):
                             st.text_input(
