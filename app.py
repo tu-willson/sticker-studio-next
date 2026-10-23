@@ -47,6 +47,8 @@ _V12_SHARED_TEMPLATE_MANAGEMENT_FALLBACKS = {
     "shared_template_visibility_saving": "正在更新膠卷狀態……",
     "shared_template_visibility_success": "「{title}」已更新為：{status}",
     "shared_template_visibility_failed": "暫時無法更新膠卷狀態，請稍後再試。",
+    "shared_template_republish_blocked": "🚫 此膠卷已累積 3 次檢舉，經管理者審核後下架，無法再次上架。",
+    "shared_template_republish_blocked_reason": "管理者審核原因：{reason}",
     "shared_template_previous_page": "← 上一頁",
     "shared_template_next_page": "下一頁 →",
     "shared_template_management_page": "第 {page}／{pages} 頁｜每頁 {size} 組",
@@ -3430,6 +3432,22 @@ def _beta_list_my_shared_template_management(session, limit=4, offset=0):
     return response if isinstance(response, list) else []
 
 
+def _beta_list_my_shared_template_moderation_status(session):
+    """Read the publisher-visible result of completed report moderation."""
+    response = _beta_rpc(
+        "get_my_shared_template_moderation_status",
+        {},
+        access_token=session["access_token"],
+    )
+    if not isinstance(response, list):
+        return {}
+    return {
+        str(item.get("template_id")): item
+        for item in response
+        if isinstance(item, dict) and item.get("template_id")
+    }
+
+
 def _beta_set_shared_template_visibility(session, template_id, publish):
     response = _beta_rpc(
         "set_my_shared_template_visibility",
@@ -4519,6 +4537,8 @@ def _beta_admin_moderate_shared_template_callback(session, template_id, title):
         error_text = str(exc).lower()
         if "creator_marketplace_suspended" in error_text:
             message = "創作者目前已被停用市集權限；請先恢復權限，才可重新上架。"
+        elif "shared_template_republication_blocked" in error_text:
+            message = "此膠卷已累積三次檢舉並經審核下架，已永久禁止重新上架。"
         elif "shared_template_not_withdrawn" in error_text:
             message = "只有已下架的膠卷可以恢復上架。"
         elif "cannot_moderate_administrator" in error_text:
@@ -4736,6 +4756,10 @@ def _beta_render_marketplace_moderation_center(session):
                 owner_email = str(row.get("owner_email", "") or "未提供 Email")
                 owner_name = str(row.get("owner_name", "") or "")
                 owner_suspended = bool(row.get("owner_marketplace_suspended", False))
+                republish_blocked = (
+                    review_status == "reviewed"
+                    and str(row.get("resolution", "") or "") == "withdraw_listing"
+                )
                 with st.expander(
                     f"{review_labels.get(review_status, review_status)}｜{title}｜{report_count} 人檢舉",
                     expanded=review_status == "pending_review",
@@ -4786,8 +4810,10 @@ def _beta_render_marketplace_moderation_center(session):
                     action_options = ["dismiss_reports"]
                     if template_status == "published":
                         action_options.append("withdraw_listing")
-                    if template_status == "withdrawn" and not owner_suspended:
+                    if template_status == "withdrawn" and not owner_suspended and not republish_blocked:
                         action_options.append("restore_listing")
+                    elif republish_blocked:
+                        st.warning("此膠卷已累積三次檢舉並經審核下架，已永久禁止重新上架。")
                     action_options.append(
                         "restore_creator_marketplace"
                         if owner_suspended else "suspend_creator_marketplace"
@@ -4883,8 +4909,8 @@ def _beta_render_admin_operations_policy():
             ### 4. 市集內容與審核
 
             - 禁止刊登不雅、違法、侵權、仇恨或不適合公開展示的內容；違規內容可下架或停權。
-            - 使用者檢舉後，該膠卷會先對該使用者自動遮蔽；累積 3 位不同使用者檢舉後，進入管理端待審核清單。
-            - 市集審核中心必須填寫處理原因，並永久保留操作者、時間、原狀態與處理結果。可確認無違規、下架／恢復單一膠卷，或停用／恢復創作者的市集權限。
+            - 使用者檢舉後，該膠卷會先對該使用者自動遮蔽；累積 3 位不同使用者檢舉後，進入管理端待審核清單。若管理員審核後下架，該膠卷會永久禁止重新上架，上傳者可看到本次審核原因。
+            - 市集審核中心必須填寫處理原因，並永久保留操作者、時間、原狀態與處理結果。可確認無違規、下架，或停用／恢復創作者的市集權限；只有未因三次檢舉而永久鎖定的下架膠卷可恢復上架。
             - 停用市集權限會立即下架該創作者全部公開膠卷，禁止新的市集發布、購入、最愛與檢舉；不刪除私人作品，也不影響既有購入者的私人快照。恢復權限後，膠卷仍需由管理員或創作者逐卷重新上架。
             - 創作者下架後不再出現在市集；已購買者保有私人快照，可繼續套用。完整刪除原始膠捲前，必須先下架。
 
@@ -7783,8 +7809,11 @@ def _v12_set_shared_template_visibility_callback(
             "title": title,
             "published": bool(publish),
         }
-    except Exception:
-        st.session_state["v12_shared_template_management_error"] = True
+    except Exception as exc:
+        if "shared_template_republication_blocked" in str(exc).lower():
+            st.session_state["v12_shared_template_management_error"] = "republish_blocked"
+        else:
+            st.session_state["v12_shared_template_management_error"] = "failed"
 
 
 def _v12_render_shared_template_manager(session):
@@ -7805,7 +7834,10 @@ def _v12_render_shared_template_manager(session):
                 ),
             )
         )
-    if st.session_state.pop("v12_shared_template_management_error", False):
+    management_error = st.session_state.pop("v12_shared_template_management_error", "")
+    if management_error == "republish_blocked":
+        st.error(_v12_management_t("shared_template_republish_blocked"))
+    elif management_error:
         st.error(_v12_management_t("shared_template_visibility_failed"))
     try:
         templates = _beta_list_my_shared_template_management(
@@ -7816,6 +7848,10 @@ def _v12_render_shared_template_manager(session):
     except Exception:
         st.warning(_v12_management_t("shared_template_management_unavailable"))
         return
+    try:
+        moderation_statuses = _beta_list_my_shared_template_moderation_status(session)
+    except Exception:
+        moderation_statuses = {}
 
     # A withdrawal/republication can change the final page while the screen is
     # open.  Return safely to the preceding page instead of showing a blank one.
@@ -7840,6 +7876,9 @@ def _v12_render_shared_template_manager(session):
             title = str(template.get("title", "") or t("untitled_project"))
             status = str(template.get("status", "") or "withdrawn")
             published = status == "published"
+            moderation = moderation_statuses.get(template_id, {})
+            republish_blocked = bool(moderation.get("republish_blocked", False))
+            moderation_reason = str(moderation.get("review_note", "") or "").strip()
             unlock_count = max(0, int(template.get("unlock_count", 0) or 0))
             reward_credits = max(0, int(template.get("reward_credits", 0) or 0))
             content_col, action_col = st.columns([2.8, 1.0], vertical_alignment="top")
@@ -7888,18 +7927,28 @@ def _v12_render_shared_template_manager(session):
                 )
                 if not published:
                     st.caption("（完整刪除請至已收藏膠捲區）")
-                action_label = _v12_management_t(
-                    "shared_template_withdraw_button"
-                    if published
-                    else "shared_template_republish_button"
-                )
-                st.button(
-                    action_label,
-                    key=f"v12_shared_template_visibility_{template_id}",
-                    use_container_width=True,
-                    on_click=_v12_set_shared_template_visibility_callback,
-                    args=(session, template_id, title, not published),
-                )
+                if republish_blocked:
+                    st.warning(_v12_management_t("shared_template_republish_blocked"))
+                    if moderation_reason:
+                        st.caption(
+                            _v12_management_t(
+                                "shared_template_republish_blocked_reason",
+                                reason=moderation_reason,
+                            )
+                        )
+                else:
+                    action_label = _v12_management_t(
+                        "shared_template_withdraw_button"
+                        if published
+                        else "shared_template_republish_button"
+                    )
+                    st.button(
+                        action_label,
+                        key=f"v12_shared_template_visibility_{template_id}",
+                        use_container_width=True,
+                        on_click=_v12_set_shared_template_visibility_callback,
+                        args=(session, template_id, title, not published),
+                    )
             st.divider()
         if total_pages > 1:
             previous_col, page_col, next_col = st.columns([1, 1.25, 1])
