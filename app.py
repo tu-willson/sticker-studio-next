@@ -47,7 +47,7 @@ _V12_SHARED_TEMPLATE_MANAGEMENT_FALLBACKS = {
     "shared_template_visibility_saving": "正在更新膠卷狀態……",
     "shared_template_visibility_success": "「{title}」已更新為：{status}",
     "shared_template_visibility_failed": "暫時無法更新膠卷狀態，請稍後再試。",
-    "shared_template_republish_blocked": "🚫 此膠卷已累積 3 次檢舉，經管理者審核後下架，無法再次上架。",
+    "shared_template_republish_blocked": "🚫 此膠卷已被檢舉 {count} 次，經管理者審核後下架，無法自行再次上架。",
     "shared_template_republish_blocked_reason": "管理者審核原因：{reason}",
     "shared_template_previous_page": "← 上一頁",
     "shared_template_next_page": "下一頁 →",
@@ -4472,6 +4472,7 @@ _BETA_MARKETPLACE_MODERATION_ACTIONS = {
     "恢復這卷膠卷上架": "restore_listing",
     "停用創作者的市集權限（同步下架其公開膠卷）": "suspend_creator_marketplace",
     "恢復創作者的市集權限（不會自動恢復上架）": "restore_creator_marketplace",
+    "申訴成立，恢復這卷膠卷上架": "appeal_restore_listing",
 }
 
 
@@ -4510,6 +4511,31 @@ def _beta_admin_list_marketplace_moderation_actions(session, limit=100):
     return response if isinstance(response, list) else []
 
 
+def _beta_admin_find_reported_listing_appeals(session, owner_email):
+    """Find admin-withdrawn listings that belong to one exact email address."""
+    response = _beta_rpc(
+        "admin_find_reported_listing_appeals",
+        {"p_owner_email": str(owner_email or "").strip()},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_admin_restore_reported_listing_after_appeal(session, template_id, note):
+    """The sole, audited administrative path that can lift the report lock."""
+    response = _beta_rpc(
+        "admin_restore_reported_listing_after_appeal",
+        {
+            "p_template_id": str(template_id),
+            "p_note": str(note or "").strip()[:300],
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
+
+
 def _beta_admin_moderate_shared_template_callback(session, template_id, title):
     """Submit a moderation decision in the form callback's sole rerun."""
     action_key = f"beta_admin_marketplace_action_{template_id}"
@@ -4538,7 +4564,7 @@ def _beta_admin_moderate_shared_template_callback(session, template_id, title):
         if "creator_marketplace_suspended" in error_text:
             message = "創作者目前已被停用市集權限；請先恢復權限，才可重新上架。"
         elif "shared_template_republication_blocked" in error_text:
-            message = "此膠卷已累積三次檢舉並經審核下架，已永久禁止重新上架。"
+            message = "此膠卷已因檢舉經審核下架，只能於申訴成立後從專區恢復上架。"
         elif "shared_template_not_withdrawn" in error_text:
             message = "只有已下架的膠卷可以恢復上架。"
         elif "cannot_moderate_administrator" in error_text:
@@ -4546,6 +4572,29 @@ def _beta_admin_moderate_shared_template_callback(session, template_id, title):
         else:
             message = "市集審核操作未完成，請確認資料庫遷移已執行後再試。"
         st.session_state["beta_admin_marketplace_error"] = message
+
+
+def _beta_admin_restore_reported_listing_after_appeal_callback(session, template_id, title):
+    """Restore one appealed listing in the callback pass, keeping the audit atomic."""
+    note_key = f"beta_admin_marketplace_appeal_note_{template_id}"
+    confirm_key = f"beta_admin_marketplace_appeal_confirm_{template_id}"
+    note = str(st.session_state.get(note_key, "") or "").strip()
+    if not bool(st.session_state.get(confirm_key, False)):
+        st.session_state["beta_admin_marketplace_appeal_error"] = "請先勾選確認申訴已成立。"
+        return
+    if not 3 <= len(note) <= 300:
+        st.session_state["beta_admin_marketplace_appeal_error"] = "請填寫 3～300 字的申訴恢復原因，會寫入操作紀錄。"
+        return
+    try:
+        _beta_admin_restore_reported_listing_after_appeal(session, template_id, note)
+        st.session_state["beta_admin_marketplace_appeal_notice"] = (
+            f"膠卷「{title}」已依申訴結果恢復上架。"
+        )
+        st.session_state.pop("beta_admin_marketplace_appeal_error", None)
+    except Exception:
+        st.session_state["beta_admin_marketplace_appeal_error"] = (
+            "申訴恢復未完成；請確認膠卷仍為管理員審核下架狀態後再試。"
+        )
 
 
 def _beta_admin_toggle_referral_code_callback(session, code_id, code, next_active):
@@ -4692,7 +4741,7 @@ def _beta_render_marketplace_moderation_center(session):
     """Render the private report queue and its auditable resolution history."""
     with st.expander("🚩 市集審核中心", expanded=True):
         st.caption(
-            "三位不同會員檢舉後，膠卷會進入此處。檢舉者身分不會顯示；"
+            "目前測試模式：一位會員檢舉後，膠卷即會進入此處。檢舉者身分不會顯示；"
             "每一次管理操作都需要填寫原因並永久保留紀錄。"
         )
         st.info(
@@ -4726,7 +4775,7 @@ def _beta_render_marketplace_moderation_center(session):
 
         if not queue_rows:
             if status_filters[selected_label] == "pending_review":
-                st.success("目前沒有累積三人檢舉、等待處理的市集膠卷。")
+                st.success("目前沒有等待處理的檢舉膠卷。")
             else:
                 st.caption("此分類目前沒有膠卷。")
         else:
@@ -4813,7 +4862,7 @@ def _beta_render_marketplace_moderation_center(session):
                     if template_status == "withdrawn" and not owner_suspended and not republish_blocked:
                         action_options.append("restore_listing")
                     elif republish_blocked:
-                        st.warning("此膠卷已累積三次檢舉並經審核下架，已永久禁止重新上架。")
+                        st.warning("此膠卷已因檢舉經審核下架；僅能在申訴成立後，從下方專區恢復上架。")
                     action_options.append(
                         "restore_creator_marketplace"
                         if owner_suspended else "suspend_creator_marketplace"
@@ -4840,6 +4889,72 @@ def _beta_render_marketplace_moderation_center(session):
                             on_click=_beta_admin_moderate_shared_template_callback,
                             args=(session, template_id, title),
                         )
+
+        with st.expander("⚖️ 申訴恢復上架專區", expanded=False):
+            st.caption(
+                "僅限申訴成立時使用。輸入創作者 Email，可查閱因檢舉而被管理員下架的膠卷；"
+                "恢復後會解除該卷的重新上架鎖定，並留下新的管理紀錄。"
+            )
+            with st.form("beta_admin_marketplace_appeal_lookup", clear_on_submit=False):
+                st.text_input(
+                    "創作者 Email",
+                    placeholder="creator@example.com",
+                    key="beta_admin_marketplace_appeal_email",
+                )
+                st.form_submit_button("查詢已審核下架的膠卷")
+
+            if st.session_state.get("beta_admin_marketplace_appeal_notice"):
+                st.success(st.session_state.pop("beta_admin_marketplace_appeal_notice"))
+            if st.session_state.get("beta_admin_marketplace_appeal_error"):
+                st.error(st.session_state.pop("beta_admin_marketplace_appeal_error"))
+
+            appeal_email = str(
+                st.session_state.get("beta_admin_marketplace_appeal_email", "") or ""
+            ).strip()
+            if appeal_email:
+                try:
+                    appeal_rows = _beta_admin_find_reported_listing_appeals(session, appeal_email)
+                except Exception:
+                    appeal_rows = []
+                    st.warning("申訴恢復資料暫時無法讀取；請確認最新資料庫遷移已執行。")
+                if not appeal_rows:
+                    st.caption("此 Email 目前沒有因檢舉審核下架、等待申訴處理的膠卷。")
+                for row in appeal_rows:
+                    if not isinstance(row, dict) or not row.get("template_id"):
+                        continue
+                    template_id = str(row["template_id"])
+                    title = str(row.get("title", "") or "未命名膠卷").strip()
+                    report_count = max(0, int(row.get("report_count", 0) or 0))
+                    with st.container(border=True):
+                        st.markdown(f"#### {html.escape(title)}")
+                        st.caption(
+                            f"創作者：{str(row.get('owner_email', '') or appeal_email)}｜"
+                            f"檢舉：{report_count} 次｜"
+                            f"下架時間：{str(row.get('reviewed_at', '') or '-')[:16]}"
+                        )
+                        st.info(
+                            "原審核原因："
+                            + str(row.get("review_note", "") or "未提供")
+                        )
+                        with st.form(
+                            f"beta_admin_marketplace_appeal_restore_{template_id}",
+                            clear_on_submit=False,
+                        ):
+                            st.text_area(
+                                "申訴成立／恢復上架原因（3～300 字）",
+                                max_chars=300,
+                                key=f"beta_admin_marketplace_appeal_note_{template_id}",
+                            )
+                            st.checkbox(
+                                "我已確認此申訴成立，並同意恢復這卷膠卷上架",
+                                key=f"beta_admin_marketplace_appeal_confirm_{template_id}",
+                            )
+                            st.form_submit_button(
+                                "⚖️ 申訴成立，恢復上架",
+                                type="primary",
+                                on_click=_beta_admin_restore_reported_listing_after_appeal_callback,
+                                args=(session, template_id, title),
+                            )
 
         with st.expander("🧾 市集審核操作紀錄", expanded=False):
             try:
@@ -4909,8 +5024,8 @@ def _beta_render_admin_operations_policy():
             ### 4. 市集內容與審核
 
             - 禁止刊登不雅、違法、侵權、仇恨或不適合公開展示的內容；違規內容可下架或停權。
-            - 使用者檢舉後，該膠卷會先對該使用者自動遮蔽；累積 3 位不同使用者檢舉後，進入管理端待審核清單。若管理員審核後下架，該膠卷會永久禁止重新上架，上傳者可看到本次審核原因。
-            - 市集審核中心必須填寫處理原因，並永久保留操作者、時間、原狀態與處理結果。可確認無違規、下架，或停用／恢復創作者的市集權限；只有未因三次檢舉而永久鎖定的下架膠卷可恢復上架。
+            - 使用者檢舉後，該膠卷會先對該使用者自動遮蔽；**目前測試模式為 1 位不同會員檢舉即送入待審核清單**，測試結束後應調回 3 位。若管理員審核後下架，膠卷會禁止創作者自行重新上架，上傳者可看到本次審核原因。
+            - 市集審核中心必須填寫處理原因，並永久保留操作者、時間、原狀態與處理結果。可確認無違規、下架，或停用／恢復創作者的市集權限；下架鎖定僅能在「申訴恢復上架專區」由管理員依創作者 Email 查找後，填寫申訴成立原因並手動恢復。
             - 停用市集權限會立即下架該創作者全部公開膠卷，禁止新的市集發布、購入、最愛與檢舉；不刪除私人作品，也不影響既有購入者的私人快照。恢復權限後，膠卷仍需由管理員或創作者逐卷重新上架。
             - 創作者下架後不再出現在市集；已購買者保有私人快照，可繼續套用。完整刪除原始膠捲前，必須先下架。
 
@@ -7878,6 +7993,7 @@ def _v12_render_shared_template_manager(session):
             published = status == "published"
             moderation = moderation_statuses.get(template_id, {})
             republish_blocked = bool(moderation.get("republish_blocked", False))
+            report_count = max(0, int(moderation.get("report_count", 0) or 0))
             moderation_reason = str(moderation.get("review_note", "") or "").strip()
             unlock_count = max(0, int(template.get("unlock_count", 0) or 0))
             reward_credits = max(0, int(template.get("reward_credits", 0) or 0))
@@ -7928,7 +8044,11 @@ def _v12_render_shared_template_manager(session):
                 if not published:
                     st.caption("（完整刪除請至已收藏膠捲區）")
                 if republish_blocked:
-                    st.warning(_v12_management_t("shared_template_republish_blocked"))
+                    st.warning(
+                        _v12_management_t(
+                            "shared_template_republish_blocked", count=report_count
+                        )
+                    )
                     if moderation_reason:
                         st.caption(
                             _v12_management_t(
