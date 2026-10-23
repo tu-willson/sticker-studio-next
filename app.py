@@ -5640,7 +5640,6 @@ def _v12_has_custom_style_snapshot(value):
     """Return whether a snapshot is a usable custom-style contract."""
     return (
         isinstance(value, dict)
-        and str(value.get("mode", "") or "") == V8_STYLE_CUSTOM_OPTION
         and bool(str(value.get("prompt", "") or "").strip())
     )
 
