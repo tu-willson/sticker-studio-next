@@ -2757,6 +2757,12 @@ def _beta_http(method, path, payload=None, access_token=None):
             "creator_reel_collection_limit",
             "creator_reel_delete_not_available",
             "creator_reel_has_published_template",
+            "invalid_referral_code_format",
+            "referral_code_not_found",
+            "referral_already_redeemed",
+            "referral_code_inactive",
+            "referral_code_expired",
+            "referral_code_limit_reached",
         }
         if error_code in known_codes:
             raise RuntimeError(error_code) from exc
@@ -4109,6 +4115,195 @@ def _beta_admin_grant_test_purchase(session, user_id, product_code, note):
     return response if isinstance(response, dict) else {}
 
 
+def _beta_redeem_referral_code(session, code):
+    response = _beta_rpc(
+        "redeem_referral_code",
+        {"p_code": str(code or "").strip().upper()},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
+
+
+def _beta_get_my_referral_redemption(session):
+    response = _beta_rpc(
+        "get_my_referral_redemption", {}, access_token=session["access_token"]
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_admin_create_referral_code(
+    session, code, redemption_limit, reward_credits, expires_at, note
+):
+    response = _beta_rpc(
+        "admin_create_referral_code",
+        {
+            "p_code": str(code or "").strip().upper(),
+            "p_redemption_limit": int(redemption_limit),
+            "p_reward_credits": int(reward_credits),
+            "p_expires_at": expires_at,
+            "p_note": str(note or "").strip(),
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
+
+
+def _beta_admin_list_referral_codes(session):
+    response = _beta_rpc(
+        "admin_list_referral_codes", {}, access_token=session["access_token"]
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_admin_list_referral_redemptions(session, code_id=None):
+    response = _beta_rpc(
+        "admin_list_referral_redemptions",
+        {"p_code_id": code_id, "p_limit": 100},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_admin_set_referral_code_active(session, code_id, is_active):
+    response = _beta_rpc(
+        "admin_set_referral_code_active",
+        {"p_code_id": str(code_id), "p_is_active": bool(is_active)},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
+
+
+def _beta_admin_toggle_referral_code_callback(session, code_id, code, next_active):
+    """Use Streamlit's single callback pass for a code status change."""
+    try:
+        _beta_admin_set_referral_code_active(session, code_id, next_active)
+        st.session_state["beta_admin_referral_notice"] = (
+            f"推薦碼「{code}」已{'重新啟用' if next_active else '停用'}。"
+        )
+    except Exception:
+        st.session_state["beta_admin_referral_error"] = "推薦碼狀態暫時無法更新，請稍後再試。"
+
+
+def _beta_redeem_referral_code_callback(session):
+    """Redeem once in the callback pass so a double click cannot grant twice."""
+    code = str(st.session_state.get("beta_referral_code_input", "") or "").strip().upper()
+    try:
+        result = _beta_redeem_referral_code(session, code)
+        _beta_clear_cached_copy_usage_status()
+        st.session_state["beta_referral_redeem_notice"] = (
+            f"推薦碼「{result.get('code', code)}」兌換成功！"
+            f"已增加 {int(result.get('awarded_credits', 0) or 0)} 次生成次數。"
+        )
+        st.session_state.pop("beta_referral_redeem_error", None)
+    except Exception as exc:
+        error_text = str(exc).lower()
+        if "already_redeemed" in error_text:
+            message = "此帳號已兌換過推薦碼，每個帳號只能使用一次。"
+        elif "limit_reached" in error_text:
+            message = "這組推薦碼的兌換名額已滿。"
+        elif "expired" in error_text:
+            message = "這組推薦碼已過期。"
+        elif "inactive" in error_text:
+            message = "這組推薦碼目前未開放兌換。"
+        elif "not_found" in error_text or "invalid_referral" in error_text:
+            message = "找不到這組推薦碼，請確認英文與數字是否正確。"
+        else:
+            message = "推薦碼暫時無法兌換，請稍後再試。"
+        st.session_state["beta_referral_redeem_error"] = message
+
+
+def _beta_render_referral_redemption(session):
+    """Render the member-facing referral entry without exposing code records."""
+    try:
+        redemptions = _beta_get_my_referral_redemption(session)
+    except Exception:
+        # Keep the account panel healthy while the feature migration is pending.
+        return
+
+    with st.expander("🎁 兌換推薦碼", expanded=False):
+        if redemptions:
+            redemption = redemptions[0] if isinstance(redemptions[0], dict) else {}
+            st.success(
+                f"你已兌換推薦碼「{redemption.get('code', '')}」，"
+                f"並獲得 {int(redemption.get('reward_credits', 0) or 0)} 次生成次數。"
+            )
+            st.caption("每個帳號僅能兌換一次推薦碼。")
+            return
+
+        st.caption("輸入英文／數字推薦碼即可領取生成次數；每個帳號僅能兌換一次。獎勵次數自兌換日起 60 天內可使用。")
+        with st.form("beta_referral_redeem_form", clear_on_submit=False):
+            st.text_input(
+                "推薦碼",
+                placeholder="例如：WELCOME100",
+                max_chars=24,
+                key="beta_referral_code_input",
+            )
+            st.form_submit_button(
+                "🎁 兌換推薦碼",
+                type="primary",
+                on_click=_beta_redeem_referral_code_callback,
+                args=(session,),
+            )
+        if st.session_state.get("beta_referral_redeem_notice"):
+            st.success(st.session_state["beta_referral_redeem_notice"])
+        if st.session_state.get("beta_referral_redeem_error"):
+            st.error(st.session_state["beta_referral_redeem_error"])
+
+
+def _beta_render_admin_operations_policy():
+    """Keep the current operational rules in one admin-only, maintainable view."""
+    with st.expander("📜 管理者使用規章（內部版）", expanded=False):
+        st.caption("這是目前上線中的營運規則總表。新增方案、效期或市集條件時，需同步更新本欄位與對外使用說明。")
+        st.markdown(
+            """
+            ### 1. 帳號、生成次數與各種效期
+
+            | 類別 | 現行規則 | 效期／優先順序 |
+            | --- | --- | --- |
+            | 一般會員 | 可使用貼圖生成與膠捲功能；不可使用市集模板。 | 依帳號目前可用次數。 |
+            | 7 次生成包 | 圖片生成 7 次、AI 幫想每日 7 次、雲端作品 7 組。 | 購買後 30 天。 |
+            | 基本／標準／進階訂閱 | 每月圖片生成 20／30／40 次；AI 幫想每日 15／20／25 次；雲端作品 20／30／40 組。 | 訂閱額度可保留至下一個帳務週期結束；系統優先使用最早到期的次數。 |
+            | 推薦碼獎勵 | 一個帳號僅可成功兌換一次；推薦碼可設定名額、獎勵次數、截止日與停用狀態。 | 兌換後 60 天。 |
+            | 市集創作者回饋 | 購買者首次解鎖模板所支付的生成次數，全數回饋原創者。 | 回饋額度 90 天，且在使用者自身方案／購買額度之後才消耗。 |
+            | 管理員手動補次 | 僅限有明確原因的客服、測試或補償處理。 | 目前核發後 365 天；每筆都需留下原因。 |
+
+            ### 2. 推薦碼管理
+
+            - 僅管理員能建立或停用。代碼僅允許 4～24 位英文字母與數字，系統會統一轉為大寫。
+            - 每組碼的可兌換名額為 1～100,000 人；每人獎勵 1～100 次。
+            - 使用者、名額、推薦碼有效期與獎勵額度會在同一筆資料庫交易中確認；連點或多人同時操作不得重複核發。
+            - 停用只阻止新的兌換，不會追回已成功核發的次數。不得刪除有兌換紀錄的推薦碼。
+            - 管理者應保留活動來源、對外文案與停用原因於「內部備註」。
+
+            ### 3. 創作膠捲、收藏與市集
+
+            - 每完成一張 4×2 原始生成圖，系統自動建立一卷未收藏膠捲；未收藏膠捲保存 10 天，超額時替換最早一卷。
+            - 一般會員未收藏／已收藏上限為 5／5；7 次生成包為 7／7；基本／標準／進階為 20／20、30／30、40／40。已收藏與已解鎖模板共用收藏額度。
+            - 只有訂閱方案與 7 次生成包可以使用市集：7 次生成包可發布 3 組、解鎖 5 組；基本／標準／進階可發布 10／15／20 組。
+            - 公開模板複製文字、動作、字型、人物／場景指令、畫風設定與預覽圖；不得包含原始人物照片。
+            - 模板購入價格限 1～3 次；首次解鎖才扣次，後續可免費重新載入同一模板。
+
+            ### 4. 市集內容與審核
+
+            - 禁止刊登不雅、違法、侵權、仇恨或不適合公開展示的內容；違規內容可下架或停權。
+            - 使用者檢舉後，該模板會先對該使用者自動遮蔽；累積 3 位不同使用者檢舉後，進入管理端待審核清單。
+            - 創作者下架後不再出現在市集；已購買者保有私人快照，可繼續套用。完整刪除原始膠捲前，必須先下架。
+
+            ### 5. 雲端作品、測試購買與管理權限
+
+            - 雲端作品每組最多保存 40 張已選貼圖；MAIN／TAB 規格圖不計入 40 張上限。作品載回後可編輯並覆蓋同一份雲端作品。
+            - 管理員測試購買不收款、不寄付款通知、不對外顯示正式訂單；僅可用於驗證方案權益，且需選擇指定帳號與留下備註。
+            - 會員搜尋、補／扣次數、測試購買、推薦碼建立／停用均只允許資料庫授權管理員執行；不可把後台畫面或 RPC 權限提供給一般帳號。
+            """
+        )
+
+
 def _beta_render_admin_console(session):
     """Render the private administration page after a server-side role check."""
     if not _beta_refresh_admin_access(session):
@@ -4120,9 +4315,158 @@ def _beta_render_admin_console(session):
     with overview_members:
         st.info("👥 會員與權益\n\n搜尋會員、補／扣生成次數與測試購買。")
     with overview_codes:
-        st.info("🎁 推薦碼管理\n\n下一階段將在此建立、限額與追蹤推薦碼。")
+        st.info("🎁 推薦碼管理\n\n建立代碼、設定名額與獎勵，並查看兌換紀錄。")
     with overview_market:
         st.info("🚩 市集審核\n\n下一階段將在此處理累積檢舉的模板。")
+
+    _beta_render_admin_operations_policy()
+
+    with st.expander("🎁 推薦碼管理", expanded=True):
+        st.caption("建立後可立即發送給使用者。每個帳號一生只能成功兌換一組推薦碼；獎勵次數自兌換日起保留 60 天。")
+        with st.form("beta_admin_create_referral_form", clear_on_submit=True):
+            create_code, create_limit, create_credits = st.columns([3, 2, 2])
+            with create_code:
+                referral_code = st.text_input(
+                    "推薦碼（英文／數字）",
+                    placeholder="例如：WELCOME100",
+                    max_chars=24,
+                    key="beta_admin_referral_code",
+                )
+            with create_limit:
+                referral_limit = st.number_input(
+                    "可兌換名額",
+                    min_value=1,
+                    max_value=100000,
+                    value=100,
+                    step=1,
+                    key="beta_admin_referral_limit",
+                )
+            with create_credits:
+                referral_credits = st.number_input(
+                    "每人獎勵次數",
+                    min_value=1,
+                    max_value=100,
+                    value=1,
+                    step=1,
+                    key="beta_admin_referral_credits",
+                )
+            set_expiry = st.checkbox(
+                "設定推薦碼截止日期",
+                key="beta_admin_referral_set_expiry",
+            )
+            referral_expiry = (
+                st.date_input("截止日期（台灣時間）", key="beta_admin_referral_expiry")
+                if set_expiry else None
+            )
+            referral_note = st.text_input(
+                "內部備註（選填）",
+                max_chars=160,
+                key="beta_admin_referral_note",
+            )
+            submitted_referral = st.form_submit_button("建立推薦碼", type="primary")
+
+        if submitted_referral:
+            normalized_code = str(referral_code or "").strip().upper()
+            if not re.fullmatch(r"[A-Z0-9]{4,24}", normalized_code):
+                st.error("推薦碼請使用 4～24 位英文大寫字母或數字。")
+            else:
+                expiry_value = (
+                    f"{referral_expiry.isoformat()}T23:59:59+08:00"
+                    if referral_expiry else None
+                )
+                try:
+                    _beta_admin_create_referral_code(
+                        session,
+                        normalized_code,
+                        referral_limit,
+                        referral_credits,
+                        expiry_value,
+                        referral_note,
+                    )
+                    st.success(f"推薦碼「{normalized_code}」已建立。")
+                except Exception as exc:
+                    if "duplicate" in str(exc).lower() or "unique" in str(exc).lower():
+                        st.error("這組推薦碼已存在，請換一組。")
+                    else:
+                        st.error("推薦碼暫時無法建立，請稍後再試。")
+
+        if st.session_state.get("beta_admin_referral_notice"):
+            st.success(st.session_state.pop("beta_admin_referral_notice"))
+        if st.session_state.get("beta_admin_referral_error"):
+            st.error(st.session_state.pop("beta_admin_referral_error"))
+
+        try:
+            referral_codes = _beta_admin_list_referral_codes(session)
+        except Exception:
+            referral_codes = []
+            st.warning("推薦碼資料目前無法讀取；請確認推薦碼 migration 已套用。")
+
+        if not referral_codes:
+            st.info("尚未建立推薦碼。")
+        else:
+            st.markdown("#### 已建立的推薦碼")
+            for referral in referral_codes:
+                if not isinstance(referral, dict):
+                    continue
+                code_id = str(referral.get("code_id", "") or "")
+                code_label = str(referral.get("code", "") or "")
+                redeemed = int(referral.get("redeemed_count", 0) or 0)
+                limit = int(referral.get("redemption_limit", 0) or 0)
+                active = bool(referral.get("is_active", False))
+                expiry = str(referral.get("expires_at", "") or "")[:10]
+                status = "🟢 開放中" if active else "⚪ 已停用"
+                left, middle, right = st.columns([3, 4, 2])
+                with left:
+                    st.markdown(f"**{code_label}**  ")
+                    st.caption(status + (f"｜截止 {expiry}" if expiry else "｜無截止日"))
+                with middle:
+                    st.markdown(
+                        f"已兌換 **{redeemed}／{limit}** 人｜"
+                        f"每人 **+{int(referral.get('reward_credits', 0) or 0)} 次**"
+                    )
+                    if referral.get("note"):
+                        st.caption(f"備註：{referral['note']}")
+                with right:
+                    st.button(
+                        "停用推薦碼" if active else "重新啟用",
+                        key=f"beta_admin_referral_toggle_{code_id}",
+                        use_container_width=True,
+                        on_click=_beta_admin_toggle_referral_code_callback,
+                        args=(session, code_id, code_label, not active),
+                    )
+
+            with st.expander("查看兌換紀錄", expanded=False):
+                code_filters = {"全部推薦碼": None}
+                for referral in referral_codes:
+                    if isinstance(referral, dict) and referral.get("code_id"):
+                        code_filters[str(referral.get("code") or "未命名")] = str(referral["code_id"])
+                selected_filter = st.selectbox(
+                    "篩選推薦碼",
+                    list(code_filters.keys()),
+                    key="beta_admin_referral_redemption_filter",
+                )
+                try:
+                    redemption_rows = _beta_admin_list_referral_redemptions(
+                        session, code_filters[selected_filter]
+                    )
+                    if redemption_rows:
+                        st.dataframe(
+                            redemption_rows,
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "redemption_id": None,
+                                "code": "推薦碼",
+                                "redeemer_email": "兌換帳號",
+                                "redeemer_name": "名稱",
+                                "reward_credits": "獎勵次數",
+                                "redeemed_at": "兌換時間",
+                            },
+                        )
+                    else:
+                        st.caption("目前尚無兌換紀錄。")
+                except Exception:
+                    st.warning("兌換紀錄暫時無法讀取，請稍後再試。")
 
     with st.expander("👥 會員與權益管理", expanded=True):
         st.caption("可補回或扣除測試生成次數，也可建立不收款的測試購買。所有操作都會記錄操作者、原因與時間。")
@@ -4289,6 +4633,7 @@ def _beta_render_account_panel():
             ) + "**")
         except Exception:
             st.caption(t("copy_quota_unavailable"))
+        _beta_render_referral_redemption(session)
         st.button(
             t("logout"),
             type="primary",
