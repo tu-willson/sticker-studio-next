@@ -7,6 +7,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase" / "migrations" / "20261024_000054_lock_reported_listing_republication.sql"
 APPEAL_MIGRATION = ROOT / "supabase" / "migrations" / "20261024_000055_marketplace_appeal_restore_and_one_report_test.sql"
+RESTORED_THRESHOLD_MIGRATION = ROOT / "supabase" / "migrations" / "20261024_000056_restore_three_report_review_threshold.sql"
 APP = ROOT / "app.py"
 
 
@@ -33,6 +34,11 @@ class ReportedListingLockTests(unittest.TestCase):
         self.assertIn("admin_restore_reported_listing_after_appeal", sql)
         self.assertIn("app.shared_template_appeal_restore", sql)
         self.assertIn("appeal_restore_listing", sql)
+
+    def test_final_review_threshold_is_restored_to_three_reports(self):
+        sql = RESTORED_THRESHOLD_MIGRATION.read_text(encoding="utf-8")
+        self.assertIn("check (report_count >= 3)", sql)
+        self.assertIn("v_count >= 3", sql)
 
 
 if __name__ == "__main__":
