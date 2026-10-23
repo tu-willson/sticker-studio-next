@@ -2611,8 +2611,16 @@ div[class*="st-key-v12_color_selected_white_"] button::after{
 </style>
 """, unsafe_allow_html=True)
 
-_v12_quick_nav_library_mode = st.session_state.get("v12_view", "create") == "library"
-_v12_quick_nav_mode_class = " v12-quick-nav-library" if _v12_quick_nav_library_mode else ""
+# Outside the creation page there are no in-page STEP anchors to scroll to.
+# Switch the floating menu to real Streamlit buttons for library, marketplace,
+# and pricing so every shortcut can first return to the studio and then land on
+# the requested section.
+_v12_quick_nav_non_creation_mode = (
+    st.session_state.get("v12_view", "create") != "create"
+)
+_v12_quick_nav_mode_class = (
+    " v12-quick-nav-library" if _v12_quick_nav_non_creation_mode else ""
+)
 st.markdown(f"""
 <div class="v12-quick-nav{_v12_quick_nav_mode_class}" aria-label="{t('quick_nav_menu')}">
   <details>
@@ -9409,7 +9417,7 @@ st.button(
     kwargs={"view": "library", "library_section": "home", "preserve_creation": True},
 )
 
-if st.session_state.get("v12_view") == "library":
+if st.session_state.get("v12_view") != "create":
     for _v12_step_number, _v12_step_key in enumerate(
         ("quick_nav_01", "quick_nav_02", "quick_nav_03", "quick_nav_04", "quick_nav_05", "quick_nav_06", "quick_nav_07", "quick_nav_08"),
         start=1,
