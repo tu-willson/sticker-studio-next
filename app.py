@@ -5636,6 +5636,35 @@ def _v12_current_custom_style_snapshot():
     return snapshot
 
 
+def _v12_has_custom_style_snapshot(value):
+    """Return whether a snapshot is a usable custom-style contract."""
+    return (
+        isinstance(value, dict)
+        and str(value.get("mode", "") or "") == V8_STYLE_CUSTOM_OPTION
+        and bool(str(value.get("prompt", "") or "").strip())
+    )
+
+
+def _v12_template_transfer_contract(snapshot):
+    """Create the explicit, photo-free settings contract for a template."""
+    snapshot = snapshot if isinstance(snapshot, dict) else {}
+    return {
+        "style_mode": str(snapshot.get("style_mode", "") or ""),
+        "character_features": copy.deepcopy(
+            snapshot.get("character_features", []) or []
+        ),
+        "custom_character": str(snapshot.get("custom_character", "") or ""),
+        "text_style": str(snapshot.get("text_style", "") or ""),
+        "font_name": str(snapshot.get("font_name", "") or ""),
+        "custom_style_snapshot": copy.deepcopy(
+            snapshot.get("custom_style_snapshot", {}) or {}
+        ),
+        "transparent_background": bool(
+            snapshot.get("transparent_background", False)
+        ),
+    }
+
+
 def _v12_normalize_style_reference_strength(value):
     """Map retired saved values to the two current style-strength choices."""
     value = str(value or "").strip()
@@ -6592,15 +6621,24 @@ def _v12_load_history_record(record):
         metadata.get("custom_character", "")
     )
 
+    loaded_custom_style = metadata.get("custom_style_snapshot")
     loaded_style_mode = str(metadata.get("style_mode", "") or "")
+    # A shared template carries an immutable custom-style snapshot.  Some
+    # legacy snapshots also retain an old/blank flat ``style_mode`` value;
+    # the usable snapshot is the authoritative source in that situation.
+    # This makes the exact custom prompt visible and editable for the
+    # recipient without ever touching their own 01–10 style slots.
+    if _v12_has_custom_style_snapshot(loaded_custom_style):
+        loaded_style_mode = V8_STYLE_CUSTOM_OPTION
+        metadata["style_mode"] = loaded_style_mode
+        st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
     if loaded_style_mode:
         st.session_state["v10_style_mode"] = loaded_style_mode
     st.session_state["v12_use_custom_style"] = (
         loaded_style_mode == V8_STYLE_CUSTOM_OPTION
     )
-    loaded_custom_style = metadata.get("custom_style_snapshot")
     if (
-        loaded_style_mode == "⭐ 自定義風格"
+        loaded_style_mode == V8_STYLE_CUSTOM_OPTION
         and isinstance(loaded_custom_style, dict)
         and str(loaded_custom_style.get("prompt", "") or "").strip()
     ):
@@ -6820,32 +6858,24 @@ def _v12_project_snapshot():
     return dict(project)
 
 
-def _v12_creator_reel_snapshot():
+def _v12_creator_reel_snapshot(project_snapshot=None):
     """Freeze the exact settings for one completed 4×2 generation.
 
     The snapshot intentionally excludes the uploader's source photograph.  An
     optional style-reference image is handled as a separate private asset so a
     later sharing flow can ask for explicit permission before exposing it.
     """
-    snapshot = _beta_library_metadata(_v12_project_snapshot())
+    frozen_project = (
+        project_snapshot
+        if isinstance(project_snapshot, dict)
+        else _v12_project_snapshot()
+    )
+    snapshot = _beta_library_metadata(frozen_project)
     # This compact, explicit contract is used by shared templates.  Keeping it
     # beside the general project metadata makes the user-facing creative
     # directions resilient to future project-schema changes and old blank
     # compatibility placeholders.
-    snapshot["template_transfer"] = {
-        "character_features": copy.deepcopy(
-            snapshot.get("character_features", []) or []
-        ),
-        "custom_character": str(snapshot.get("custom_character", "") or ""),
-        "text_style": str(snapshot.get("text_style", "") or ""),
-        "font_name": str(snapshot.get("font_name", "") or ""),
-        "custom_style_snapshot": copy.deepcopy(
-            snapshot.get("custom_style_snapshot", {}) or {}
-        ),
-        "transparent_background": bool(
-            snapshot.get("transparent_background", False)
-        ),
-    }
+    snapshot["template_transfer"] = _v12_template_transfer_contract(snapshot)
     resolved_expression_specs = st.session_state.get(
         "v12_expression_generation_specs"
     )
@@ -6859,7 +6889,11 @@ def _v12_creator_reel_snapshot():
         "grid_width": 1536,
         "grid_height": 1024,
         "crop_boxes": None,
-        "prompt": str(st.session_state.get("last_prompt", "") or "")[:30000],
+        "prompt": str(
+            st.session_state.get("v12_generation_creator_reel_prompt")
+            or st.session_state.get("last_prompt", "")
+            or ""
+        )[:30000],
     }
     return snapshot
 
@@ -6879,8 +6913,11 @@ def _v12_current_creator_reel_payload():
         st.session_state.get("v12_style_source_mode")
         == V12_STYLE_REFERENCE_MODE
     )
+    frozen_project = st.session_state.get(
+        "v12_generation_creator_reel_project_snapshot"
+    )
     return (
-        _v12_creator_reel_snapshot(),
+        _v12_creator_reel_snapshot(frozen_project),
         grid_bytes,
         style_bytes if has_style_reference else b"",
     )
@@ -7619,6 +7656,7 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         # It is intentionally only settings; no uploader photograph is ever
         # part of this payload.
         for field in (
+            "style_mode",
             "character_features",
             "custom_character",
             "text_style",
@@ -7648,6 +7686,11 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
             **custom_style_snapshot,
             "source": "shared_template",
         }
+        # The snapshot's mode is authoritative.  This also repairs published
+        # templates from before ``style_mode`` was included in the dedicated
+        # transfer contract.
+        if _v12_has_custom_style_snapshot(custom_style_snapshot):
+            metadata["style_mode"] = V8_STYLE_CUSTOM_OPTION
     metadata["project_id"] = str(uuid4())
     metadata["project_name"] = _v12_normalize_project_name(
         f"模板｜{str(title or '').strip()}"
@@ -12235,6 +12278,16 @@ if _generate_clicked:
             "v12_expression_generation_new_cycle_start",
         ):
             st.session_state.pop(_expression_job_key, None)
+
+    # Freeze the exact form state at the instant this generation is accepted.
+    # The reel is saved only after the image returns, when users may already
+    # have navigated or edited another field.  Reusing live session values at
+    # that later point could publish a feature/style that was not used for the
+    # generated image.
+    st.session_state["v12_generation_creator_reel_project_snapshot"] = (
+        _v12_project_snapshot()
+    )
+    st.session_state["v12_generation_creator_reel_prompt"] = str(prompt or "")[:30000]
 
     # 先鎖定，再立即重新繪製畫面；本次不呼叫 AI。
     st.session_state["v11_generation_pending"] = True
