@@ -2993,6 +2993,46 @@ def _v12_collect_creator_reel_callback(session, reel_id):
         )
 
 
+def _v12_publish_creator_reel_callback(session, reel, publish_limit):
+    """Publish a reel before the form's single automatic submission rerun."""
+    reel_id = str((reel or {}).get("reel_id", "") or "")
+    title = str(st.session_state.get(f"v12_shared_template_title_{reel_id}", "") or "")
+    description = str(
+        st.session_state.get(f"v12_shared_template_description_{reel_id}", "") or ""
+    )
+    cost = st.session_state.get(f"v12_shared_template_cost_{reel_id}", 1)
+    tags = st.session_state.get(f"v12_shared_template_tags_{reel_id}", [])
+    confirmed = bool(
+        st.session_state.get(f"v12_shared_template_rights_{reel_id}", False)
+    )
+    if len(title.strip()) < 3:
+        st.session_state["v12_shared_template_publish_error"] = "title"
+        return
+    if not isinstance(tags, list) or not tags:
+        st.session_state["v12_shared_template_publish_error"] = "tags"
+        return
+    if not confirmed:
+        st.session_state["v12_shared_template_publish_error"] = "rights"
+        return
+    try:
+        published = _beta_publish_creator_reel(
+            session, reel, title, description, cost, tags
+        )
+        st.session_state["v12_shared_template_publish_feedback"] = published
+    except Exception as exc:
+        message = str(exc or "")
+        if "shared_template_publish_limit" in message:
+            error = "limit"
+        elif "shared_template_already_exists" in message:
+            error = "exists"
+        else:
+            error = "failed"
+        st.session_state["v12_shared_template_publish_error"] = {
+            "type": error,
+            "limit": int(publish_limit or 0),
+        }
+
+
 def _v12_save_creator_reel_rename_callback(session, reel_id):
     """Save a rename before the form's single automatic submission rerun."""
     rename_key = f"v12_creator_reel_rename_draft_{reel_id}"
@@ -3821,6 +3861,13 @@ def _beta_complete_oauth_callback():
         st.query_params.clear()
 
 
+def _beta_logout_callback():
+    """Clear login state before Streamlit's normal one-click rerun."""
+    st.session_state.pop("beta_auth_session", None)
+    st.session_state.pop("beta_pending_login_url", None)
+    _beta_clear_cached_copy_usage_status()
+
+
 def _beta_credit_balance(session):
     response = _beta_rpc(
         "get_my_credit_balance", {}, access_token=session["access_token"]
@@ -4220,11 +4267,12 @@ def _beta_render_account_panel():
             ) + "**")
         except Exception:
             st.caption(t("copy_quota_unavailable"))
-        if st.button(t("logout"), type="primary", key="beta_logout"):
-            st.session_state.pop("beta_auth_session", None)
-            st.session_state.pop("beta_pending_login_url", None)
-            _beta_clear_cached_copy_usage_status()
-            st.rerun()
+        st.button(
+            t("logout"),
+            type="primary",
+            key="beta_logout",
+            on_click=_beta_logout_callback,
+        )
         if not _beta_site_openai_key():
             st.info("會員登入與生成次數帳本已啟用；站方生成 API 正在進行最後設定。")
         if _v12_ui_locale() != "zh-TW":
@@ -6576,14 +6624,14 @@ def _v12_render_shared_template_manager(session):
         if total_pages > 1:
             previous_col, page_col, next_col = st.columns([1, 1.25, 1])
             with previous_col:
-                if st.button(
+                st.button(
                     _v12_management_t("shared_template_previous_page"),
                     key="v12_shared_template_management_previous_page",
                     disabled=page_number <= 0,
                     use_container_width=True,
-                ):
-                    st.session_state[page_state_key] = page_number - 1
-                    st.rerun()
+                    on_click=_v12_set_session_state_callback,
+                    args=(page_state_key, page_number - 1),
+                )
             with page_col:
                 st.caption(
                     _v12_management_t(
@@ -6594,14 +6642,14 @@ def _v12_render_shared_template_manager(session):
                     )
                 )
             with next_col:
-                if st.button(
+                st.button(
                     _v12_management_t("shared_template_next_page"),
                     key="v12_shared_template_management_next_page",
                     disabled=page_number >= total_pages - 1,
                     use_container_width=True,
-                ):
-                    st.session_state[page_state_key] = page_number + 1
-                    st.rerun()
+                    on_click=_v12_set_session_state_callback,
+                    args=(page_state_key, page_number + 1),
+                )
 
 
 def _v12_render_creator_reels(session, shelf="active"):
@@ -6669,6 +6717,25 @@ def _v12_render_creator_reels(session, shelf="active"):
                 limit=template_feedback.get("limit", 0),
             )
         )
+    publish_error = st.session_state.pop("v12_shared_template_publish_error", None)
+    if publish_error == "title":
+        st.warning(t("shared_template_title_required"))
+    elif publish_error == "tags":
+        st.warning(t("shared_template_tags_required"))
+    elif publish_error == "rights":
+        st.warning(t("shared_template_rights_required"))
+    elif isinstance(publish_error, dict):
+        if publish_error.get("type") == "limit":
+            st.warning(
+                t(
+                    "shared_template_publish_limit",
+                    limit=publish_error.get("limit", status["publish_template_limit"]),
+                )
+            )
+        elif publish_error.get("type") == "exists":
+            st.warning(t("shared_template_already_published"))
+        else:
+            st.error(t("shared_template_publish_failed"))
     if not status["eligible"]:
         st.info(t("creator_reel_subscription_only"))
         return
@@ -6695,32 +6762,32 @@ def _v12_render_creator_reels(session, shelf="active"):
     shelf = str(shelf or "active")
     reel_active_col, reel_collected_col, reel_manage_col = st.columns(3)
     with reel_active_col:
-        if st.button(
+        st.button(
             ("✓ " if shelf == "active" else "") + "未收藏的膠卷",
             key="v12_creator_reel_shelf_active",
             type="primary" if shelf == "active" else "secondary",
             use_container_width=True,
-        ):
-            st.session_state["v12_creator_reel_shelf"] = "active"
-            st.rerun()
+            on_click=_v12_set_session_state_callback,
+            args=("v12_creator_reel_shelf", "active"),
+        )
     with reel_collected_col:
-        if st.button(
+        st.button(
             ("✓ " if shelf == "collected" else "") + "已收藏的膠卷",
             key="v12_creator_reel_shelf_collected",
             type="primary" if shelf == "collected" else "secondary",
             use_container_width=True,
-        ):
-            st.session_state["v12_creator_reel_shelf"] = "collected"
-            st.rerun()
+            on_click=_v12_set_session_state_callback,
+            args=("v12_creator_reel_shelf", "collected"),
+        )
     with reel_manage_col:
-        if st.button(
+        st.button(
             ("✓ " if shelf == "management" else "") + "管理發布市集的膠捲",
             key="v12_creator_reel_shelf_management",
             type="primary" if shelf == "management" else "secondary",
             use_container_width=True,
-        ):
-            st.session_state["v12_creator_reel_shelf"] = "management"
-            st.rerun()
+            on_click=_v12_set_session_state_callback,
+            args=("v12_creator_reel_shelf", "management"),
+        )
 
     if shelf == "management":
         _v12_render_shared_template_manager(session)
@@ -6935,46 +7002,17 @@ def _v12_render_creator_reels(session, shelf="active"):
                                 t("shared_template_rights_confirm"),
                                 key=f"v12_shared_template_rights_{reel_id}",
                             )
-                            publish_pressed = st.form_submit_button(
+                            st.form_submit_button(
                                 t("shared_template_publish_button"),
                                 type="primary",
                                 use_container_width=True,
+                                on_click=_v12_publish_creator_reel_callback,
+                                args=(
+                                    session,
+                                    reel,
+                                    status["publish_template_limit"],
+                                ),
                             )
-                        if publish_pressed:
-                            if len(str(template_title or "").strip()) < 3:
-                                st.warning(t("shared_template_title_required"))
-                            elif not template_tags:
-                                st.warning(t("shared_template_tags_required"))
-                            elif not rights_confirmed:
-                                st.warning(t("shared_template_rights_required"))
-                            else:
-                                try:
-                                    with st.spinner(t("shared_template_publishing")):
-                                        published = _beta_publish_creator_reel(
-                                            session,
-                                            reel,
-                                            template_title,
-                                            template_description,
-                                            template_cost,
-                                            template_tags,
-                                        )
-                                    st.session_state[
-                                        "v12_shared_template_publish_feedback"
-                                    ] = published
-                                    st.rerun()
-                                except Exception as exc:
-                                    message = str(exc or "")
-                                    if "shared_template_publish_limit" in message:
-                                        st.warning(
-                                            t(
-                                                "shared_template_publish_limit",
-                                                limit=status["publish_template_limit"],
-                                            )
-                                        )
-                                    elif "shared_template_already_exists" in message:
-                                        st.warning(t("shared_template_already_published"))
-                                    else:
-                                        st.error(t("shared_template_publish_failed"))
             elif reel_status == "active":
                 collect_button, collect_note = st.columns([1.05, 1.95])
                 with collect_button:
@@ -7028,25 +7066,25 @@ def _v12_render_creator_reels(session, shelf="active"):
     if total_pages > 1:
         previous_col, page_col, next_col = st.columns([1, 1.35, 1])
         with previous_col:
-            if st.button(
+            st.button(
                 "← 上一頁",
                 key=f"v12_creator_reel_previous_{desired_status}",
                 disabled=page_number <= 0,
                 use_container_width=True,
-            ):
-                st.session_state[page_key] = page_number - 1
-                st.rerun()
+                on_click=_v12_set_session_state_callback,
+                args=(page_key, page_number - 1),
+            )
         with page_col:
             st.caption(f"第 {page_number + 1}／{total_pages} 頁")
         with next_col:
-            if st.button(
+            st.button(
                 "下一頁 →",
                 key=f"v12_creator_reel_next_{desired_status}",
                 disabled=page_number >= total_pages - 1,
                 use_container_width=True,
-            ):
-                st.session_state[page_key] = page_number + 1
-                st.rerun()
+                on_click=_v12_set_session_state_callback,
+                args=(page_key, page_number + 1),
+            )
 
 
 def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
@@ -7294,15 +7332,25 @@ def _v12_render_unlocked_template_shelf(session):
     if total_pages > 1:
         previous_col, page_col, next_col = st.columns([1, 1.35, 1])
         with previous_col:
-            if st.button("← 上一頁", key="v12_unlocked_template_previous", disabled=page_number <= 0, use_container_width=True):
-                st.session_state[page_key] = page_number - 1
-                st.rerun()
+            st.button(
+                "← 上一頁",
+                key="v12_unlocked_template_previous",
+                disabled=page_number <= 0,
+                use_container_width=True,
+                on_click=_v12_set_session_state_callback,
+                args=(page_key, page_number - 1),
+            )
         with page_col:
             st.caption(f"第 {page_number + 1}／{total_pages} 頁｜每頁 {page_size} 組")
         with next_col:
-            if st.button("下一頁 →", key="v12_unlocked_template_next", disabled=page_number >= total_pages - 1, use_container_width=True):
-                st.session_state[page_key] = page_number + 1
-                st.rerun()
+            st.button(
+                "下一頁 →",
+                key="v12_unlocked_template_next",
+                disabled=page_number >= total_pages - 1,
+                use_container_width=True,
+                on_click=_v12_set_session_state_callback,
+                args=(page_key, page_number + 1),
+            )
 
 
 def _v12_render_shared_template_marketplace(session):
@@ -7329,31 +7377,31 @@ def _v12_render_shared_template_marketplace(session):
     market_shelf = str(st.session_state.get("v12_marketplace_shelf", "market") or "market")
     back_col, unlocked_col, market_return_col = st.columns([1, 1, 1])
     with back_col:
-        if st.button(
+        st.button(
             t("shared_template_back_library"),
             key="v12_shared_template_back_library",
             use_container_width=True,
-        ):
-            st.session_state["v12_view"] = "library"
-            st.rerun()
+            on_click=_v12_navigate_callback,
+            kwargs={"view": "library"},
+        )
     with unlocked_col:
-        if st.button(
+        st.button(
             ("✓ " if market_shelf == "unlocked" else "") + "已解鎖模版區",
             key="v12_market_unlocked_tab",
             type="primary",
             use_container_width=True,
-        ):
-            st.session_state["v12_marketplace_shelf"] = "unlocked"
-            st.rerun()
+            on_click=_v12_set_session_state_callback,
+            args=("v12_marketplace_shelf", "unlocked"),
+        )
     with market_return_col:
-        if st.button(
+        st.button(
             t("shared_template_market_return"),
             key="v12_market_return_tab",
             type="primary",
             use_container_width=True,
-        ):
-            st.session_state["v12_marketplace_shelf"] = "market"
-            st.rerun()
+            on_click=_v12_set_session_state_callback,
+            args=("v12_marketplace_shelf", "market"),
+        )
 
     if market_shelf == "unlocked":
         _v12_render_unlocked_template_shelf(session)
@@ -8368,6 +8416,13 @@ def _v12_render_ai_copy_assistant():
     st.session_state.setdefault("v12_ai_copy_topic", "")
     st.session_state.setdefault("v12_ai_copy_topic_used", "")
     st.session_state.setdefault("v12_ai_copy_tone_used", "")
+    _theme_feedback = str(st.session_state.pop("v12_ai_theme_feedback", "") or "")
+    if _theme_feedback.startswith("deleted:"):
+        st.success(f"✅ 已刪除 {_theme_feedback.split(':', 1)[1]} 句。")
+    elif _theme_feedback == "need_eight":
+        st.warning(t("ai_apply_eight_warning"))
+    elif _theme_feedback == "applied":
+        st.success(t("ai_applied_edit"))
 
     # ------------------------------------------------------------
     # ① 主題：這裡只是「創作輸入」，不會因為打字就自動建立主題。
@@ -8678,17 +8733,13 @@ def _v12_render_ai_copy_assistant():
                                 _delete_refs.append(_pi)
                     if _delete_refs:
                         st.warning(t("ai_theme_delete_count", count=len(_delete_refs)))
-                        if st.button(
+                        st.button(
                             t("ai_theme_delete_button", count=len(_delete_refs)),
                             key=f"v12_theme_pool_delete_{_theme_i}",
                             use_container_width=True,
-                        ):
-                            _remaining_pool = [
-                                x for i, x in enumerate(_pool) if i not in _delete_refs
-                            ]
-                            st.session_state["v12_theme_pools"][_theme] = _remaining_pool
-                            st.success(f"✅ 已刪除 {len(_delete_refs)} 句。")
-                            st.rerun()
+                            on_click=_v12_delete_theme_pool_items_callback,
+                            args=(_theme, _pool, _delete_refs),
+                        )
 
         st.caption(t("ai_themes_selected", count=len(st.session_state["v12_selected_themes"])))
 
@@ -8725,28 +8776,13 @@ def _v12_render_ai_copy_assistant():
         st.caption(t("ai_selected_eight", count=len(_final_new)))
         if len(_final_new) > 8:
             st.warning(t("ai_max_eight"))
-        if st.button(
+        st.button(
             t("ai_apply_eight"),
             key="v12_ai_copy_apply_pool",
             use_container_width=True,
-        ):
-            if len(_final_new) != 8:
-                st.warning(t("ai_apply_eight_warning"))
-            else:
-                _phrase_map = {}
-                for _theme in _active_selected_themes:
-                    for _pi, _phrase in enumerate(
-                        st.session_state["v12_theme_pools"].get(_theme, [])[:30]
-                    ):
-                        _phrase_map[f"{_theme}\x1f{_pi}"] = _phrase
-                _final_phrases = [
-                    _phrase_map[_ref] for _ref in _final_new if _ref in _phrase_map
-                ]
-                if len(_final_phrases) == 8:
-                    set_texts(_final_phrases)
-                    st.session_state["v12_ai_copy_last_applied"] = True
-                    # 01～08 是另一個局部區塊；套用完成時才需要更新整頁。
-                    st.rerun()
+            on_click=_v12_apply_theme_phrases_callback,
+            args=(_active_selected_themes, _final_new),
+        )
 
     if st.session_state.get("v12_ai_copy_last_applied", False):
         st.caption(t("ai_applied_edit"))
@@ -8907,6 +8943,197 @@ def _v12_clear_style_reference():
     )
 
 
+def _v12_set_session_state_callback(key, value):
+    """Update a simple UI state before Streamlit's one automatic rerun."""
+    st.session_state[key] = value
+
+
+def _v12_navigate_callback(
+    view=None,
+    library_section=None,
+    marketplace_shelf=None,
+    scroll_target=None,
+    preserve_creation=False,
+):
+    """Navigate from a button without adding a second manual rerun.
+
+    Streamlit already reruns once after every widget click.  Navigation used to
+    call ``st.rerun()`` inside that run so the page visibly loaded twice.  A
+    callback runs before the automatic rerun, letting the next render start in
+    the requested location immediately.
+    """
+    if preserve_creation:
+        _v12_preserve_creation_draft_for_navigation()
+        _public02a_sync_style_bank_from_widgets()
+        _save_v10_presets()
+    if view is not None:
+        st.session_state["v12_view"] = view
+    if library_section is not None:
+        st.session_state["v12_library_section"] = library_section
+    if marketplace_shelf is not None:
+        st.session_state["v12_marketplace_shelf"] = marketplace_shelf
+    if scroll_target is not None:
+        st.session_state["v12_scroll_target"] = scroll_target
+
+
+def _v12_select_purchase_product_callback(product_code):
+    """Choose a plan before the click's single normal Streamlit rerun."""
+    st.session_state["v12_pending_purchase_product"] = product_code
+
+
+def _v12_load_workspace_project_callback(project):
+    """Restore a browser-only project before its single navigation rerun."""
+    _v12_load_history_record(project)
+    st.session_state["v12_view"] = "create"
+
+
+def _v12_delete_workspace_project_callback(project_id):
+    """Delete a browser-only project before the click's normal rerun."""
+    _v12_delete_history_record(project_id)
+
+
+def _v12_load_cloud_project_callback(session, cloud_project):
+    """Load a cloud project before Streamlit's normal single rerun."""
+    try:
+        record = _beta_load_library_project_record(session, cloud_project)
+        _v12_load_history_record(record)
+        st.session_state["v12_view"] = "create"
+    except Exception:
+        st.session_state["v12_cloud_project_action_error"] = "load"
+
+
+def _v12_delete_cloud_project_callback(session, cloud_id, confirmation_key):
+    """Delete a cloud project before Streamlit's normal single rerun."""
+    if not bool(st.session_state.get(confirmation_key, False)):
+        st.session_state["v12_cloud_project_action_error"] = "confirmation"
+        return
+    try:
+        _beta_delete_library_project(session, cloud_id)
+        st.session_state["v12_cloud_project_action_feedback"] = "deleted"
+    except Exception:
+        st.session_state["v12_cloud_project_action_error"] = "delete"
+
+
+def _v12_save_style_editor_callback():
+    """Save a custom style before the form's one normal submission rerun."""
+    try:
+        slot = int(st.session_state.get("v12_style_editor_slot", 1))
+    except Exception:
+        slot = 1
+    slot = max(1, min(10, slot))
+    name = (
+        str(st.session_state.get("v12_style_editor_name", "") or "").strip()
+        or f"使用者自定{slot}"
+    )
+    _v12_save_style_editor()
+    st.session_state["v12_pending_saved_custom_style_choice"] = f"{slot:02d}｜{name}"
+    st.session_state["v12_show_saved_style_notice"] = True
+
+
+def _v12_clear_style_editor_callback():
+    """Clear a custom style before the form's one normal submission rerun."""
+    try:
+        slot = int(st.session_state.get("v12_style_editor_slot", 1))
+    except Exception:
+        slot = 1
+    bank = _public02a_get_style_bank()
+    bank[str(slot)] = {"name": f"使用者自定{slot}", "prompt": ""}
+    _public02a_set_style_bank(bank)
+    _save_v10_presets()
+    st.session_state["v12_style_editor_clear_pending"] = True
+
+
+def _v12_add_custom_phrase_callback():
+    """Save one custom phrase before the widget's single normal rerun."""
+    phrase = str(st.session_state.get("v10_new_phrase", "") or "").strip()
+    if not phrase:
+        st.session_state["v12_random_phrase_feedback"] = "empty"
+        return
+    V10_CUSTOM_PHRASE_POOL.append(phrase)
+    V10_CUSTOM_PHRASE_POOL[:] = list(dict.fromkeys(V10_CUSTOM_PHRASE_POOL))
+    st.session_state["v12_random_phrase_feedback"] = (
+        "saved" if _save_v10_phrase_pool(V10_CUSTOM_PHRASE_POOL) else "save_failed"
+    )
+
+
+def _v12_clear_custom_phrase_callback():
+    """Clear the custom phrase pool before the click's one normal rerun."""
+    V10_CUSTOM_PHRASE_POOL.clear()
+    st.session_state["v12_random_phrase_feedback"] = (
+        "cleared" if _save_v10_phrase_pool(V10_CUSTOM_PHRASE_POOL) else "save_failed"
+    )
+
+
+def _v12_apply_phrase_set_callback(phrases):
+    """Put selected phrases into the eight text slots before they render."""
+    values = list(phrases or [])[:8]
+    if not values:
+        st.session_state["v12_random_phrase_feedback"] = "pool_empty"
+        return
+    while len(values) < 8:
+        values.append(random.choice(values))
+    random.shuffle(values)
+    set_texts(values)
+    st.session_state["v12_random_phrase_feedback"] = "applied"
+
+
+def _v12_insert_phrase_callback(phrase, target_slot):
+    """Insert one phrase before text-slot widgets render on the normal rerun."""
+    target = max(1, min(8, int(target_slot or 1))) - 1
+    set_texts(
+        [
+            phrase if index == target else st.session_state.get(f"sticker_text_{index}", "")
+            for index in range(8)
+        ]
+    )
+    st.session_state["v12_random_phrase_feedback"] = "applied"
+
+
+def _v12_delete_theme_pool_items_callback(theme, pool, indexes):
+    """Remove chosen AI-theme phrases before the fragment's normal rerun."""
+    index_set = {int(index) for index in (indexes or [])}
+    st.session_state["v12_theme_pools"][theme] = [
+        item for index, item in enumerate(pool or []) if index not in index_set
+    ]
+    st.session_state["v12_ai_theme_feedback"] = f"deleted:{len(index_set)}"
+
+
+def _v12_apply_theme_phrases_callback(themes, refs):
+    """Apply eight checked AI-theme phrases before text fields render."""
+    refs = list(refs or [])
+    if len(refs) != 8:
+        st.session_state["v12_ai_theme_feedback"] = "need_eight"
+        return
+    phrase_map = {}
+    for theme in themes or []:
+        for index, phrase in enumerate(
+            st.session_state["v12_theme_pools"].get(theme, [])[:30]
+        ):
+            phrase_map[f"{theme}\x1f{index}"] = phrase
+    phrases = [phrase_map[ref] for ref in refs if ref in phrase_map]
+    if len(phrases) != 8:
+        st.session_state["v12_ai_theme_feedback"] = "need_eight"
+        return
+    set_texts(phrases)
+    st.session_state["v12_ai_copy_last_applied"] = True
+    st.session_state["v12_ai_theme_feedback"] = "applied"
+
+
+def _v12_retry_creator_reel_callback():
+    """Retry reel saving before Streamlit's normal one-click rerun."""
+    try:
+        session = _beta_current_user() if _beta_config() else None
+        if not session:
+            raise RuntimeError("creator_reel_not_authenticated")
+        _v12_save_current_creator_reel(session)
+    except Exception as exc:
+        st.session_state["v12_creator_reel_generation_feedback"] = {
+            "saved": False,
+            "reason": "save_retry",
+            "diagnostic": str(exc or "creator_reel_save_failed")[:100],
+        }
+
+
 def _v12_render_pricing_page():
     """Render the public-ready plan selection screen before ECPay checkout goes live."""
     products = [
@@ -9012,15 +9239,15 @@ def _v12_render_pricing_page():
                 """,
                 unsafe_allow_html=True,
             )
-            if st.button(
+            st.button(
                 "✓ " + t("pricing_current") if is_selected else product["button"],
                 key=f"v12_select_product_{product['code']}",
                 type="primary" if product.get("recommended") else "secondary",
                 use_container_width=True,
                 disabled=is_current,
-            ):
-                st.session_state["v12_pending_purchase_product"] = product["code"]
-                st.rerun()
+                on_click=_v12_select_purchase_product_callback,
+                args=(product["code"],),
+            )
 
     chosen = next((item for item in products if item["code"] == selected_code), None)
     if chosen:
@@ -9037,9 +9264,14 @@ def _v12_render_pricing_page():
             )
         else:
             st.warning(t("pricing_signin_notice"))
-            if st.button(t("pricing_signin"), key="v12_pricing_go_login", type="primary", use_container_width=True):
-                st.session_state["v12_view"] = "create"
-                st.rerun()
+            st.button(
+                t("pricing_signin"),
+                key="v12_pricing_go_login",
+                type="primary",
+                use_container_width=True,
+                on_click=_v12_navigate_callback,
+                kwargs={"view": "create"},
+            )
         st.markdown("</div>", unsafe_allow_html=True)
 
     with st.container(key="v12_pricing_rules_guide"):
@@ -9134,9 +9366,13 @@ with _v12_nav_cols[0]:
     # V12 微調：創作頁上方改為「聯繫作者」；其他頁面保留「開始製作」。
     _v12_current_view = st.session_state.get("v12_view", "create")
     if _v12_current_view in {"library", "pricing", "marketplace"}:
-        if st.button(t("nav_create"), key="v12_nav_create", use_container_width=True):
-            st.session_state["v12_view"] = "create"
-            st.rerun()
+        st.button(
+            t("nav_create"),
+            key="v12_nav_create",
+            use_container_width=True,
+            on_click=_v12_navigate_callback,
+            kwargs={"view": "create"},
+        )
     else:
         st.link_button(
             t("nav_contact"),
@@ -9144,50 +9380,55 @@ with _v12_nav_cols[0]:
             use_container_width=True,
         )
 with _v12_nav_cols[1]:
-    if st.button(t("nav_pricing"), key="v12_nav_pricing", use_container_width=True):
-        _v12_preserve_creation_draft_for_navigation()
-        _public02a_sync_style_bank_from_widgets()
-        _save_v10_presets()
-        st.session_state["v12_view"] = "pricing"
-        st.rerun()
+    st.button(
+        t("nav_pricing"),
+        key="v12_nav_pricing",
+        use_container_width=True,
+        on_click=_v12_navigate_callback,
+        kwargs={"view": "pricing", "preserve_creation": True},
+    )
 with _v12_nav_cols[2]:
-    if st.button(t("nav_library"), key="v12_nav_library", use_container_width=True):
-        # FIX11: leave-create navigation explicitly commits the dedicated style bank
-        # before conditional editor widgets disappear.
-        _v12_preserve_creation_draft_for_navigation()
-        _public02a_sync_style_bank_from_widgets()
-        _save_v10_presets()
-        # 「我的作品」主入口永遠回到作品首頁，避免沿用上次的膠捲／雲端分頁。
-        st.session_state["v12_library_section"] = "home"
-        st.session_state["v12_view"] = "library"
-        st.rerun()
+    st.button(
+        t("nav_library"),
+        key="v12_nav_library",
+        use_container_width=True,
+        on_click=_v12_navigate_callback,
+        kwargs={
+            "view": "library",
+            "library_section": "home",
+            "preserve_creation": True,
+        },
+    )
 
 # This is a real Streamlit button, visually placed in the expanded floating
 # menu so it follows the exact same in-page navigation as "My Works" above.
-if st.button(t("quick_nav_library_button"), key="v12_quick_library"):
-    _v12_preserve_creation_draft_for_navigation()
-    _public02a_sync_style_bank_from_widgets()
-    _save_v10_presets()
-    st.session_state["v12_library_section"] = "home"
-    st.session_state["v12_view"] = "library"
-    st.rerun()
+st.button(
+    t("quick_nav_library_button"),
+    key="v12_quick_library",
+    on_click=_v12_navigate_callback,
+    kwargs={"view": "library", "library_section": "home", "preserve_creation": True},
+)
 
 if st.session_state.get("v12_view") == "library":
     for _v12_step_number, _v12_step_key in enumerate(
         ("quick_nav_01", "quick_nav_02", "quick_nav_03", "quick_nav_04", "quick_nav_05", "quick_nav_06", "quick_nav_07", "quick_nav_08"),
         start=1,
     ):
-        if st.button(
+        st.button(
             f"{t(_v12_step_key)}\n{_v12_step_number:02d}",
             key=f"v12_quick_step_{_v12_step_number:02d}",
-        ):
-            st.session_state["v12_view"] = "create"
-            st.session_state["v12_scroll_target"] = f"v12-step-{_v12_step_number:02d}"
-            st.rerun()
-    if st.button("暫存\n區", key="v12_quick_basket"):
-        st.session_state["v12_view"] = "create"
-        st.session_state["v12_scroll_target"] = "v12-sticker-basket"
-        st.rerun()
+            on_click=_v12_navigate_callback,
+            kwargs={
+                "view": "create",
+                "scroll_target": f"v12-step-{_v12_step_number:02d}",
+            },
+        )
+    st.button(
+        "暫存\n區",
+        key="v12_quick_basket",
+        on_click=_v12_navigate_callback,
+        kwargs={"view": "create", "scroll_target": "v12-sticker-basket"},
+    )
 
 st.session_state.setdefault("v12_view", "create")
 
@@ -9241,9 +9482,12 @@ if st.session_state["v12_view"] == "marketplace":
     else:
         st.markdown(f'<div class="v10-main-title">{t("shared_template_market_title")}</div>', unsafe_allow_html=True)
         st.warning(t("shared_template_market_login_required"))
-        if st.button(t("shared_template_back_library"), key="v12_shared_template_login_back"):
-            st.session_state["v12_view"] = "library"
-            st.rerun()
+        st.button(
+            t("shared_template_back_library"),
+            key="v12_shared_template_login_back",
+            on_click=_v12_navigate_callback,
+            kwargs={"view": "library"},
+        )
     st.stop()
 
 
@@ -9320,14 +9564,21 @@ def _v12_render_browser_workspace_projects():
                         key=f"v12_redownload_{project_id}",
                     )
             with act2:
-                if st.button("↩️ 載回創作頁", key=f"v12_load_{project_id}", use_container_width=True):
-                    _v12_load_history_record(project)
-                    st.session_state["v12_view"] = "create"
-                    st.rerun()
+                st.button(
+                    "↩️ 載回創作頁",
+                    key=f"v12_load_{project_id}",
+                    use_container_width=True,
+                    on_click=_v12_load_workspace_project_callback,
+                    args=(project,),
+                )
             with act3:
-                if st.button("🗑️ 刪除", key=f"v12_delete_{project_id}", use_container_width=True):
-                    _v12_delete_history_record(project_id)
-                    st.rerun()
+                st.button(
+                    "🗑️ 刪除",
+                    key=f"v12_delete_{project_id}",
+                    use_container_width=True,
+                    on_click=_v12_delete_workspace_project_callback,
+                    args=(project_id,),
+                )
 
             with st.expander("🔍 查看這組作品詳細設定", expanded=False):
                 st.write(f"**作品名稱：** {project_name}")
@@ -9351,15 +9602,14 @@ if st.session_state["v12_view"] == "library":
 
     _market_spacer_left, _market_button_col, _market_spacer_right = st.columns([1, 2, 1])
     with _market_button_col:
-        if st.button(
+        st.button(
             t("shared_template_market_nav"),
             key="v12_shared_template_market_nav",
             type="primary",
             use_container_width=True,
-        ):
-            st.session_state["v12_marketplace_shelf"] = "market"
-            st.session_state["v12_view"] = "marketplace"
-            st.rerun()
+            on_click=_v12_navigate_callback,
+            kwargs={"view": "marketplace", "marketplace_shelf": "market"},
+        )
 
     st.session_state.setdefault("v12_library_section", "home")
     _library_section = str(st.session_state.get("v12_library_section", "home") or "home")
@@ -9367,23 +9617,23 @@ if st.session_state["v12_view"] == "library":
         st.markdown("#### 選擇要查看的作品")
         _library_reels_col, _library_cloud_col = st.columns(2)
         with _library_reels_col:
-            if st.button(
+            st.button(
                 "🎞️ 創作膠卷",
                 key="v12_library_open_reels",
                 type="primary",
                 use_container_width=True,
-            ):
-                st.session_state["v12_library_section"] = "reels"
-                st.rerun()
+                on_click=_v12_set_session_state_callback,
+                args=("v12_library_section", "reels"),
+            )
         with _library_cloud_col:
-            if st.button(
+            st.button(
                 "☁️ 雲端作品",
                 key="v12_library_open_cloud",
                 type="primary",
                 use_container_width=True,
-            ):
-                st.session_state["v12_library_section"] = "cloud"
-                st.rerun()
+                on_click=_v12_set_session_state_callback,
+                args=("v12_library_section", "cloud"),
+            )
         st.markdown(
             """
             <section class="v12-reel-rules">
@@ -9446,9 +9696,12 @@ if st.session_state["v12_view"] == "library":
         st.stop()
 
     if _library_section == "reels":
-        if st.button("← 返回上一頁", key="v12_library_reels_back"):
-            st.session_state["v12_library_section"] = "home"
-            st.rerun()
+        st.button(
+            "← 返回上一頁",
+            key="v12_library_reels_back",
+            on_click=_v12_set_session_state_callback,
+            args=("v12_library_section", "home"),
+        )
 
         st.session_state.setdefault("v12_creator_reel_shelf", "active")
         _reel_shelf = str(st.session_state.get("v12_creator_reel_shelf", "active") or "active")
@@ -9459,9 +9712,12 @@ if st.session_state["v12_view"] == "library":
             st.info(t("cloud_login"))
         st.stop()
 
-    if st.button("← 返回上一頁", key="v12_library_cloud_back"):
-        st.session_state["v12_library_section"] = "home"
-        st.rerun()
+    st.button(
+        "← 返回上一頁",
+        key="v12_library_cloud_back",
+        on_click=_v12_set_session_state_callback,
+        args=("v12_library_section", "home"),
+    )
 
     _v12_render_browser_workspace_projects()
     st.divider()
@@ -9469,6 +9725,20 @@ if st.session_state["v12_view"] == "library":
 
     _cloud_session = _beta_current_user() if _beta_config() else None
     if _cloud_session:
+        _cloud_action_feedback = st.session_state.pop(
+            "v12_cloud_project_action_feedback", ""
+        )
+        _cloud_action_error = st.session_state.pop(
+            "v12_cloud_project_action_error", ""
+        )
+        if _cloud_action_feedback == "deleted":
+            st.success("雲端作品已刪除。")
+        elif _cloud_action_error == "confirmation":
+            st.warning(t("delete_confirm_first"))
+        elif _cloud_action_error == "load":
+            st.error("作品暫時無法載回，請稍後再試。")
+        elif _cloud_action_error == "delete":
+            st.error(t("delete_failed"))
         try:
             _cloud_status = _beta_library_status(_cloud_session)
             st.info(t("cloud_library_status", count=_cloud_status["saved_count"], limit=_cloud_status["library_capacity"]))
@@ -9546,53 +9816,52 @@ if st.session_state["v12_view"] == "library":
                     st.caption(t("cloud_assets_note"))
                     _cloud_act1, _cloud_act2 = st.columns(2)
                     with _cloud_act1:
-                        if st.button(t("return_create"), key=f"cloud_load_{_cloud_id}", use_container_width=True):
-                            try:
-                                _cloud_record = _beta_load_library_project_record(
-                                    _cloud_session, _cloud_project
-                                )
-                                _v12_load_history_record(_cloud_record)
-                                st.session_state["v12_view"] = "create"
-                                st.rerun()
-                            except Exception:
-                                st.error("作品暫時無法載回，請稍後再試。")
+                        st.button(
+                            t("return_create"),
+                            key=f"cloud_load_{_cloud_id}",
+                            use_container_width=True,
+                            on_click=_v12_load_cloud_project_callback,
+                            args=(_cloud_session, _cloud_project),
+                        )
                     with _cloud_act2:
                         _delete_ack = st.checkbox(
                             t("confirm_delete"),
                             key=f"cloud_delete_ack_{_cloud_id}",
                         )
-                        if st.button(t("delete_cloud"), key=f"cloud_delete_{_cloud_id}", use_container_width=True):
-                            if not _delete_ack:
-                                st.warning(t("delete_confirm_first"))
-                            else:
-                                try:
-                                    _beta_delete_library_project(_cloud_session, _cloud_id)
-                                    st.rerun()
-                                except Exception:
-                                    st.error(t("delete_failed"))
+                        st.button(
+                            t("delete_cloud"),
+                            key=f"cloud_delete_{_cloud_id}",
+                            use_container_width=True,
+                            on_click=_v12_delete_cloud_project_callback,
+                            args=(
+                                _cloud_session,
+                                _cloud_id,
+                                f"cloud_delete_ack_{_cloud_id}",
+                            ),
+                        )
                 st.divider()
             if _cloud_total_pages > 1:
                 _cloud_previous, _cloud_page_label, _cloud_next = st.columns([1, 1.35, 1])
                 with _cloud_previous:
-                    if st.button(
+                    st.button(
                         "← 上一頁",
                         key="v12_cloud_project_previous",
                         disabled=_cloud_page_number <= 0,
                         use_container_width=True,
-                    ):
-                        st.session_state[_cloud_page_key] = _cloud_page_number - 1
-                        st.rerun()
+                        on_click=_v12_set_session_state_callback,
+                        args=(_cloud_page_key, _cloud_page_number - 1),
+                    )
                 with _cloud_page_label:
                     st.caption(f"第 {_cloud_page_number + 1}／{_cloud_total_pages} 頁")
                 with _cloud_next:
-                    if st.button(
+                    st.button(
                         "下一頁 →",
                         key="v12_cloud_project_next",
                         disabled=_cloud_page_number >= _cloud_total_pages - 1,
                         use_container_width=True,
-                    ):
-                        st.session_state[_cloud_page_key] = _cloud_page_number + 1
-                        st.rerun()
+                        on_click=_v12_set_session_state_callback,
+                        args=(_cloud_page_key, _cloud_page_number + 1),
+                    )
         else:
             st.caption(t("cloud_empty"))
     else:
@@ -9914,8 +10183,6 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 key="v12_style_editor_slot",
                 on_change=_v12_load_style_editor_from_slot,
             )
-            _save_style_editor = False
-            _clear_style_editor = False
             if _editor_slot == 0:
                 st.info("👆 請先從上方選單點選 01～10 的一組風格，才會載入可編輯的內容。")
             else:
@@ -9924,36 +10191,17 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                     st.text_area("🎨 自定義風格 Prompt", key="v12_style_editor_prompt", height=180, placeholder="在這裡輸入完整的風格 Prompt…")
                     _ea, _eb = st.columns(2)
                     with _ea:
-                        _save_style_editor = st.form_submit_button("💾 儲存此風格", use_container_width=True)
+                        st.form_submit_button(
+                            "💾 儲存此風格",
+                            use_container_width=True,
+                            on_click=_v12_save_style_editor_callback,
+                        )
                     with _eb:
-                        _clear_style_editor = st.form_submit_button("🧹 清空此風格", use_container_width=True)
-            if _save_style_editor:
-                try:
-                    _saved_slot = int(st.session_state.get("v12_style_editor_slot", 1))
-                except Exception:
-                    _saved_slot = 1
-                _saved_slot = max(1, min(10, _saved_slot))
-                _saved_name = (
-                    str(st.session_state.get("v12_style_editor_name", "") or "").strip()
-                    or f"使用者自定{_saved_slot}"
-                )
-                _v12_save_style_editor()
-                st.session_state["v12_pending_saved_custom_style_choice"] = (
-                    f"{_saved_slot:02d}｜{_saved_name}"
-                )
-                st.session_state["v12_show_saved_style_notice"] = True
-                st.rerun()
-            if _clear_style_editor:
-                try:
-                    _slot = int(st.session_state.get("v12_style_editor_slot", 1))
-                except Exception:
-                    _slot = 1
-                _bank = _public02a_get_style_bank()
-                _bank[str(_slot)] = {"name": f"使用者自定{_slot}", "prompt": ""}
-                _public02a_set_style_bank(_bank)
-                _save_v10_presets()
-                st.session_state["v12_style_editor_clear_pending"] = True
-                st.rerun()
+                        st.form_submit_button(
+                            "🧹 清空此風格",
+                            use_container_width=True,
+                            on_click=_v12_clear_style_editor_callback,
+                        )
         st.warning("ℹ️ 目前只使用「自定義風格」，不會同時套用其他預設風格。")
     else:
         style = style_mode
@@ -9994,13 +10242,12 @@ else:
             )
         st.success(t("style_reference_enabled"))
         st.info(t("style_identity_priority"))
-        if st.button(
+        st.button(
             "🗑️ 清除這張畫風參考",
             key="v12_clear_style_reference",
             help="明確移除目前畫風參考圖。",
-        ):
-            _v12_clear_style_reference()
-            st.rerun()
+            on_click=_v12_clear_style_reference,
+        )
         st.caption(t("style_settings_caption"))
         _normalized_style_strength = _v12_normalize_style_reference_strength(
             st.session_state.get("v12_style_reference_strength")
@@ -10556,6 +10803,17 @@ def _v12_render_random_phrase_panel():
     _pool_placeholder = "↓ 請選擇語詞池"
     _custom_pool = "⭐ 我的自定義語詞池"
     _all_builtin_pool = "全部內建語詞"
+    _random_feedback = str(st.session_state.pop("v12_random_phrase_feedback", "") or "")
+    if _random_feedback == "saved":
+        st.success(t("random_saved"))
+    elif _random_feedback == "cleared":
+        st.success(t("random_cleared"))
+    elif _random_feedback == "save_failed":
+        st.error(t("random_save_failed"))
+    elif _random_feedback == "pool_empty":
+        st.warning(t("random_custom_empty"))
+    elif _random_feedback == "applied":
+        st.success(t("ai_applied_edit"))
     _pool_choice=st.selectbox(
         t("random_pool"),
         [_pool_placeholder, _custom_pool, _all_builtin_pool] + _pool_names,
@@ -10576,32 +10834,27 @@ def _v12_render_random_phrase_panel():
             )
             _pa,_pb,_pc=st.columns(3)
             with _pa:
-                if st.button(t("random_add_to_pool"),key="v10_add_phrase",use_container_width=True):
-                    if _new_phrase.strip():
-                        V10_CUSTOM_PHRASE_POOL.append(_new_phrase.strip())
-                        V10_CUSTOM_PHRASE_POOL[:]=list(dict.fromkeys(V10_CUSTOM_PHRASE_POOL))
-                        if _save_v10_phrase_pool(V10_CUSTOM_PHRASE_POOL):
-                            st.success(t("random_saved"))
-                            st.rerun()
-                        else:
-                            st.error(t("random_save_failed"))
+                st.button(
+                    t("random_add_to_pool"),
+                    key="v10_add_phrase",
+                    use_container_width=True,
+                    on_click=_v12_add_custom_phrase_callback,
+                )
             with _pb:
-                if st.button(t("random_draw_eight"),key="v10_random_my_pool",use_container_width=True):
-                    if V10_CUSTOM_PHRASE_POOL:
-                        vals=random.sample(V10_CUSTOM_PHRASE_POOL,min(8,len(V10_CUSTOM_PHRASE_POOL)))
-                        while len(vals)<8:
-                            vals.append(random.choice(V10_CUSTOM_PHRASE_POOL))
-                        random.shuffle(vals)
-                        set_texts(vals)
-                        st.rerun()
-                    else:
-                        st.warning(t("random_custom_empty"))
+                st.button(
+                    t("random_draw_eight"),
+                    key="v10_random_my_pool",
+                    use_container_width=True,
+                    on_click=_v12_apply_phrase_set_callback,
+                    args=(V10_CUSTOM_PHRASE_POOL,),
+                )
             with _pc:
-                if st.button(t("random_clear"),key="v10_clear_my_pool",use_container_width=True):
-                    V10_CUSTOM_PHRASE_POOL.clear()
-                    if _save_v10_phrase_pool(V10_CUSTOM_PHRASE_POOL):
-                        st.success(t("random_cleared"))
-                        st.rerun()
+                st.button(
+                    t("random_clear"),
+                    key="v10_clear_my_pool",
+                    use_container_width=True,
+                    on_click=_v12_clear_custom_phrase_callback,
+                )
 
             if V10_CUSTOM_PHRASE_POOL:
                 st.caption(t("random_total", count=len(V10_CUSTOM_PHRASE_POOL)))
@@ -10621,14 +10874,13 @@ def _v12_render_random_phrase_panel():
 
         a,b,c=st.columns(3)
         with a:
-            if st.button(t("random_fill_eight"),use_container_width=True,key="v10_random_v8"):
-                if _active_pool:
-                    vals=random.sample(_active_pool,min(8,len(_active_pool)))
-                    while len(vals)<8:
-                        vals.append(random.choice(_active_pool))
-                    random.shuffle(vals)
-                    set_texts(vals)
-                    st.rerun()
+            st.button(
+                t("random_fill_eight"),
+                use_container_width=True,
+                key="v10_random_v8",
+                on_click=_v12_apply_phrase_set_callback,
+                args=(_active_pool,),
+            )
         with b:
             st.write(t("random_current_pool", count=len(_active_pool)))
         with c:
@@ -10643,12 +10895,12 @@ def _v12_render_random_phrase_panel():
             _common_phrase=st.selectbox(t("phrase_reference"),V8_RANDOM_POOLS.get(_common_cat,[]),key="v8_common_phrase")
         with p3:
             _target_slot=st.selectbox(t("target_slot"),[f"{i:02d}" for i in range(1,9)],key="v8_target_slot")
-        if st.button(t("insert_selected_slot"),key="v8_insert_phrase"):
-            set_texts([
-                _common_phrase if i==int(_target_slot)-1 else st.session_state.get(f"sticker_text_{i}","")
-                for i in range(8)
-            ])
-            st.rerun()
+        st.button(
+            t("insert_selected_slot"),
+            key="v8_insert_phrase",
+            on_click=_v12_insert_phrase_callback,
+            args=(_common_phrase, _target_slot),
+        )
 
 
 if _v12_step04_frontend_enabled:
@@ -10833,14 +11085,15 @@ if "v10_font_gallery_open" not in st.session_state:
 if "v12_font_gallery_page" not in st.session_state:
     st.session_state.v12_font_gallery_page = 1
 
-if _sticker_mode == "text" and st.button(
-    t("font_open_gallery") if not st.session_state.v10_font_gallery_open
-    else t("font_close_gallery"),
-    key="v10_font_gallery_toggle",
-    use_container_width=True,
-):
-    st.session_state.v10_font_gallery_open = not st.session_state.v10_font_gallery_open
-    st.rerun()
+if _sticker_mode == "text":
+    st.button(
+        t("font_open_gallery") if not st.session_state.v10_font_gallery_open
+        else t("font_close_gallery"),
+        key="v10_font_gallery_toggle",
+        use_container_width=True,
+        on_click=_v12_set_session_state_callback,
+        args=("v10_font_gallery_open", not st.session_state.v10_font_gallery_open),
+    )
 
 if _sticker_mode == "text":
     st.caption("來源出處：cz88422")
@@ -11708,28 +11961,12 @@ if st.session_state.generated_4x2_bytes:
                 ),
             )
         )
-        if st.button(
+        st.button(
             t("creator_reel_retry_button"),
             key="v12_creator_reel_retry_current_grid",
             type="primary",
-        ):
-            _retry_finished = False
-            try:
-                _retry_session = _beta_current_user() if _beta_config() else None
-                if not _retry_session:
-                    raise RuntimeError("creator_reel_not_authenticated")
-                with st.spinner(t("creator_reel_retrying")):
-                    _v12_save_current_creator_reel(_retry_session)
-                _retry_finished = True
-            except Exception as exc:
-                st.session_state["v12_creator_reel_generation_feedback"] = {
-                    "saved": False,
-                    "reason": "save_retry",
-                    "diagnostic": str(exc or "creator_reel_save_failed")[:100],
-                }
-                _retry_finished = True
-            if _retry_finished:
-                st.rerun()
+            on_click=_v12_retry_creator_reel_callback,
+        )
 
     src = Image.open(BytesIO(st.session_state.generated_4x2_bytes)).convert("RGBA")
     w, h = src.size
@@ -11939,17 +12176,14 @@ function saveBlob(blob,name){''',
     _v12_render_sticker_basket_workspace()
     _basket_library_col = st.columns([1, 2, 1])[1]
     with _basket_library_col:
-        if st.button(
+        st.button(
             t("basket_go_library"),
             key="v12_basket_library",
             type="primary",
             use_container_width=True,
-        ):
-            _v12_preserve_creation_draft_for_navigation()
-            _public02a_sync_style_bank_from_widgets()
-            _save_v10_presets()
-            st.session_state["v12_view"] = "library"
-            st.rerun()
+            on_click=_v12_navigate_callback,
+            kwargs={"view": "library", "preserve_creation": True},
+        )
 
     # 舊版 01～08 立即打包區保留在原始碼中作為回溯參考，但不再執行。
     # 新版以作品暫存區作為唯一的裁切後工作流程。
@@ -12258,17 +12492,17 @@ st.markdown("""
 st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
 _link_col = st.columns([1, 2, 1])[1]
 with _link_col:
-    if st.button(
+    st.button(
         t("nav_library"),
         key="v12_footer_library",
         use_container_width=True,
-    ):
-        _v12_preserve_creation_draft_for_navigation()
-        _public02a_sync_style_bank_from_widgets()
-        _save_v10_presets()
-        st.session_state["v12_library_section"] = "home"
-        st.session_state["v12_view"] = "library"
-        st.rerun()
+        on_click=_v12_navigate_callback,
+        kwargs={
+            "view": "library",
+            "library_section": "home",
+            "preserve_creation": True,
+        },
+    )
 
     st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
 
