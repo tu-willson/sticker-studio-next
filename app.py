@@ -6437,6 +6437,28 @@ def _v12_apply_creator_reel_snapshot(session, reel):
     }
 
 
+def _v12_apply_creator_reel_callback(session, reel):
+    """Load a collected reel before Streamlit's one automatic rerun."""
+    try:
+        _v12_apply_creator_reel_snapshot(session, reel)
+    except Exception:
+        st.session_state["v12_creator_reel_apply_error"] = True
+
+
+def _v12_set_shared_template_visibility_callback(
+    session, template_id, title, publish
+):
+    """Update publication visibility before Streamlit's one automatic rerun."""
+    try:
+        _beta_set_shared_template_visibility(session, template_id, publish=publish)
+        st.session_state["v12_shared_template_management_feedback"] = {
+            "title": title,
+            "published": bool(publish),
+        }
+    except Exception:
+        st.session_state["v12_shared_template_management_error"] = True
+
+
 def _v12_render_shared_template_manager(session):
     """Let a publisher see rewards and control marketplace visibility."""
     page_size = 4
@@ -6455,6 +6477,8 @@ def _v12_render_shared_template_manager(session):
                 ),
             )
         )
+    if st.session_state.pop("v12_shared_template_management_error", False):
+        st.error(_v12_management_t("shared_template_visibility_failed"))
     try:
         templates = _beta_list_my_shared_template_management(
             session,
@@ -6541,23 +6565,13 @@ def _v12_render_shared_template_manager(session):
                     if published
                     else "shared_template_republish_button"
                 )
-                if st.button(
+                st.button(
                     action_label,
                     key=f"v12_shared_template_visibility_{template_id}",
                     use_container_width=True,
-                ):
-                    try:
-                        with st.spinner(_v12_management_t("shared_template_visibility_saving")):
-                            _beta_set_shared_template_visibility(
-                                session, template_id, publish=not published
-                            )
-                        st.session_state["v12_shared_template_management_feedback"] = {
-                            "title": title,
-                            "published": not published,
-                        }
-                        st.rerun()
-                    except Exception:
-                        st.error(_v12_management_t("shared_template_visibility_failed"))
+                    on_click=_v12_set_shared_template_visibility_callback,
+                    args=(session, template_id, title, not published),
+                )
             st.divider()
         if total_pages > 1:
             previous_col, page_col, next_col = st.columns([1, 1.25, 1])
@@ -6599,6 +6613,8 @@ def _v12_render_creator_reels(session, shelf="active"):
         return
 
     st.markdown(f"### {t('creator_reel_title')}")
+    if st.session_state.pop("v12_creator_reel_apply_error", False):
+        st.error("這卷暫時無法載回創作頁，請稍後再試。")
     collection_feedback = st.session_state.pop(
         "v12_creator_reel_collection_feedback", None
     )
@@ -6819,17 +6835,14 @@ def _v12_render_creator_reels(session, shelf="active"):
                     ):
                         st.session_state["v12_creator_reel_rename_open"] = reel_id
                         st.session_state[rename_key] = source_name
-                    if st.button(
+                    st.button(
                         "🔵 套用模板",
                         key=f"v12_creator_reel_apply_{reel_id}",
                         type="primary",
                         use_container_width=True,
-                    ):
-                        try:
-                            _v12_apply_creator_reel_snapshot(session, reel)
-                            st.rerun()
-                        except Exception:
-                            st.error("這卷暫時無法載回創作頁，請稍後再試。")
+                        on_click=_v12_apply_creator_reel_callback,
+                        args=(session, reel),
+                    )
 
             rename_key = f"v12_creator_reel_rename_draft_{reel_id}"
             if (
