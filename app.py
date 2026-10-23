@@ -5644,19 +5644,81 @@ def _v12_has_custom_style_snapshot(value):
     )
 
 
+def _v12_normalize_custom_style_snapshot(
+    value, *, style_mode="", style_name="", fallback=None
+):
+    """Read both current and legacy custom-style snapshot shapes safely.
+
+    Earlier reels/templates did not always store the prompt under the current
+    ``{name, prompt}`` object.  A string prompt, or a nested legacy object,
+    should remain usable when a member redeems an older template.  This helper
+    deliberately returns only a compact, photo-free style contract.
+    """
+    candidates = [value, fallback]
+    raw = {}
+    prompt = ""
+    for candidate in candidates:
+        if isinstance(candidate, dict):
+            raw = candidate
+            for key in (
+                "prompt", "custom_prompt", "style_prompt", "custom_style_prompt",
+            ):
+                prompt = str(candidate.get(key, "") or "").strip()
+                if prompt:
+                    break
+            if not prompt:
+                for key in (
+                    "custom_snapshot", "custom_style_snapshot", "custom_style",
+                    "style_custom",
+                ):
+                    nested = candidate.get(key)
+                    if nested is candidate:
+                        continue
+                    nested_snapshot = _v12_normalize_custom_style_snapshot(
+                        nested,
+                        style_mode=style_mode,
+                        style_name=style_name,
+                    )
+                    if _v12_has_custom_style_snapshot(nested_snapshot):
+                        return nested_snapshot
+            if prompt:
+                break
+        elif isinstance(candidate, str) and candidate.strip():
+            prompt = candidate.strip()
+            raw = {}
+            break
+
+    return {
+        "mode": str(raw.get("mode", style_mode) or style_mode or ""),
+        "name": str(
+            raw.get("name", raw.get("style_name", style_name))
+            or style_name
+            or ""
+        ).strip()[:120],
+        "prompt": prompt[:12000],
+        "source": str(raw.get("source", "") or "")[:40],
+    }
+
+
 def _v12_template_transfer_contract(snapshot):
     """Create the explicit, photo-free settings contract for a template."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
+    style_mode = str(snapshot.get("style_mode", "") or "")
     return {
-        "style_mode": str(snapshot.get("style_mode", "") or ""),
+        "style_mode": style_mode,
         "character_features": copy.deepcopy(
             snapshot.get("character_features", []) or []
         ),
         "custom_character": str(snapshot.get("custom_character", "") or ""),
         "text_style": str(snapshot.get("text_style", "") or ""),
         "font_name": str(snapshot.get("font_name", "") or ""),
-        "custom_style_snapshot": copy.deepcopy(
-            snapshot.get("custom_style_snapshot", {}) or {}
+        "custom_style_snapshot": _v12_normalize_custom_style_snapshot(
+            snapshot.get("custom_style_snapshot", {}),
+            style_mode=style_mode,
+            style_name=str(snapshot.get("style_name", "") or ""),
+            fallback=snapshot.get("creative_settings", {}).get("style", {})
+            if isinstance(snapshot.get("creative_settings"), dict)
+            else None,
         ),
         "transparent_background": bool(
             snapshot.get("transparent_background", False)
@@ -5771,15 +5833,29 @@ def _v12_normalize_project_metadata(metadata):
     # value hide a real setting preserved in the nested contract.
     style_mode = str(data.get("style_mode") or style.get("mode", "") or "")
     raw_custom_style = (
-        data.get("custom_style_snapshot") or style.get("custom_snapshot", {})
+        data.get("custom_style_snapshot")
+        or data.get("custom_style")
+        or style.get("custom_snapshot", {})
     )
-    custom_style_snapshot = dict(raw_custom_style) if isinstance(raw_custom_style, dict) else {}
-    custom_style_snapshot = {
-        "mode": str(custom_style_snapshot.get("mode", style_mode) or ""),
-        "name": str(custom_style_snapshot.get("name", "") or "")[:120],
-        "prompt": str(custom_style_snapshot.get("prompt", "") or "")[:12000],
-        "source": str(custom_style_snapshot.get("source", "") or "")[:40],
-    }
+    custom_style_snapshot = _v12_normalize_custom_style_snapshot(
+        raw_custom_style,
+        style_mode=style_mode,
+        style_name=str(data.get("style_name") or style.get("name", "") or ""),
+        # Some early snapshots placed the prompt alongside the style metadata
+        # instead of inside ``custom_style_snapshot``.
+        fallback={
+            "prompt": data.get("custom_style_prompt")
+            or data.get("style_prompt")
+            or "",
+            "name": data.get("custom_style_name")
+            or data.get("style_name")
+            or style.get("name", ""),
+            "mode": style_mode,
+        },
+    )
+    if _v12_has_custom_style_snapshot(custom_style_snapshot):
+        style_mode = V8_STYLE_CUSTOM_OPTION
+        custom_style_snapshot["mode"] = V8_STYLE_CUSTOM_OPTION
     character_features = _v12_clean_character_features(
         data.get("character_features") or creative.get("character_features", [])
     )
@@ -7678,8 +7754,17 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         metadata.get("custom_character", "") or ""
     ).strip()[:2000]
     metadata["custom_character_enabled"] = bool(metadata["custom_character"])
-    custom_style_snapshot = metadata.get("custom_style_snapshot")
-    if isinstance(custom_style_snapshot, dict):
+    custom_style_snapshot = _v12_normalize_custom_style_snapshot(
+        metadata.get("custom_style_snapshot"),
+        style_mode=str(metadata.get("style_mode", "") or ""),
+        style_name=str(metadata.get("style_name", "") or ""),
+        fallback=(
+            metadata.get("creative_settings", {}).get("style", {})
+            if isinstance(metadata.get("creative_settings"), dict)
+            else metadata
+        ),
+    )
+    if _v12_has_custom_style_snapshot(custom_style_snapshot):
         # 保持為模板獨立快照，不能寫入或覆蓋套用者自己的 01～10 風格庫。
         metadata["custom_style_snapshot"] = {
             **custom_style_snapshot,
@@ -7688,8 +7773,7 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         # The snapshot's mode is authoritative.  This also repairs published
         # templates from before ``style_mode`` was included in the dedicated
         # transfer contract.
-        if _v12_has_custom_style_snapshot(custom_style_snapshot):
-            metadata["style_mode"] = V8_STYLE_CUSTOM_OPTION
+        metadata["style_mode"] = V8_STYLE_CUSTOM_OPTION
     metadata["project_id"] = str(uuid4())
     metadata["project_name"] = _v12_normalize_project_name(
         f"模板｜{str(title or '').strip()}"
@@ -7725,6 +7809,15 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         ),
         v12_style_reference_custom_elements=st.session_state.get(
             "v12_style_reference_custom_elements"
+        ),
+        v12_loaded_project_custom_style=st.session_state.get(
+            "v12_loaded_project_custom_style"
+        ),
+        v12_applied_template_style_name=st.session_state.get(
+            "v12_applied_template_style_name"
+        ),
+        v12_applied_template_style_prompt=st.session_state.get(
+            "v12_applied_template_style_prompt"
         ),
         v10_character_options=list(
             st.session_state.get("v10_character_options", []) or []
@@ -8156,6 +8249,12 @@ _V12_CREATION_DRAFT_KEYS = (
     "v12_style_reference_fingerprint",
     "v12_style_reference_strength",
     "v12_style_reference_custom_elements",
+    # A redeemed template's custom prompt is intentionally separate from the
+    # member's 01–10 library, but it still must survive the marketplace →
+    # creation-page rerun that rebuilds conditional widgets.
+    "v12_loaded_project_custom_style",
+    "v12_applied_template_style_name",
+    "v12_applied_template_style_prompt",
     "v10_character_options",
     "v10_character_custom_1",
     "v10_character_enabled_1",
@@ -10951,6 +11050,15 @@ _v12_update_navigation_safe_creation_draft(
     v12_style_reference_fingerprint=st.session_state.get("v12_style_reference_fingerprint"),
     v12_style_reference_strength=st.session_state.get("v12_style_reference_strength"),
     v12_style_reference_custom_elements=st.session_state.get("v12_style_reference_custom_elements"),
+    v12_loaded_project_custom_style=st.session_state.get(
+        "v12_loaded_project_custom_style"
+    ),
+    v12_applied_template_style_name=st.session_state.get(
+        "v12_applied_template_style_name"
+    ),
+    v12_applied_template_style_prompt=st.session_state.get(
+        "v12_applied_template_style_prompt"
+    ),
 )
 
 v10_section(t("section_features"), "#2ecc71")
