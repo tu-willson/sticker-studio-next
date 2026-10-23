@@ -3098,8 +3098,24 @@ def _v12_collect_creator_reel_callback(session, reel_id):
 
 def _v12_publish_creator_reel_callback(session, reel, publish_limit):
     """Publish a reel before the form's single automatic submission rerun."""
-    reel_id = str((reel or {}).get("reel_id", "") or "")
-    title = str(st.session_state.get(f"v12_shared_template_title_{reel_id}", "") or "")
+    # The reel-list RPC exposes the primary key as ``id``.  Older payloads
+    # used ``reel_id``; accept both, otherwise this callback reads a blank
+    # form key and falsely reports that every template title is too short.
+    reel_id = str(
+        (reel or {}).get("id") or (reel or {}).get("reel_id") or ""
+    )
+    snapshot = (reel or {}).get("snapshot") or {}
+    snapshot = snapshot if isinstance(snapshot, dict) else {}
+    source_name = str((reel or {}).get("source_project_name", "") or "").strip()
+    if not source_name:
+        source_name = str(snapshot.get("project_name", "") or "").strip()
+    fallback_title = source_name or t("untitled_project")
+    # Forms can retain an old blank widget value after a reel was renamed or
+    # after the collection list rerendered.  Treat the visible source title as
+    # the safe fallback so a user is never blocked by an invisible empty field.
+    title = str(
+        st.session_state.get(f"v12_shared_template_title_{reel_id}", "") or ""
+    ).strip() or fallback_title
     description = str(
         st.session_state.get(f"v12_shared_template_description_{reel_id}", "") or ""
     )
@@ -7213,33 +7229,7 @@ def _v12_render_creator_reels(session, shelf="active"):
     template_feedback = st.session_state.pop(
         "v12_shared_template_publish_feedback", None
     )
-    if isinstance(template_feedback, dict):
-        st.success(
-            t(
-                "shared_template_publish_success",
-                count=template_feedback.get("count", 0),
-                limit=template_feedback.get("limit", 0),
-            )
-        )
     publish_error = st.session_state.pop("v12_shared_template_publish_error", None)
-    if publish_error == "title":
-        st.warning(t("shared_template_title_required"))
-    elif publish_error == "tags":
-        st.warning(t("shared_template_tags_required"))
-    elif publish_error == "rights":
-        st.warning(t("shared_template_rights_required"))
-    elif isinstance(publish_error, dict):
-        if publish_error.get("type") == "limit":
-            st.warning(
-                t(
-                    "shared_template_publish_limit",
-                    limit=publish_error.get("limit", status["publish_template_limit"]),
-                )
-            )
-        elif publish_error.get("type") == "exists":
-            st.warning(t("shared_template_already_published"))
-        else:
-            st.error(t("shared_template_publish_failed"))
     if not status["eligible"]:
         st.info(t("creator_reel_subscription_only"))
         return
@@ -7312,6 +7302,34 @@ def _v12_render_creator_reels(session, shelf="active"):
     shelf_title = "⭐ 已收藏的膠卷" if desired_status == "collected" else "🎞️ 未收藏的膠卷"
     st.markdown(f"#### {shelf_title}")
     if desired_status == "collected":
+        # 發布成功或缺少欄位的提醒只屬於「已收藏」分頁；放在這個
+        # 標題下方，避免使用者誤以為是整個創作膠卷頁面的錯誤。
+        if isinstance(template_feedback, dict):
+            st.success(
+                t(
+                    "shared_template_publish_success",
+                    count=template_feedback.get("count", 0),
+                    limit=template_feedback.get("limit", 0),
+                )
+            )
+        if publish_error == "title":
+            st.warning(t("shared_template_title_required"))
+        elif publish_error == "tags":
+            st.warning(t("shared_template_tags_required"))
+        elif publish_error == "rights":
+            st.warning(t("shared_template_rights_required"))
+        elif isinstance(publish_error, dict):
+            if publish_error.get("type") == "limit":
+                st.warning(
+                    t(
+                        "shared_template_publish_limit",
+                        limit=publish_error.get("limit", status["publish_template_limit"]),
+                    )
+                )
+            elif publish_error.get("type") == "exists":
+                st.warning(t("shared_template_already_published"))
+            else:
+                st.error(t("shared_template_publish_failed"))
         st.caption("已解鎖模板與已收藏膠捲共用數量上限。")
         st.info(
             f"已收藏+已解鎖：{status['shared_reel_count']}／"
