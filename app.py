@@ -3252,7 +3252,10 @@ def _beta_list_shared_template_marketplace(session, tags=None, search="", sort="
     response = _beta_rpc(
         "list_shared_template_marketplace",
         {
-            "p_limit": 24,
+            # The database caps this endpoint at 48.  Keeping the full
+            # discovery window here lets the UI present six consistent pages
+            # of eight cards rather than silently stopping after page three.
+            "p_limit": 48,
             "p_offset": 0,
             "p_tags": [
                 str(tag).strip() for tag in (tags or [])
@@ -8159,6 +8162,11 @@ def _v12_render_unlocked_template_shelf(session):
             )
 
 
+def _v12_reset_shared_template_marketplace_page_callback():
+    """Return marketplace browsing to page one when its filters change."""
+    st.session_state["v12_shared_template_marketplace_page"] = 0
+
+
 def _v12_render_shared_template_marketplace(session):
     """Browse public templates without exposing protected template internals."""
     st.markdown(f'<div class="v10-main-title">{t("shared_template_market_title")}</div>', unsafe_allow_html=True)
@@ -8243,6 +8251,7 @@ def _v12_render_shared_template_marketplace(session):
             t("shared_template_market_search"),
             placeholder=t("shared_template_market_search_placeholder"),
             key="v12_shared_template_market_search",
+            on_change=_v12_reset_shared_template_marketplace_page_callback,
         )
     with sort_col:
         marketplace_sort = st.selectbox(
@@ -8250,6 +8259,7 @@ def _v12_render_shared_template_marketplace(session):
             options=["newest", "popular", "low_cost", "favorites"],
             format_func=lambda value: t(f"shared_template_market_sort_{value}"),
             key="v12_shared_template_market_sort",
+            on_change=_v12_reset_shared_template_marketplace_page_callback,
         )
     marketplace_tags = st.pills(
         t("shared_template_market_filter_tags"),
@@ -8257,6 +8267,7 @@ def _v12_render_shared_template_marketplace(session):
         selection_mode="multi",
         key="v12_shared_template_market_tags",
         help=t("shared_template_market_filter_tags_help"),
+        on_change=_v12_reset_shared_template_marketplace_page_callback,
     )
     try:
         templates = _beta_list_shared_template_marketplace(
@@ -8278,6 +8289,7 @@ def _v12_render_shared_template_marketplace(session):
         )
     ]
     if not templates:
+        st.session_state["v12_shared_template_marketplace_page"] = 0
         st.info(
             t("shared_template_market_no_match")
             if marketplace_search or marketplace_tags
@@ -8285,7 +8297,21 @@ def _v12_render_shared_template_marketplace(session):
         )
         return
 
-    for template in templates:
+    # Marketplace cards are deliberately limited to eight per page.  We load
+    # the available discovery set first, then paginate *after* excluding a
+    # member's purchased cards so purchased templates never leave sparse pages
+    # behind or appear mixed into the storefront.
+    page_size = 8
+    page_key = "v12_shared_template_marketplace_page"
+    total_count = len(templates)
+    total_pages = max(1, (total_count + page_size - 1) // page_size)
+    page_number = max(0, int(st.session_state.get(page_key, 0) or 0))
+    page_number = min(page_number, total_pages - 1)
+    st.session_state[page_key] = page_number
+    page_start = page_number * page_size
+    page_templates = templates[page_start : page_start + page_size]
+
+    for template in page_templates:
         if not isinstance(template, dict) or not template.get("template_id"):
             continue
         template_id = str(template["template_id"])
@@ -8388,6 +8414,29 @@ def _v12_render_shared_template_marketplace(session):
                             session, template_id, title, button_label, button_key
                         )
         st.divider()
+
+    if total_pages > 1:
+        previous_col, page_col, next_col = st.columns([1, 1.5, 1])
+        with previous_col:
+            st.button(
+                "← 上一頁",
+                key="v12_shared_template_marketplace_previous_page",
+                disabled=page_number <= 0,
+                use_container_width=True,
+                on_click=_v12_set_session_state_callback,
+                args=(page_key, page_number - 1),
+            )
+        with page_col:
+            st.caption(f"第 {page_number + 1}／{total_pages} 頁｜每頁 {page_size} 組模板")
+        with next_col:
+            st.button(
+                "下一頁 →",
+                key="v12_shared_template_marketplace_next_page",
+                disabled=page_number >= total_pages - 1,
+                use_container_width=True,
+                on_click=_v12_set_session_state_callback,
+                args=(page_key, page_number + 1),
+            )
 
 
 for i in range(8):
