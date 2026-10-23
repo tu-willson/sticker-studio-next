@@ -1055,15 +1055,15 @@ st.markdown("""
 }
 /* 創作頁底部 LINE 官方網站捷徑：保持低干擾紫色，滑過時才加深。 */
 .st-key-v12_basket_line_creator_link a{
-  background:rgba(155,89,182,.24) !important;
-  border:1px solid rgba(202,146,237,.72) !important;
-  color:#f3e8ff !important;
+  background:#b799e4 !important;
+  border:1px solid #cbb5ef !important;
+  color:#fff !important;
   font-weight:800 !important;
   transition:background .18s ease,border-color .18s ease,transform .18s ease !important;
 }
 .st-key-v12_basket_line_creator_link a:hover{
-  background:rgba(155,89,182,.62) !important;
-  border-color:#e5b7ff !important;
+  background:#9167d2 !important;
+  border-color:#dfc5ff !important;
   color:#fff !important;
   transform:translateY(-1px);
 }
