@@ -1058,9 +1058,9 @@ st.markdown("""
   width:100% !important;
 }
 .st-key-v12_basket_line_creator_link [data-testid="stLinkButton"]{
-  width:calc(100% - 48px) !important;
-  margin-left:24px !important;
-  margin-right:24px !important;
+  width:calc(100% - 11px) !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
 }
 .st-key-v12_basket_line_creator_link a{
   display:flex !important;
