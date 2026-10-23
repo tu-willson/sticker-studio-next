@@ -6527,12 +6527,22 @@ def _v12_render_sticker_basket_workspace():
     st.caption(t("main_tab_caption"))
     main_choices, tab_choices = st.columns(2)
     with main_choices:
-        main_label = st.selectbox(t("choose_main"), option_labels, key=main_key)
+        main_label = st.selectbox(
+            t("choose_main"),
+            option_labels,
+            key=main_key,
+            on_change=_v12_preserve_project_name_before_basket_choice,
+        )
     tab_labels = [label for label in option_labels if label != main_label] or [main_label]
     if st.session_state.get(tab_key) not in tab_labels:
         st.session_state[tab_key] = tab_labels[0]
     with tab_choices:
-        tab_label = st.selectbox(t("choose_tab"), tab_labels, key=tab_key)
+        tab_label = st.selectbox(
+            t("choose_tab"),
+            tab_labels,
+            key=tab_key,
+            on_change=_v12_preserve_project_name_before_basket_choice,
+        )
 
     if len(selected) == 1:
         st.caption(t("main_tab_same"))
@@ -7060,6 +7070,30 @@ def _v12_prepare_project_name_input():
     restored_value = top_value or stored_value
     if restored_value:
         st.session_state["v12_project_name_input"] = restored_value
+
+
+def _v12_preserve_project_name_before_basket_choice():
+    """Commit a pending title before MAIN/TAB causes a fragment rerun."""
+    value = (
+        _v12_normalize_project_name(
+            st.session_state.get("v12_project_name_input", "")
+        )
+        or _v12_normalize_project_name(
+            st.session_state.get("v12_project_name_top_input", "")
+        )
+        or _v12_normalize_project_name(
+            _v12_current_project().get("project_name", "")
+        )
+    )
+    if not value:
+        return
+    project = _v12_current_project()
+    project["project_name"] = value
+    project["updated_at"] = _v12_now_iso()
+    st.session_state["v12_current_project"] = project
+    # The upper field is not re-created during a fragment-only rerun.  Keep a
+    # durable mirror so the lower field can restore exactly what was entered.
+    st.session_state["v12_project_name_top_input"] = value
 
 
 def _v12_project_name_on_change():
