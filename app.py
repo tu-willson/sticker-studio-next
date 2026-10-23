@@ -1054,9 +1054,13 @@ st.markdown("""
   border-color:#17639c !important;
 }
 /* 創作頁底部 LINE 官方網站捷徑：保持低干擾紫色，滑過時才加深。 */
-.st-key-v12_basket_line_creator_link,
-.st-key-v12_basket_line_creator_link [data-testid="stLinkButton"]{
+.st-key-v12_basket_line_creator_link{
   width:100% !important;
+}
+.st-key-v12_basket_line_creator_link [data-testid="stLinkButton"]{
+  width:calc(100% - 48px) !important;
+  margin-left:24px !important;
+  margin-right:24px !important;
 }
 .st-key-v12_basket_line_creator_link a{
   display:flex !important;
