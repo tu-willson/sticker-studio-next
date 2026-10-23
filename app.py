@@ -2004,6 +2004,13 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
   background:linear-gradient(145deg,#ec4a70,#b91f49) !important;
   box-shadow:0 7px 16px rgba(205,38,84,.32) !important;
 }
+.v12-report-limit-note{
+  margin-top:.22rem;
+  color:#b74a61;
+  font-size:.78rem;
+  font-weight:800;
+  text-align:center;
+}
 .v12-reel-rules{
   margin:1.1rem 0 .7rem;
   color:#fff;
@@ -9084,7 +9091,10 @@ def _v12_render_shared_template_marketplace(session):
                         if report_remaining > 0:
                             st.caption(f"今日剩 {report_remaining}／2 次｜檢舉後自動遮蔽")
                         else:
-                            st.caption("今日檢舉額度已用完")
+                            st.markdown(
+                                '<div class="v12-report-limit-note">今日檢舉額度已用完</div>',
+                                unsafe_allow_html=True,
+                            )
             if description:
                 st.caption(description)
             template_tags = [
