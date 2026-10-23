@@ -5289,10 +5289,12 @@ def _beta_render_admin_console(session):
 
 
 def _beta_same_tab_login_html(login_url):
-    """Navigate the app document itself; the PKCE callback returns to this tab."""
+    """Leave Streamlit Cloud's app iframe in the same browser tab for OAuth."""
+    # Community Cloud wraps the app in /~/+/; _self would embed Google inside
+    # that frame. _top navigates the existing tab, including when not framed.
     return (
         '<a class="v12-google-login-link" '
-        f'href="{html.escape(login_url, quote=True)}" target="_self">'
+        f'href="{html.escape(login_url, quote=True)}" target="_top">'
         f'{html.escape(t("login_google"))}</a>'
     )
 

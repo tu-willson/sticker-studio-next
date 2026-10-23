@@ -24,7 +24,7 @@ class LoginUploadAccessTests(unittest.TestCase):
         exec(compile(HELPERS, "app.py", "exec"), scope)
         return scope
 
-    def test_login_link_stays_in_tab_and_preserves_oauth_query(self):
+    def test_login_link_leaves_cloud_iframe_in_same_tab_and_preserves_oauth_query(self):
         url = 'https://example.test/auth/v1/authorize?provider=google&redirect_to=https%3A%2F%2Fapp.test&state=a"b'
         markup = self.helpers(Mock())["_beta_same_tab_login_html"](url)
         anchors = []
@@ -36,7 +36,7 @@ class LoginUploadAccessTests(unittest.TestCase):
 
         Links().feed(markup)
         self.assertEqual(len(anchors), 1)
-        self.assertEqual(anchors[0]["target"], "_self")
+        self.assertEqual(anchors[0]["target"], "_top")
         self.assertEqual(anchors[0]["href"], url)
 
     def test_anonymous_stale_upload_is_not_returned_for_processing(self):
