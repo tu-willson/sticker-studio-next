@@ -8227,7 +8227,7 @@ def _v12_restore_durable_style_reference():
 
 
 def _v12_restore_durable_character_settings():
-    """Rehydrate the character form only when its Streamlit widget was removed."""
+    """Rehydrate character fields only when Streamlit removed their widgets."""
     draft = st.session_state.get("v12_navigation_safe_creation_draft")
     if not isinstance(draft, dict):
         return
@@ -8238,7 +8238,10 @@ def _v12_restore_durable_character_settings():
     ):
         saved = draft.get(key)
         current = st.session_state.get(key)
-        if saved and (current is None or current == [] or current == ""):
+        # An empty list/string is a deliberate user edit (for example removing
+        # the final selected feature).  Only a missing widget key means the
+        # page changed and the durable draft must be restored.
+        if saved and current is None:
             st.session_state[key] = copy.deepcopy(saved)
 
 
@@ -10960,24 +10963,29 @@ if isinstance(_saved_character_options, list):
     st.session_state["v10_character_options"] = [
         option for option in _saved_character_options if option in CHARACTER_OPTIONS
     ]
-with st.form("v12_character_settings_form", border=False):
-    selected_character = st.multiselect(
-        t("feature_select"),
-        CHARACTER_OPTIONS,
-        key="v10_character_options",
+# Do not place these controls in a form.  A Streamlit form keeps the browser's
+# visible values separate from Session State until its submit button is
+# pressed, which made a cleared feature look empty while generation still used
+# an older selection.  Changes now reach the current creation snapshot at once.
+selected_character = st.multiselect(
+    t("feature_select"),
+    CHARACTER_OPTIONS,
+    key="v10_character_options",
+    on_change=_v12_capture_character_settings_draft,
+)
+st.text_area(
+    t("custom_character"),
+    key="v10_character_custom_1",
+    height=70,
+    on_change=_v12_capture_character_settings_draft,
+)
+with st.container(key="v12_character_settings_apply_button"):
+    _save_character_settings = st.button(
+        t("save_character"),
+        type="primary",
+        use_container_width=True,
+        on_click=_v12_capture_character_settings_draft,
     )
-    st.text_area(
-        t("custom_character"),
-        key="v10_character_custom_1",
-        height=70,
-    )
-    with st.container(key="v12_character_settings_apply_button"):
-        _save_character_settings = st.form_submit_button(
-            t("save_character"),
-            type="primary",
-            use_container_width=True,
-            on_click=_v12_capture_character_settings_draft,
-        )
 custom_character = str(
     st.session_state.get("v10_character_custom_1", "") or ""
 ).strip()
