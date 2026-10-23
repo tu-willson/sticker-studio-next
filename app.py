@@ -8001,6 +8001,31 @@ def _v12_apply_shared_template_callback(session, template_id, title):
         st.session_state["v12_shared_template_apply_error"] = error_type
 
 
+def _v12_purchase_shared_template_callback(session, template_id, title):
+    """Redeem once, then keep the purchased template on its separate shelf."""
+    idempotency_state_key = f"v12_shared_template_purchase_key_{template_id}"
+    redemption_key = st.session_state.setdefault(idempotency_state_key, str(uuid4()))
+    try:
+        redeemed = _beta_redeem_shared_template(session, template_id, redemption_key)
+        st.session_state.pop(idempotency_state_key, None)
+        st.session_state["v12_marketplace_shelf"] = "purchased"
+        st.session_state["v12_shared_template_purchase_feedback"] = {
+            "title": str(redeemed.get("title", title) or title),
+            "charged": max(0, int(redeemed.get("charged_cost", 0) or 0)),
+        }
+    except Exception as exc:
+        message = str(exc or "")
+        if "shared_template_insufficient_credits" in message:
+            error_type = "insufficient_credits"
+        elif "shared_template_collection_limit" in message:
+            error_type = "collection_limit"
+        elif "shared_templates_marketplace_required" in message:
+            error_type = "marketplace_required"
+        else:
+            error_type = "failed"
+        st.session_state["v12_shared_template_purchase_error"] = error_type
+
+
 def _v12_render_shared_template_apply_button(
     session, template_id, title, button_label, button_key
 ):
@@ -8016,7 +8041,7 @@ def _v12_render_shared_template_apply_button(
 
 
 def _v12_render_unlocked_template_shelf(session):
-    """Show the member's own redeemed templates, five at a time."""
+    """Show the member's purchased templates, five at a time."""
     delete_feedback = str(
         st.session_state.pop("v12_unlocked_template_delete_feedback", "") or ""
     )
@@ -8028,7 +8053,7 @@ def _v12_render_unlocked_template_shelf(session):
     elif delete_error == "confirmation":
         st.warning("請先勾選「確認永久刪除」。")
     elif delete_error == "failed":
-        st.error("這個已解鎖模板暫時無法刪除，請稍後再試。")
+        st.error("這個已購入模板暫時無法刪除，請稍後再試。")
     try:
         status = _beta_creator_reel_status(session)
         page_size = 5
@@ -8038,7 +8063,7 @@ def _v12_render_unlocked_template_shelf(session):
             session, limit=page_size, offset=page_number * page_size
         )
     except Exception:
-        st.warning("已解鎖模板暫時無法載入，請稍後再試。")
+        st.warning("已購入模板暫時無法載入，請稍後再試。")
         return
 
     total_count = max(
@@ -8049,14 +8074,14 @@ def _v12_render_unlocked_template_shelf(session):
         st.session_state[page_key] = page_number - 1
         st.rerun()
 
-    st.markdown("### 🔓 已解鎖模版區")
+    st.markdown("### 🛍️ 已購入模版區")
     st.info(
         f"自動創作膠卷：{status['shared_reel_count']}／"
         f"{status['collected_reel_limit']} 卷"
     )
-    st.caption("已解鎖模板與已收藏膠捲共用數量上限。")
+    st.caption("已購入模板與已收藏膠捲共用數量上限。")
     if not templates:
-        st.caption("尚未解鎖其他創作者的模板。")
+        st.caption("尚未購入其他創作者的模板。")
         return
 
     for template in templates:
@@ -8086,7 +8111,7 @@ def _v12_render_unlocked_template_shelf(session):
             tags = [str(tag).strip() for tag in list(template.get("tags", []) or []) if str(tag).strip()]
             if tags:
                 st.caption(f"🏷️ {'　'.join(tags)}")
-            st.caption("已解鎖，可免費再次套用。")
+            st.caption("已購入，可免費再次套用。")
             _v12_render_shared_template_apply_button(
                 session, template_id, title, t("shared_template_apply_unlocked"),
                 f"v12_unlocked_template_apply_{template_id}",
@@ -8138,6 +8163,25 @@ def _v12_render_shared_template_marketplace(session):
     """Browse public templates without exposing protected template internals."""
     st.markdown(f'<div class="v10-main-title">{t("shared_template_market_title")}</div>', unsafe_allow_html=True)
     market_feedback = st.session_state.pop("v12_shared_template_market_feedback", None)
+    purchase_feedback = st.session_state.pop(
+        "v12_shared_template_purchase_feedback", None
+    )
+    purchase_error = str(
+        st.session_state.pop("v12_shared_template_purchase_error", "") or ""
+    )
+    if isinstance(purchase_feedback, dict):
+        purchased_title = str(
+            purchase_feedback.get("title", "") or t("untitled_project")
+        )
+        st.success(f"已購入「{purchased_title}」，並已移至已購入模版區。")
+    elif purchase_error == "insufficient_credits":
+        st.warning(t("shared_template_insufficient_credits"))
+    elif purchase_error == "collection_limit":
+        st.warning("已購入模板與已收藏膠捲共用數量上限，請先整理收藏區後再購入。")
+    elif purchase_error == "marketplace_required":
+        st.warning("一般會員無法使用市集模板；購買 7 次生成包或訂閱方案後即可購入。")
+    elif purchase_error == "failed":
+        st.error("暫時無法購入這個模板，請稍後再試。")
     if market_feedback == "reported":
         st.success(t("shared_template_report_success"))
     elif isinstance(market_feedback, dict) and market_feedback.get("type") == "favorite":
@@ -8167,12 +8211,12 @@ def _v12_render_shared_template_marketplace(session):
         )
     with unlocked_col:
         st.button(
-            ("✓ " if market_shelf == "unlocked" else "") + "已解鎖模版區",
+            ("✓ " if market_shelf == "purchased" else "") + "已購入模版區",
             key="v12_market_unlocked_tab",
             type="primary",
             use_container_width=True,
             on_click=_v12_set_session_state_callback,
-            args=("v12_marketplace_shelf", "unlocked"),
+            args=("v12_marketplace_shelf", "purchased"),
         )
     with market_return_col:
         st.button(
@@ -8184,7 +8228,7 @@ def _v12_render_shared_template_marketplace(session):
             args=("v12_marketplace_shelf", "market"),
         )
 
-    if market_shelf == "unlocked":
+    if market_shelf in {"unlocked", "purchased"}:
         _v12_render_unlocked_template_shelf(session)
         return
     try:
@@ -8224,11 +8268,20 @@ def _v12_render_shared_template_marketplace(session):
     except Exception:
         st.warning(t("shared_template_market_unavailable"))
         return
+    templates = [
+        template
+        for template in templates
+        if isinstance(template, dict)
+        and not (
+            bool(template.get("is_unlocked", False))
+            and not bool(template.get("is_owner", False))
+        )
+    ]
     if not templates:
         st.info(
             t("shared_template_market_no_match")
             if marketplace_search or marketplace_tags
-            else t("shared_template_market_empty")
+            else "目前沒有尚未購入的市集模板；已購入模板請至已購入模版區查看。"
         )
         return
 
@@ -8321,9 +8374,19 @@ def _v12_render_shared_template_marketplace(session):
                         use_container_width=True,
                     )
                 else:
-                    _v12_render_shared_template_apply_button(
-                        session, template_id, title, button_label, button_key
-                    )
+                    if not is_owner and not is_unlocked:
+                        st.button(
+                            button_label,
+                            key=button_key,
+                            type="primary",
+                            use_container_width=True,
+                            on_click=_v12_purchase_shared_template_callback,
+                            args=(session, template_id, title),
+                        )
+                    else:
+                        _v12_render_shared_template_apply_button(
+                            session, template_id, title, button_label, button_key
+                        )
         st.divider()
 
 
