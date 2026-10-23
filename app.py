@@ -2219,6 +2219,26 @@ html{scroll-behavior:smooth;}
   font-weight:700;
   line-height:1.55;
 }
+a.v12-google-login-link,
+a.v12-google-login-link:visited{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-sizing:border-box;
+  width:100%;
+  min-height:52px;
+  padding:.65rem 1rem;
+  border:1px solid #ff4b4b;
+  border-radius:10px;
+  background:#ff4b4b;
+  color:#fff !important;
+  font-size:18px;
+  font-weight:800;
+  text-decoration:none !important;
+  transition:background .15s ease;
+}
+a.v12-google-login-link:hover{background:#ff3333;border-color:#ff3333;}
+a.v12-google-login-link:focus-visible{outline:3px solid #ffc0cc;outline-offset:3px;}
 .v12-pricing-hero{
   width:min(1000px,100%);
   margin:1rem auto 1.35rem;
@@ -5268,6 +5288,24 @@ def _beta_render_admin_console(session):
     return True
 
 
+def _beta_same_tab_login_html(login_url):
+    """Navigate the app document itself; the PKCE callback returns to this tab."""
+    return (
+        '<a class="v12-google-login-link" '
+        f'href="{html.escape(login_url, quote=True)}" target="_self">'
+        f'{html.escape(t("login_google"))}</a>'
+    )
+
+
+def _beta_image_uploader(label, *, session, **kwargs):
+    """Disable anonymous uploads and never pass stale upload values for processing."""
+    uploaded_file = st.file_uploader(label, disabled=not bool(session), **kwargs)
+    if not session:
+        st.caption(t("upload_login_required"))
+        return None
+    return uploaded_file
+
+
 def _beta_render_account_panel():
     """Render the member login and current member usage."""
     if not _beta_config():
@@ -5364,12 +5402,9 @@ def _beta_render_account_panel():
     if login_url:
         _login_left, _login_center, _login_right = st.columns([1, 1.35, 1])
         with _login_center:
-            st.link_button(
-                t("login_google"),
-                login_url,
-                type="primary",
-                key="beta_google_login_link",
-                use_container_width=True,
+            st.markdown(
+                _beta_same_tab_login_html(login_url),
+                unsafe_allow_html=True,
             )
         st.markdown(
             f'<div class="v12-beta-login-copy">{t("login_expiry")}</div>',
@@ -11606,8 +11641,9 @@ with _clear_creation_col:
 if st.session_state.pop("v12_reset_creation_feedback", False):
     st.success("已清空本次創作設定與暫存內容；已收藏膠捲、雲端作品與個人風格庫都保留不變。")
 with st.container(key="v12_person_photo_upload"):
-    uploaded = st.file_uploader(
+    uploaded = _beta_image_uploader(
         t("photo_select"),
+        session=_beta_session,
         type=["jpg", "jpeg", "png", "webp"],
         key="v12_person_photo_upload_widget",
     )
@@ -11903,8 +11939,9 @@ else:
     st.caption(t("style_reference_caption"))
     _style_reference_left, _style_reference_center, _style_reference_right = st.columns([1, 2, 1])
     with _style_reference_center:
-        _style_reference_upload = st.file_uploader(
+        _style_reference_upload = _beta_image_uploader(
             t("style_reference_upload"),
+            session=_beta_session,
             type=["jpg", "jpeg", "png", "webp"],
             key="v12_style_reference_upload",
             on_change=_v12_style_reference_upload_changed,
