@@ -6522,9 +6522,26 @@ def _v12_render_sticker_basket_workspace():
         st.session_state[tab_key] = tab_labels[0]
     tab_label = st.session_state[tab_key]
 
-    # 作品名稱與保存動作先出現；它們會使用目前 MAIN／TAB 的選擇值。
+    # 先選擇 MAIN／TAB，再填作品名稱與保存，讓輸出規格和保存動作的順序一致。
+    st.markdown(f"### {t('main_tab_title')}")
+    st.caption(t("main_tab_caption"))
+    main_choices, tab_choices = st.columns(2)
+    with main_choices:
+        main_label = st.selectbox(t("choose_main"), option_labels, key=main_key)
+    tab_labels = [label for label in option_labels if label != main_label] or [main_label]
+    if st.session_state.get(tab_key) not in tab_labels:
+        st.session_state[tab_key] = tab_labels[0]
+    with tab_choices:
+        tab_label = st.selectbox(t("choose_tab"), tab_labels, key=tab_key)
+
+    if len(selected) == 1:
+        st.caption(t("main_tab_same"))
+    st.info(t("package_summary", selected=len(selected), limit=V12_PROJECT_STICKER_LIMIT, main=main_label, tab=tab_label))
+
+    st.markdown('<div class="v12-project-save-divider"></div>', unsafe_allow_html=True)
     st.markdown(f"### {t('project_title')}")
     st.caption(t("project_caption"))
+    _v12_prepare_project_name_input()
     st.text_input(
         t("project_label"),
         key="v12_project_name_input",
@@ -6536,9 +6553,8 @@ def _v12_render_sticker_basket_workspace():
     if not name_preview:
         st.caption(t("project_default", name=_v12_default_project_name()))
 
-    # 雲端保存僅由上方「存入我的作品」按鈕執行；ZIP 打包不再附帶同步。
+    # 雲端保存僅由「存入我的作品」按鈕執行；ZIP 打包不再附帶同步。
     cloud_session = _beta_current_user() if _beta_config() else None
-
     _active_style_reference_for_save = (
         st.session_state.get("v12_style_source_mode") == V12_STYLE_REFERENCE_MODE
     )
@@ -6558,7 +6574,6 @@ def _v12_render_sticker_basket_workspace():
     if has_creation_materials:
         st.caption(t("materials_private"))
 
-    # 直接存入「我的作品」不建立 ZIP，使用與一般雲端同步相同的素材選項。
     _loaded_cloud_project_id = str(
         st.session_state.get("v12_loaded_cloud_project_id", "") or ""
     ).strip()
@@ -6576,13 +6591,10 @@ def _v12_render_sticker_basket_workspace():
             key="v12_basket_save_to_library_button",
             disabled=not bool(cloud_session),
         ):
+            cloud_progress = None
             try:
                 history_record = _v12_save_selected_stickers_to_history(
-                    selected,
-                    options,
-                    main_label,
-                    tab_label,
-                    _active_style_reference_for_save,
+                    selected, options, main_label, tab_label, _active_style_reference_for_save
                 )
                 cloud_record = dict(history_record)
                 if not save_creation_materials:
@@ -6600,68 +6612,27 @@ def _v12_render_sticker_basket_workspace():
                 if cloud_save.get("saved"):
                     cloud_progress.progress(
                         100,
-                        text=t(
-                            "cloud_saved",
-                            count=cloud_save["saved_count"],
-                            limit=cloud_save["library_capacity"],
-                        ),
+                        text=t("cloud_saved", count=cloud_save["saved_count"], limit=cloud_save["library_capacity"]),
                     )
                     if _loaded_cloud_project_id:
                         st.success("✅ 雲端作品已更新，新的設定與已選貼圖已覆蓋舊版本。")
                     else:
-                        st.success(
-                            t(
-                                "cloud_saved",
-                                count=cloud_save["saved_count"],
-                                limit=cloud_save["library_capacity"],
-                            )
-                        )
+                        st.success(t("cloud_saved", count=cloud_save["saved_count"], limit=cloud_save["library_capacity"]))
                 else:
                     cloud_progress.empty()
-                    st.warning(
-                        t(
-                            "cloud_full",
-                            count=cloud_save["saved_count"],
-                            limit=cloud_save["library_capacity"],
-                        )
-                    )
+                    st.warning(t("cloud_full", count=cloud_save["saved_count"], limit=cloud_save["library_capacity"]))
             except Exception as exc:
-                cloud_progress.empty()
+                if cloud_progress is not None:
+                    cloud_progress.empty()
                 if str(exc) == "library_assets_missing":
-                    st.warning(
-                        "雲端覆蓋尚未完成：最後確認時缺少可驗證的素材。"
-                        "本機暫存與原有雲端作品都沒有被刪除；請稍後再試。"
-                    )
+                    st.warning("雲端覆蓋尚未完成：最後確認時缺少可驗證的素材。本機暫存與原有雲端作品都沒有被刪除；請稍後再試。")
                 elif str(exc) == "library_project_not_found":
-                    st.warning(
-                        "雲端覆蓋尚未完成：原作品已不存在或目前登入帳號不符。"
-                        "請從「我的作品」重新載入後再試。"
-                    )
+                    st.warning("雲端覆蓋尚未完成：原作品已不存在或目前登入帳號不符。請從「我的作品」重新載入後再試。")
                 elif str(exc).startswith("beta_request_failed_http_"):
                     _http_code = str(exc).rsplit("_", 1)[-1]
-                    st.warning(
-                        "雲端覆蓋的最後確認未完成（系統診斷碼：HTTP "
-                        f"{_http_code}）。本機暫存與原有雲端作品都沒有被刪除。"
-                    )
+                    st.warning(f"雲端覆蓋的最後確認未完成（系統診斷碼：HTTP {_http_code}）。本機暫存與原有雲端作品都沒有被刪除。")
                 else:
                     st.warning(t("cloud_failed"))
-
-    # 把保存動作與 MAIN／TAB 選擇清楚分開，避免兩種用途混在同一區。
-    st.markdown('<div class="v12-project-save-divider"></div>', unsafe_allow_html=True)
-    st.markdown(f"### {t('main_tab_title')}")
-    st.caption(t("main_tab_caption"))
-    main_choices, tab_choices = st.columns(2)
-    with main_choices:
-        main_label = st.selectbox(t("choose_main"), option_labels, key=main_key)
-    tab_labels = [label for label in option_labels if label != main_label] or [main_label]
-    if st.session_state.get(tab_key) not in tab_labels:
-        st.session_state[tab_key] = tab_labels[0]
-    with tab_choices:
-        tab_label = st.selectbox(t("choose_tab"), tab_labels, key=tab_key)
-
-    if len(selected) == 1:
-        st.caption(t("main_tab_same"))
-    st.info(t("package_summary", selected=len(selected), limit=V12_PROJECT_STICKER_LIMIT, main=main_label, tab=tab_label))
 
     if st.button(
         t("package_selected", count=len(selected)),
@@ -7067,6 +7038,30 @@ def _v12_safe_download_stem(value):
     value = re.sub(r"\s+", " ", value).strip(" ._")
     return value[:80] or _v12_default_project_name()
 
+
+def _v12_prepare_project_name_input():
+    """Restore the save-area name before a fragment-only MAIN/TAB rerun.
+
+    The upper name field is outside the basket fragment.  A fragment rerun for
+    MAIN or TAB must therefore keep its already-entered value available to the
+    lower, canonical field instead of rendering that field as empty.
+    """
+    current_value = _v12_normalize_project_name(
+        st.session_state.get("v12_project_name_input", "")
+    )
+    if current_value:
+        return
+    top_value = _v12_normalize_project_name(
+        st.session_state.get("v12_project_name_top_input", "")
+    )
+    stored_value = _v12_normalize_project_name(
+        _v12_current_project().get("project_name", "")
+    )
+    restored_value = top_value or stored_value
+    if restored_value:
+        st.session_state["v12_project_name_input"] = restored_value
+
+
 def _v12_project_name_on_change():
     value = _v12_normalize_project_name(
         st.session_state.get("v12_project_name_input", "")
@@ -7091,8 +7086,12 @@ def _v12_project_snapshot():
     """取得目前作品的可保存 metadata 快照；絕不包含 API Key。"""
     project = dict(_v12_current_project())
     project["updated_at"] = _v12_now_iso()
-    project["project_name"] = _v12_normalize_project_name(
-        st.session_state.get("v12_project_name_input", project.get("project_name", ""))
+    # MAIN／TAB 的局部 fragment rerun 不會重新建立上方命名欄位；
+    # 取兩個同步欄位與既有 metadata 的第一個有效值，避免名稱遺失。
+    project["project_name"] = (
+        _v12_normalize_project_name(st.session_state.get("v12_project_name_input", ""))
+        or _v12_normalize_project_name(st.session_state.get("v12_project_name_top_input", ""))
+        or _v12_normalize_project_name(project.get("project_name", ""))
     )
     project["sticker_texts"] = [
         str(st.session_state.get(f"sticker_text_{i}", ""))
@@ -12172,6 +12171,26 @@ if _v12_step04_frontend_enabled:
                         try:
                             _v12_copy_reservation = _beta_reserve_copy_generation(
                                 _v12_copy_session
+                            )
+                            # 預約成功時 RPC 已經扣除當日額度。直接更新短期快取，
+                            # 下一次元件重繪即可顯示正確剩餘次數，不必額外查詢或
+                            # 重新整理整個頁面。
+                            _beta_set_cached_copy_usage_status(
+                                _v12_copy_session,
+                                {
+                                    "usage_date": _v12_copy_reservation["usage_date"],
+                                    "daily_limit": _v12_copy_reservation["daily_limit"],
+                                    "used_count": max(
+                                        0,
+                                        _v12_copy_reservation["daily_limit"]
+                                        - _v12_copy_reservation["remaining_count"],
+                                    ),
+                                    "remaining_count": _v12_copy_reservation["remaining_count"],
+                                    "entitlement_kind": _v12_copy_reservation["entitlement_kind"],
+                                    "entitlement_expires_at": _v12_copy_reservation[
+                                        "entitlement_expires_at"
+                                    ],
+                                },
                             )
                             if not _v12_copy_reservation.get("granted"):
                                 _v12_feedback = "今日 AI 幫想額度已用完，將在台灣時間午夜重置。"
