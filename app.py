@@ -2219,26 +2219,6 @@ html{scroll-behavior:smooth;}
   font-weight:700;
   line-height:1.55;
 }
-a.v12-google-login-link,
-a.v12-google-login-link:visited{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  box-sizing:border-box;
-  width:100%;
-  min-height:52px;
-  padding:.65rem 1rem;
-  border:1px solid #ff4b4b;
-  border-radius:10px;
-  background:#ff4b4b;
-  color:#fff !important;
-  font-size:18px;
-  font-weight:800;
-  text-decoration:none !important;
-  transition:background .15s ease;
-}
-a.v12-google-login-link:hover{background:#ff3333;border-color:#ff3333;}
-a.v12-google-login-link:focus-visible{outline:3px solid #ffc0cc;outline-offset:3px;}
 .v12-pricing-hero{
   width:min(1000px,100%);
   margin:1rem auto 1.35rem;
@@ -5288,17 +5268,6 @@ def _beta_render_admin_console(session):
     return True
 
 
-def _beta_same_tab_login_html(login_url):
-    """Leave Streamlit Cloud's app iframe in the same browser tab for OAuth."""
-    # Community Cloud wraps the app in /~/+/; _self would embed Google inside
-    # that frame. _top navigates the existing tab, including when not framed.
-    return (
-        '<a class="v12-google-login-link" '
-        f'href="{html.escape(login_url, quote=True)}" target="_top">'
-        f'{html.escape(t("login_google"))}</a>'
-    )
-
-
 def _beta_image_uploader(label, *, session, **kwargs):
     """Disable anonymous uploads and never pass stale upload values for processing."""
     uploaded_file = st.file_uploader(label, disabled=not bool(session), **kwargs)
@@ -5404,9 +5373,14 @@ def _beta_render_account_panel():
     if login_url:
         _login_left, _login_center, _login_right = st.columns([1, 1.35, 1])
         with _login_center:
-            st.markdown(
-                _beta_same_tab_login_html(login_url),
-                unsafe_allow_html=True,
+            # Cloud embeds the app in a sandbox: Google rejects _self inside
+            # that frame, while _top is blocked. Keep OAuth outside the frame.
+            st.link_button(
+                t("login_google"),
+                login_url,
+                type="primary",
+                key="beta_google_login_link",
+                use_container_width=True,
             )
         st.markdown(
             f'<div class="v12-beta-login-copy">{t("login_expiry")}</div>',

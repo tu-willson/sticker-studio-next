@@ -1,8 +1,6 @@
 """Exercise login/upload controls without calling production authentication."""
 
 import ast
-import html
-from html.parser import HTMLParser
 from pathlib import Path
 import unittest
 from unittest.mock import Mock
@@ -13,31 +11,16 @@ from streamlit.testing.v1 import AppTest
 APP_TREE = ast.parse((Path(__file__).resolve().parents[1] / "app.py").read_text(encoding="utf-8"))
 HELPERS = ast.Module(
     body=[node for node in APP_TREE.body if isinstance(node, ast.FunctionDef)
-          and node.name in {"_beta_same_tab_login_html", "_beta_image_uploader"}],
+          and node.name == "_beta_image_uploader"],
     type_ignores=[],
 )
 
 
 class LoginUploadAccessTests(unittest.TestCase):
     def helpers(self, streamlit):
-        scope = {"st": streamlit, "html": html, "t": lambda key: key}
+        scope = {"st": streamlit, "t": lambda key: key}
         exec(compile(HELPERS, "app.py", "exec"), scope)
         return scope
-
-    def test_login_link_leaves_cloud_iframe_in_same_tab_and_preserves_oauth_query(self):
-        url = 'https://example.test/auth/v1/authorize?provider=google&redirect_to=https%3A%2F%2Fapp.test&state=a"b'
-        markup = self.helpers(Mock())["_beta_same_tab_login_html"](url)
-        anchors = []
-
-        class Links(HTMLParser):
-            def handle_starttag(self, tag, attrs):
-                if tag == "a":
-                    anchors.append(dict(attrs))
-
-        Links().feed(markup)
-        self.assertEqual(len(anchors), 1)
-        self.assertEqual(anchors[0]["target"], "_top")
-        self.assertEqual(anchors[0]["href"], url)
 
     def test_anonymous_stale_upload_is_not_returned_for_processing(self):
         st = Mock()
