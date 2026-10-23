@@ -6431,9 +6431,13 @@ def _v12_save_selected_stickers_to_history(selected, options, main_label, tab_la
     return history_record
 
 
-@st.fragment
 def _v12_render_sticker_basket_workspace():
-    """Allow an unlimited session basket, then make one final limited-size project ZIP."""
+    """Allow an unlimited session basket, then make one final limited-size project ZIP.
+
+    This intentionally runs in the normal page lifecycle.  Streamlit fragment
+    reruns can discard a text widget's pending browser value when a nearby
+    selectbox changes, which made the project title look as if it disappeared.
+    """
     basket = _v12_get_sticker_basket()
     if not basket:
         st.info(t("basket_empty"))
@@ -6447,12 +6451,12 @@ def _v12_render_sticker_basket_workspace():
         if st.button(t("basket_select_all"), key="v12_basket_select_all", use_container_width=True):
             for item in basket:
                 st.session_state[f"v12_basket_select_{item['id']}"] = True
-            st.rerun(scope="fragment")
+            st.rerun()
     with control_right:
         if st.button(t("basket_deselect_all"), key="v12_basket_deselect_all", use_container_width=True):
             for item in basket:
                 st.session_state[f"v12_basket_select_{item['id']}"] = False
-            st.rerun(scope="fragment")
+            st.rerun()
 
     for row_start in range(0, len(basket), 4):
         columns = st.columns(4)
@@ -6494,7 +6498,7 @@ def _v12_render_sticker_basket_workspace():
                         with remove_col:
                             if st.button("刪除", key=f"v12_basket_remove_{item_id}", use_container_width=True):
                                 _v12_remove_sticker_basket_item(item_id)
-                                st.rerun(scope="fragment")
+                                st.rerun()
 
     selected = _v12_selected_sticker_basket_items()
     st.divider()
