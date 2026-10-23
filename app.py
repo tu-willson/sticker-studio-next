@@ -602,6 +602,40 @@ def _v12_load_style_editor_from_slot():
     st.session_state["v12_style_editor_prompt"] = str(item.get("prompt", ""))
 
 
+def _v12_custom_style_toggle_changed():
+    """Start a fresh selection sync whenever custom style is toggled."""
+    st.session_state["v12_custom_style_toggle_version"] = (
+        int(st.session_state.get("v12_custom_style_toggle_version", 0) or 0) + 1
+    )
+
+
+def _v12_sync_saved_style_choice_to_editor(choice):
+    """Make the active-style picker and editor one reliable selection flow."""
+    choice = str(choice or "").strip()
+    if not choice or choice == "↓ 請選擇已儲存風格":
+        return
+    try:
+        slot = int(choice.split("｜", 1)[0])
+    except (TypeError, ValueError):
+        return
+    if slot not in range(1, 11):
+        return
+
+    version = int(st.session_state.get("v12_custom_style_toggle_version", 0) or 0)
+    marker = f"{version}:{choice}"
+    if st.session_state.get("v12_style_editor_loaded_choice") == marker:
+        return
+
+    # This runs before the editor widgets are rendered, so both the visible
+    # editor and the generation prompt receive the same saved-style payload on
+    # the first click.  It does not overwrite a member's edits on ordinary
+    # reruns; only a new style selection or a fresh toggle reloads the slot.
+    st.session_state["v12_style_editor_slot"] = slot
+    _v12_load_style_editor_from_slot()
+    st.session_state["v12_style_editor_choice_initialized"] = True
+    st.session_state["v12_style_editor_loaded_choice"] = marker
+
+
 def _v12_save_style_editor():
     """Save only the single editor into the selected Style Bank slot."""
     try:
@@ -10875,6 +10909,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
         _use_custom_style = st.checkbox(
             t("custom_style_enable"),
             key="v12_use_custom_style",
+            on_change=_v12_custom_style_toggle_changed,
         )
     if _use_custom_style:
         # Keep the canonical mode explicit so prompts and saved projects retain
@@ -10929,9 +10964,18 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
             st.success("✅ 此風格已儲存，並已同步更新到上方選單。")
         if _saved_choice != "↓ 請選擇已儲存風格":
             st.session_state.pop("v12_loaded_project_custom_style", None)
+            _v12_sync_saved_style_choice_to_editor(_saved_choice)
             _pos = _saved_labels.index(_saved_choice) - 1
             custom_style = _custom_style_slots[_pos][2]
             st.info(f"💾 已套用：{_custom_style_slots[_pos][0]:02d}｜{_custom_style_slots[_pos][1]}")
+            with st.expander("📝 目前套用的自定義風格文案", expanded=True):
+                st.text_area(
+                    "完整 Prompt（可在下方管理區直接編輯）",
+                    value=custom_style,
+                    height=160,
+                    disabled=True,
+                    key=f"v12_saved_style_preview_{_custom_style_slots[_pos][0]}",
+                )
         else:
             _loaded_project_style = st.session_state.get("v12_loaded_project_custom_style")
             _draft_style_prompt = str(st.session_state.get("v12_style_editor_prompt", "") or "").strip()
