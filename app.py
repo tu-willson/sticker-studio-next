@@ -4298,6 +4298,36 @@ def _beta_admin_grant_test_purchase(session, user_id, product_code, note):
     return response if isinstance(response, dict) else {}
 
 
+def _beta_admin_get_member_credit_lots(session, user_id):
+    """Read one member's dated credit lots through the admin-only RPC."""
+    response = _beta_rpc(
+        "admin_get_member_credit_lots",
+        {"p_user_id": str(user_id)},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_admin_get_member_entitlements(session, user_id):
+    """Read active and expired membership rights without exposing table access."""
+    response = _beta_rpc(
+        "admin_get_member_entitlements",
+        {"p_user_id": str(user_id)},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_admin_list_member_operations(session, user_id, limit=50):
+    """Return the member's auditable credit and entitlement event timeline."""
+    response = _beta_rpc(
+        "admin_list_member_operations",
+        {"p_user_id": str(user_id), "p_limit": max(1, min(int(limit), 100))},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
 def _beta_redeem_referral_code(session, code):
     response = _beta_rpc(
         "redeem_referral_code",
@@ -4724,6 +4754,108 @@ def _beta_render_admin_console(session):
             "選擇會員", list(options.keys()), key="beta_admin_selected_member"
         )
         selected = options[selected_label]
+
+        st.markdown("#### 📊 會員額度、效期與操作紀錄")
+        st.caption("顯示此會員所有額度批次、方案權益與最近 50 筆可追溯事件；已到期或已用完的批次也會保留，方便客服查核。")
+        try:
+            credit_lots = _beta_admin_get_member_credit_lots(
+                session, selected["user_id"]
+            )
+            entitlements = _beta_admin_get_member_entitlements(
+                session, selected["user_id"]
+            )
+            operations = _beta_admin_list_member_operations(
+                session, selected["user_id"]
+            )
+        except Exception:
+            st.warning("會員明細暫時無法讀取；請確認會員權益明細資料庫遷移已完成。")
+            credit_lots, entitlements, operations = [], [], []
+        else:
+            credit_groups = {
+                "基本／體驗／管理員": 0,
+                "推薦碼獎勵": 0,
+                "訂閱／生成包": 0,
+                "市集創作者回饋": 0,
+            }
+            for lot in credit_lots:
+                if str(lot.get("lot_status", "")) != "可用":
+                    continue
+                remaining = max(0, int(lot.get("remaining_credits", 0) or 0))
+                source = str(lot.get("source_kind", "") or "")
+                if source == "referral":
+                    credit_groups["推薦碼獎勵"] += remaining
+                elif source in {"subscription", "credit_pack"}:
+                    credit_groups["訂閱／生成包"] += remaining
+                elif source == "template_reward":
+                    credit_groups["市集創作者回饋"] += remaining
+                else:
+                    credit_groups["基本／體驗／管理員"] += remaining
+            metric_columns = st.columns(4)
+            for metric_column, (label, value) in zip(metric_columns, credit_groups.items()):
+                metric_column.metric(label, f"{value} 次")
+
+            st.markdown("##### 💳 生成次數批次與到期日")
+            if credit_lots:
+                lot_rows = [
+                    {
+                        "來源": str(lot.get("source_kind", "") or "-") or "-",
+                        "方案": str(lot.get("product_code", "") or "-") or "-",
+                        "原始次數": int(lot.get("total_credits", 0) or 0),
+                        "剩餘次數": int(lot.get("remaining_credits", 0) or 0),
+                        "開始時間": str(lot.get("starts_at", "") or "-")[:16],
+                        "到期時間": str(lot.get("expires_at", "") or "-")[:16],
+                        "狀態": str(lot.get("lot_status", "") or "-") or "-",
+                    }
+                    for lot in credit_lots
+                    if isinstance(lot, dict)
+                ]
+                st.dataframe(lot_rows, hide_index=True, use_container_width=True)
+            else:
+                st.caption("尚無生成次數批次紀錄。")
+
+            st.markdown("##### 📋 方案權益與到期日")
+            if entitlements:
+                entitlement_rows = [
+                    {
+                        "權益類型": str(item.get("entitlement_kind", "") or "-") or "-",
+                        "方案": str(item.get("product_code", "") or "-") or "-",
+                        "AI 幫想／日": int(item.get("daily_copy_limit", 0) or 0),
+                        "雲端作品上限": int(item.get("library_capacity", 0) or 0),
+                        "開始時間": str(item.get("starts_at", "") or "-")[:16],
+                        "到期時間": str(item.get("expires_at", "") or "-")[:16],
+                        "狀態": str(item.get("entitlement_status", "") or "-") or "-",
+                        "備註": str(item.get("note", "") or "-") or "-",
+                    }
+                    for item in entitlements
+                    if isinstance(item, dict)
+                ]
+                st.dataframe(entitlement_rows, hide_index=True, use_container_width=True)
+            else:
+                st.caption("尚無方案或生成包權益紀錄。")
+
+            st.markdown("##### 🧾 最近操作紀錄")
+            if operations:
+                operation_rows = [
+                    {
+                        "時間": str(item.get("occurred_at", "") or "-")[:16],
+                        "類型": str(item.get("operation_type", "") or "-") or "-",
+                        "內容": str(item.get("detail", "") or "-") or "-",
+                        "次數變動": (
+                            f"{int(item.get('credit_delta', 0) or 0):+d}"
+                            if int(item.get("credit_delta", 0) or 0) != 0
+                            else "－"
+                        ),
+                        "操作者": str(item.get("operator_label", "") or "-") or "-",
+                    }
+                    for item in operations
+                    if isinstance(item, dict)
+                ]
+                st.dataframe(operation_rows, hide_index=True, use_container_width=True)
+            else:
+                st.caption("尚無可顯示的操作紀錄。")
+
+        st.divider()
+        st.markdown("#### ➕ 手動補／扣生成次數")
         adjustment = st.number_input(
             "調整生成次數（正數補次、負數扣次）",
             min_value=-50,
