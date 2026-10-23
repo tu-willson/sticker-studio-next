@@ -6597,8 +6597,20 @@ def _v12_load_history_record(record):
         st.session_state["v12_style_editor_prompt"] = str(
             loaded_custom_style.get("prompt", "") or ""
         )
+        # 模板的自定義風格要有自己的可編輯暫存區；絕不佔用、也不覆蓋
+        # 套用者的 01～10 個人風格槽。每一次重新套用都重設為該模板快照。
+        st.session_state["v12_applied_template_style_name"] = str(
+            loaded_custom_style.get("name", "") or ""
+        )
+        st.session_state["v12_applied_template_style_prompt"] = str(
+            loaded_custom_style.get("prompt", "") or ""
+        )
+        st.session_state.pop("v12_applied_template_style_feedback", None)
     else:
         st.session_state.pop("v12_loaded_project_custom_style", None)
+        st.session_state.pop("v12_applied_template_style_name", None)
+        st.session_state.pop("v12_applied_template_style_prompt", None)
+        st.session_state.pop("v12_applied_template_style_feedback", None)
 
     loaded_sticker_mode = str(metadata.get("sticker_mode", "text") or "text")
     st.session_state["v12_sticker_content_mode"] = (
@@ -9522,6 +9534,32 @@ def _v12_save_style_editor_callback():
     st.session_state["v12_show_saved_style_notice"] = True
 
 
+def _v12_save_applied_template_style_callback():
+    """Persist edits to the temporary shared-template style, never to 01–10."""
+    loaded = st.session_state.get("v12_loaded_project_custom_style")
+    if not isinstance(loaded, dict):
+        st.session_state["v12_applied_template_style_feedback"] = "missing"
+        return
+
+    prompt = str(
+        st.session_state.get("v12_applied_template_style_prompt", "") or ""
+    ).strip()[:12000]
+    name = str(
+        st.session_state.get("v12_applied_template_style_name", "") or ""
+    ).strip()[:120]
+    if not prompt:
+        st.session_state["v12_applied_template_style_feedback"] = "empty"
+        return
+
+    st.session_state["v12_loaded_project_custom_style"] = {
+        **loaded,
+        "name": name,
+        "prompt": prompt,
+        "source": "shared_template",
+    }
+    st.session_state["v12_applied_template_style_feedback"] = "saved"
+
+
 def _v12_clear_style_editor_callback():
     """Clear a custom style before the form's one normal submission rerun."""
     try:
@@ -10672,6 +10710,40 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                     else "📦 已載入作品當時的自定義風格"
                 )
                 st.info(_loaded_style_label + (f"：{_loaded_style_name}" if _loaded_style_name else ""))
+                if _loaded_style_source == "shared_template":
+                    _template_style_feedback = st.session_state.pop(
+                        "v12_applied_template_style_feedback", ""
+                    )
+                    if _template_style_feedback == "saved":
+                        st.success("✅ 已更新本次套用中的自定義風格；不會覆蓋你的 01～10。")
+                    elif _template_style_feedback == "empty":
+                        st.warning("請保留至少一段自定義風格指令，才能儲存。")
+                    elif _template_style_feedback == "missing":
+                        st.warning("套用中的自定義風格已失效，請重新套用模板。")
+
+                    with st.expander("✏️ 套用中的自定義風格（可編輯）", expanded=True):
+                        st.caption(
+                            "這是本次購買模板專用的暫存位置。可查看並修改上傳者的風格指令；"
+                            "修改後只會用在你目前這份創作與後續保存的作品／膠捲，不會改動原模板，也不會覆蓋你的 01～10。"
+                        )
+                        with st.form("v12_applied_template_style_form", border=False):
+                            st.text_input(
+                                "🏷️ 套用中的風格名稱（可自行命名）",
+                                key="v12_applied_template_style_name",
+                                placeholder="例如：我的改版孩童風格",
+                            )
+                            st.text_area(
+                                "🎨 自定義風格 Prompt（可直接編輯）",
+                                key="v12_applied_template_style_prompt",
+                                height=200,
+                                placeholder="在這裡調整想強調的畫風、局部部位或畫面細節…",
+                            )
+                            st.form_submit_button(
+                                "💾 儲存套用中的風格修改",
+                                type="primary",
+                                use_container_width=True,
+                                on_click=_v12_save_applied_template_style_callback,
+                            )
             elif _draft_style_prompt:
                 custom_style = _draft_style_prompt
                 st.info("✏️ 正在使用尚未儲存的自定義風格草稿。")
