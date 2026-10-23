@@ -283,12 +283,16 @@ Sticker Studio Next 是一項 AI 輔助 LINE 貼圖創作服務。會員可上�
 
 #### 💳 方案與提供額度
 
+**免費會員權益：**可使用基礎貼圖創作、首次登入 **2 次**圖片生成體驗額度、每日 **2 次** AI 幫想，以及雲端作品庫 **5 組**。本段不包含膠捲與市集功能。
+
 | 方案 | 月費／售價 | 每月圖片生成次數 | AI幫想每日額度 | 雲端作品庫上限 |
 | --- | ---: | ---: | ---: | ---: |
 | 基本方案 | NT$99／月 | 20 次 | 15 次 | 20 組 |
 | 標準方案 | NT$149／月 | 30 次 | 20 次 | 30 組 |
 | 進階方案 | NT$199／月 | 40 次 | 25 次 | 40 組 |
 | 單次生成包 | NT$49／包 | 7 次 | 7 次 | 7 組 |
+
+膠捲與市集規則請至「我的作品」頁面查看。
 
 #### ✨ 圖片生成次數與使用方式
 
@@ -301,6 +305,8 @@ Sticker Studio Next 是一項 AI 輔助 LINE 貼圖創作服務。會員可上�
 - 作品庫容量依目前有效方案計算；免費會員預設可保存 5 組作品，訂閱或單次生成包則依方案權益提供容量。
 
 #### 📌 重要提醒
+
+**生成次數使用順序：**基本會員點數 → 推薦碼獎勵 → 訂閱方案／7 次生成包 → 市集創作者回饋。同一類別內，會優先使用較早到期的額度。
 
 本服務提供數位化 AI 創作與雲端保存功能。使用者須確認上傳照片、參考圖、文字與生成內容具有合法使用權，且不侵害他人權利。正式付款頁面將同步揭示付款、續訂、取消與退款相關說明。"""
     if locale == "en":
@@ -2760,6 +2766,8 @@ def _beta_http(method, path, payload=None, access_token=None):
             "invalid_referral_code_format",
             "referral_code_not_found",
             "referral_already_redeemed",
+            "referral_code_already_redeemed",
+            "referral_previous_reward_remaining",
             "referral_code_inactive",
             "referral_code_expired",
             "referral_code_limit_reached",
@@ -3896,6 +3904,28 @@ def _beta_credit_balance(session):
         raise RuntimeError("beta_invalid_balance") from exc
 
 
+def _beta_credit_balance_breakdown(session):
+    """Return only the member's active lots, grouped by spend-priority class."""
+    response = _beta_rpc(
+        "get_my_credit_balance_breakdown", {}, access_token=session["access_token"]
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("beta_invalid_credit_breakdown")
+    fields = (
+        "basic_member_credits",
+        "referral_credits",
+        "subscription_or_pack_credits",
+        "marketplace_creator_reward_credits",
+        "total_credits",
+    )
+    try:
+        return {field: max(0, int(response.get(field, 0) or 0)) for field in fields}
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("beta_invalid_credit_breakdown") from exc
+
+
 def _beta_effective_entitlement(session):
     """Read the member's currently effective subscription or credit-pack rights."""
     response = _beta_rpc(
@@ -4235,8 +4265,12 @@ def _beta_redeem_referral_code_callback(session):
         st.session_state.pop("beta_referral_redeem_error", None)
     except Exception as exc:
         error_text = str(exc).lower()
-        if "already_redeemed" in error_text:
-            message = "此帳號已兌換過推薦碼，每個帳號只能使用一次。"
+        if "previous_reward_remaining" in error_text:
+            message = "請先使用完目前的推薦碼獎勵次數，才能兌換下一組推薦碼。"
+        elif "code_already_redeemed" in error_text:
+            message = "這組推薦碼已由此帳號兌換過，請改用不同的推薦碼。"
+        elif "already_redeemed" in error_text:
+            message = "這組推薦碼已由此帳號兌換過，請改用不同的推薦碼。"
         elif "limit_reached" in error_text:
             message = "這組推薦碼的兌換名額已滿。"
         elif "expired" in error_text:
@@ -4255,20 +4289,47 @@ def _beta_render_referral_redemption(session):
     try:
         redemptions = _beta_get_my_referral_redemption(session)
     except Exception:
-        # Keep the account panel healthy while the feature migration is pending.
+        # Keep the account panel healthy while the referral migration is pending.
         return
+    try:
+        breakdown = _beta_credit_balance_breakdown(session)
+    except Exception:
+        breakdown = None
 
     with st.expander("🎁 兌換推薦碼", expanded=False):
-        if redemptions:
-            redemption = redemptions[0] if isinstance(redemptions[0], dict) else {}
-            st.success(
-                f"你已兌換推薦碼「{redemption.get('code', '')}」，"
-                f"並獲得 {int(redemption.get('reward_credits', 0) or 0)} 次生成次數。"
-            )
-            st.caption("每個帳號僅能兌換一次推薦碼。")
-            return
+        if breakdown is None:
+            # The earlier one-code policy stays usable until the new database
+            # migration is applied; do not make the redemption entry vanish.
+            if redemptions:
+                redemption = redemptions[0] if isinstance(redemptions[0], dict) else {}
+                st.success(
+                    f"你已兌換推薦碼「{redemption.get('code', '')}」，"
+                    f"並獲得 {int(redemption.get('reward_credits', 0) or 0)} 次生成次數。"
+                )
+                st.caption("推薦碼連續兌換功能正在更新，請稍後重新整理。")
+                return
+            breakdown = {"referral_credits": 0}
 
-        st.caption("輸入英文／數字推薦碼即可領取生成次數；每個帳號僅能兌換一次。獎勵次數自兌換日起 60 天內可使用。")
+        referral_credits = int(breakdown.get("referral_credits", 0) or 0)
+        if referral_credits:
+            st.info(
+                f"🎁 目前推薦碼獎勵尚有 **{referral_credits} 次**可用。"
+                "使用完畢前，不能再兌換下一組推薦碼。"
+            )
+        else:
+            st.caption("目前沒有未使用的推薦碼獎勵，可輸入新的推薦碼。")
+
+        if redemptions:
+            latest = redemptions[0] if isinstance(redemptions[0], dict) else {}
+            st.caption(
+                f"最近一次兌換：{latest.get('code', '')}"
+                f"（+{int(latest.get('reward_credits', 0) or 0)} 次）。"
+            )
+
+        st.caption(
+            "可使用不同推薦碼累積獎勵；每組推薦碼每個帳號限兌換一次。"
+            "獎勵次數自各次兌換日起 60 天內可使用。"
+        )
         with st.form("beta_referral_redeem_form", clear_on_submit=False):
             st.text_input(
                 "推薦碼",
@@ -4301,15 +4362,17 @@ def _beta_render_admin_operations_policy():
             | 一般會員 | 可使用貼圖生成與膠捲功能；不可使用市集模板。 | 依帳號目前可用次數。 |
             | 7 次生成包 | 圖片生成 7 次、AI 幫想每日 7 次、雲端作品 7 組。 | 購買後 30 天。 |
             | 基本／標準／進階訂閱 | 每月圖片生成 20／30／40 次；AI 幫想每日 15／20／25 次；雲端作品 20／30／40 組。 | 訂閱額度可保留至下一個帳務週期結束；系統優先使用最早到期的次數。 |
-            | 推薦碼獎勵 | 一個帳號僅可成功兌換一次；推薦碼可設定名額、獎勵次數、截止日與停用狀態。 | 兌換後 60 天。 |
-            | 市集創作者回饋 | 購買者首次解鎖模板所支付的生成次數，全數回饋原創者。 | 回饋額度 90 天，且在使用者自身方案／購買額度之後才消耗。 |
+            | 推薦碼獎勵 | 可使用不同推薦碼加點；同一組碼每帳號限兌換一次，舊推薦碼獎勵用完前不得再兌換下一組。推薦碼可設定名額、獎勵次數、截止日與停用狀態。 | 每次兌換後 60 天。 |
+            | 市集創作者回饋 | 購買者首次解鎖模板所支付的生成次數，全數回饋原創者。 | 回饋額度 90 天，且最後才消耗。 |
             | 管理員手動補次 | 僅限有明確原因的客服、測試或補償處理。 | 目前核發後 365 天；每筆都需留下原因。 |
+
+            **生成次數扣除優先順序：**基本會員點數（含體驗／管理員補次） → 推薦碼獎勵 → 訂閱方案／7 次生成包 → 市集創作者回饋；同一類別內再優先使用較早到期的額度。
 
             ### 2. 推薦碼管理
 
             - 僅管理員能建立或停用。代碼僅允許 4～24 位英文字母與數字，系統會統一轉為大寫。
             - 每組碼的可兌換名額為 1～100,000 人；每人獎勵 1～100 次。
-            - 使用者、名額、推薦碼有效期與獎勵額度會在同一筆資料庫交易中確認；連點或多人同時操作不得重複核發。
+            - 每組碼每個帳號限成功兌換一次；使用者可於前一筆推薦碼獎勵用完後，再輸入不同推薦碼。使用者、名額、推薦碼有效期與獎勵額度會在同一筆資料庫交易中確認；連點或多人同時操作不得重複核發。
             - 停用只阻止新的兌換，不會追回已成功核發的次數。不得刪除有兌換紀錄的推薦碼。
             - 管理者應保留活動來源、對外文案與停用原因於「內部備註」。
 
@@ -4354,7 +4417,7 @@ def _beta_render_admin_console(session):
     _beta_render_admin_operations_policy()
 
     with st.expander("🎁 推薦碼管理", expanded=True):
-        st.caption("建立後可立即發送給使用者。每個帳號一生只能成功兌換一組推薦碼；獎勵次數自兌換日起保留 60 天。")
+        st.caption("建立後可立即發送給使用者。同一組推薦碼每個帳號限兌換一次；前一筆推薦碼獎勵用完後，可再兌換不同推薦碼。每筆獎勵自兌換日起保留 60 天。")
         create_code, create_limit, create_credits = st.columns([3, 2, 2])
         with create_code:
             st.text_input(
@@ -4621,6 +4684,16 @@ def _beta_render_account_panel():
                 st.success(t("account_balance", email=email, balance=balance))
             except Exception:
                 st.warning(t("account_unavailable", email=email))
+            else:
+                try:
+                    credit_breakdown = _beta_credit_balance_breakdown(session)
+                    st.caption(
+                        "🎁 推薦碼獎勵："
+                        f"{credit_breakdown['referral_credits']} 次"
+                        "｜基本會員點數用完後優先使用，再使用訂閱／生成包額度。"
+                    )
+                except Exception:
+                    pass
         with refresh_balance_col:
             if st.button(t("refresh"), key="beta_refresh_credit_balance", use_container_width=True):
                 _beta_clear_cached_copy_usage_status()
@@ -4651,49 +4724,12 @@ def _beta_render_account_panel():
                 st.markdown(_v12_member_rules_markdown())
             return session
         with st.expander("📜 生成次數與雲端作品庫規則", expanded=False):
-            st.markdown(
-                """
-                #### 🎨 服務內容
-
-                Sticker Studio Next 是一項 AI 輔助 LINE 貼圖創作服務。會員可上傳人物照片、選擇貼圖風格或上傳畫風參考，設定貼圖文字與動作後，產生 4×2 貼圖總圖；完成裁切後，可挑選單張貼圖下載或保存至雲端作品庫。
-
-                #### 💳 方案與提供額度
-
-                | 方案 | 月費／售價 | 每月圖片生成次數 | AI幫想每日額度 | 雲端作品庫上限 |
-                | --- | ---: | ---: | ---: | ---: |
-                | 基本方案 | NT$99／月 | 20 次 | 15 次 | 20 組 |
-                | 標準方案 | NT$149／月 | 30 次 | 20 次 | 30 組 |
-                | 進階方案 | NT$199／月 | 40 次 | 25 次 | 40 組 |
-                | 單次生成包 | NT$49／包 | 7 次 | 7 次 | 7 組 |
-
-                #### ✨ 圖片生成次數與使用方式
-
-                - 每次成功生成一張 **4×2 原始貼圖總圖**，扣除 **1 次圖片生成次數**；生成失敗不計入使用。
-                - AI幫想額度以台灣時間每日計算，供「主題 AI 幫想」等文字輔助功能使用；與圖片生成次數分開計算。
-                - 單次生成包為一次性購買，不會自動續訂；購買後有效期為 **30 天**。
-                - 訂閱方案每月提供的新圖片生成次數，未使用部分可保留至 **下一個帳務週期結束**；系統會優先使用最早到期的次數。
-
-                > **例子：**你在 5 月 10 日訂閱基本方案，取得 20 次圖片生成次數；到了 6 月 9 日還剩 5 次。6 月 10 日進入新一期後會再加入 20 次，因此共有 25 次可用；原本保留的 5 次最晚可用到 7 月 9 日，系統會優先使用這 5 次。
-
-                #### 🔁 訂閱規則（正式付款開通後適用）
-
-                - 訂閱自付款成功日起生效，並依所選方案按月提供圖片生成次數、AI幫想額度與作品庫容量。
-                - 取消訂閱後，當期已取得的服務權益可使用至該帳務週期結束；下一期不再續扣。
-
-                > **例子：**你的訂閱週期是 5 月 10 日至 6 月 9 日；若在 5 月 20 日取消，仍可使用當期的圖片生成次數、AI幫想額度與作品庫權益至 6 月 9 日。6 月 10 日起不會再扣款，也不會發放新一期的方案額度。
-                - 變更方案或訂閱到期後，雲端作品不會自動刪除；若現有作品數超過新方案上限，需先整理作品庫後才能新增保存。
-                - 單次生成包與訂閱生成次數可併用；服務會優先使用最早到期的可用次數。
-
-                #### ☁️ 雲端作品庫與下載
-
-                - 每組作品可保存原始人物照片、已上傳的畫風參考與使用者選取的貼圖成品；單組最多保存 **40 張貼圖**，**MAIN／TAB** 規格圖不計入此上限。
-                - 未勾選保存的裁切貼圖不會寫入作品庫；ZIP 壓縮檔不會另行保存，可在日後將作品載回創作頁後重新下載。
-                - 作品庫容量依目前有效方案計算；免費會員預設可保存 5 組作品，訂閱或單次生成包則依上表權益提供容量。
-
-                #### 📌 重要提醒
-
-                本服務提供數位化 AI 創作與雲端保存功能。使用者須確認上傳照片、參考圖、文字與生成內容具有合法使用權，且不侵害他人權利。正式付款頁面將同步揭示付款、續訂、取消與退款相關說明。
-                """
+            st.markdown(_v12_member_rules_markdown())
+            st.button(
+                "📚 前往我的作品了解膠捲與市集規則",
+                key="beta_rules_go_library",
+                on_click=_v12_navigate_callback,
+                kwargs={"view": "library", "library_section": "home", "preserve_creation": True},
             )
         return session
 
