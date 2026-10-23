@@ -10424,6 +10424,10 @@ def _v12_clear_style_reference():
 def _v12_set_session_state_callback(key, value):
     """Update a simple UI state before Streamlit's one automatic rerun."""
     st.session_state[key] = value
+    # 作品集各分頁是同一個 Streamlit view；切換時不能沿用先前長頁面的
+    # 捲動位置，否則瀏覽器會把使用者留在頁面底部。
+    if key == "v12_library_section":
+        st.session_state["v12_scroll_page_top"] = True
 
 
 def _v12_navigate_callback(
@@ -10446,6 +10450,10 @@ def _v12_navigate_callback(
         _save_v10_presets()
     if view is not None:
         st.session_state["v12_view"] = view
+        # 從製作頁／市集切回作品集時，明確回到作品集頂端。Streamlit 的 rerun
+        # 預設會保留捲動位置，長頁面切到較短的作品集時便會看起來落在最下方。
+        if view == "library":
+            st.session_state["v12_scroll_page_top"] = True
     if library_section is not None:
         st.session_state["v12_library_section"] = library_section
     if marketplace_shelf is not None:
@@ -10964,6 +10972,35 @@ if st.session_state.get("v12_view") != "create":
 st.session_state.setdefault("v12_view", "create")
 
 
+def _v12_render_pending_page_top_scroll():
+    """Return to the visible page top after a works-page navigation rerun."""
+    if not st.session_state.pop("v12_scroll_page_top", False):
+        return
+
+    # The scroll owner varies slightly between Streamlit versions and embedded
+    # browsers. Reset each safe candidate, then repeat after the new page has
+    # finished laying out so a restored browser scroll position cannot win.
+    components.html(
+        """
+        <script>
+        (() => {
+          const resetToTop = () => {
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+            parentWindow.scrollTo(0, 0);
+            if (parentDocument.documentElement) parentDocument.documentElement.scrollTop = 0;
+            if (parentDocument.body) parentDocument.body.scrollTop = 0;
+            const appScroller = parentDocument.querySelector('[data-testid="stAppViewContainer"]');
+            if (appScroller) appScroller.scrollTop = 0;
+          };
+          [0, 80, 260, 700].forEach((delay) => window.setTimeout(resetToTop, delay));
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
 def _v12_render_pending_creation_scroll():
     """Scroll after a library shortcut, before the long creation page is painted."""
     target = str(st.session_state.pop("v12_scroll_target", "") or "")
@@ -11001,6 +11038,8 @@ def _v12_render_pending_creation_scroll():
 if st.session_state["v12_view"] == "create":
     _v12_restore_creation_draft_after_navigation()
     _v12_render_pending_creation_scroll()
+
+_v12_render_pending_page_top_scroll()
 
 if st.session_state["v12_view"] == "pricing":
     _v12_render_pricing_page()
