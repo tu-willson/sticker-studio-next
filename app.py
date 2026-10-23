@@ -2931,6 +2931,8 @@ def _beta_http(method, path, payload=None, access_token=None):
             "referral_code_inactive",
             "referral_code_expired",
             "referral_code_limit_reached",
+            "marketplace_report_membership_required",
+            "marketplace_report_daily_limit_reached",
         }
         if error_code in known_codes:
             raise RuntimeError(error_code) from exc
@@ -3341,14 +3343,42 @@ def _beta_report_shared_template(session, template_id):
     }
 
 
+def _beta_get_marketplace_report_status(session):
+    """Return the current member's daily marketplace-report allowance."""
+    response = _beta_rpc(
+        "get_my_marketplace_report_status",
+        {},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("marketplace_report_status_invalid")
+    daily_limit = max(0, int(response.get("daily_limit", 0) or 0))
+    used_count = max(0, int(response.get("used_count", 0) or 0))
+    return {
+        "can_report": bool(response.get("can_report", False)),
+        "daily_limit": daily_limit,
+        "used_count": used_count,
+        "remaining_count": max(0, int(response.get("remaining_count", 0) or 0)),
+    }
+
+
 def _v12_report_shared_template_callback(session, template_id):
     """Run the report request before Streamlit's single automatic rerun."""
     try:
         _beta_report_shared_template(session, template_id)
         st.session_state["v12_shared_template_market_feedback"] = "reported"
-    except Exception:
+    except Exception as exc:
+        error_code = str(exc)
+        if error_code == "marketplace_report_membership_required":
+            feedback_type = "report_membership_required"
+        elif error_code == "marketplace_report_daily_limit_reached":
+            feedback_type = "report_daily_limit"
+        else:
+            feedback_type = "report_error"
         st.session_state["v12_shared_template_market_feedback"] = {
-            "type": "report_error",
+            "type": feedback_type,
         }
 
 
@@ -8705,6 +8735,10 @@ def _v12_render_shared_template_marketplace(session):
             st.info(f"已從我的最愛名單移除「{feedback_title}」。")
     elif isinstance(market_feedback, dict) and market_feedback.get("type") == "favorite_error":
         st.error("這卷膠卷暫時無法更新最愛名單，請稍後再試。")
+    elif isinstance(market_feedback, dict) and market_feedback.get("type") == "report_membership_required":
+        st.warning("檢舉功能限訂閱方案或 7 次生成包會員使用。")
+    elif isinstance(market_feedback, dict) and market_feedback.get("type") == "report_daily_limit":
+        st.warning("今日檢舉額度已達 2 次上限，請明天再試。")
     elif isinstance(market_feedback, dict) and market_feedback.get("type") == "report_error":
         st.error(t("shared_template_report_failed"))
     st.markdown(
@@ -8750,6 +8784,17 @@ def _v12_render_shared_template_marketplace(session):
         marketplace_rights = {"marketplace_eligible": False}
     if not marketplace_rights["marketplace_eligible"]:
         st.caption("一般會員可瀏覽市集，但無法購入膠卷；購買 7 次生成包或訂閱方案後即可使用。")
+    try:
+        report_rights = _beta_get_marketplace_report_status(session)
+    except Exception:
+        report_rights = {
+            "can_report": False,
+            "daily_limit": 0,
+            "used_count": 0,
+            "remaining_count": 0,
+        }
+    if not report_rights["can_report"]:
+        st.caption("檢舉功能限訂閱方案或 7 次生成包會員使用。")
     search_col, sort_col = st.columns([2.1, 1.0], vertical_alignment="bottom")
     with search_col:
         marketplace_search = st.text_input(
@@ -8846,14 +8891,20 @@ def _v12_render_shared_template_marketplace(session):
                 st.markdown(f"### 🌐 {html.escape(title or t('untitled_project'))}")
             with top_report_col:
                 if not is_owner:
-                    st.button(
-                        t("shared_template_report"),
-                        key=f"v12_shared_template_report_{template_id}",
-                        use_container_width=True,
-                        on_click=_v12_report_shared_template_callback,
-                        args=(session, template_id),
-                    )
-                    st.caption("檢舉後自動遮蔽")
+                    if report_rights["can_report"]:
+                        report_remaining = report_rights["remaining_count"]
+                        st.button(
+                            t("shared_template_report"),
+                            key=f"v12_shared_template_report_{template_id}",
+                            use_container_width=True,
+                            disabled=report_remaining <= 0,
+                            on_click=_v12_report_shared_template_callback,
+                            args=(session, template_id),
+                        )
+                        if report_remaining > 0:
+                            st.caption(f"今日剩 {report_remaining}／2 次｜檢舉後自動遮蔽")
+                        else:
+                            st.caption("今日檢舉額度已用完")
             if description:
                 st.caption(description)
             template_tags = [
