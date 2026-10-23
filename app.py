@@ -4056,6 +4056,19 @@ def _beta_is_admin(session):
     return bool(response)
 
 
+def _beta_refresh_admin_access(session):
+    """Refresh the server-authorized admin flag used to expose the private UI."""
+    if not session:
+        st.session_state["v12_is_beta_admin"] = False
+        return False
+    try:
+        is_admin = _beta_is_admin(session)
+    except Exception:
+        is_admin = False
+    st.session_state["v12_is_beta_admin"] = bool(is_admin)
+    return bool(is_admin)
+
+
 def _beta_admin_list_members(session, search_text=""):
     response = _beta_rpc(
         "admin_list_members",
@@ -4097,21 +4110,21 @@ def _beta_admin_grant_test_purchase(session, user_id, product_code, note):
 
 
 def _beta_render_admin_console(session):
-    """Show a small audited console only when Supabase authorizes this member."""
-    if not session:
-        st.session_state["v12_is_beta_admin"] = False
-        return
-    try:
-        is_admin = _beta_is_admin(session)
-        st.session_state["v12_is_beta_admin"] = is_admin
-        if not is_admin:
-            return
-    except Exception:
-        st.session_state["v12_is_beta_admin"] = False
-        return
+    """Render the private administration page after a server-side role check."""
+    if not _beta_refresh_admin_access(session):
+        return False
 
-    st.markdown("---")
-    with st.expander("🛠️ Beta 管理後台（僅管理者）", expanded=False):
+    st.markdown('<div class="v10-main-title">🛠️ 管理後台</div>', unsafe_allow_html=True)
+    st.caption("僅限資料庫授權的管理員。所有會員權益操作都會記錄操作者、原因與時間。")
+    overview_members, overview_codes, overview_market = st.columns(3)
+    with overview_members:
+        st.info("👥 會員與權益\n\n搜尋會員、補／扣生成次數與測試購買。")
+    with overview_codes:
+        st.info("🎁 推薦碼管理\n\n下一階段將在此建立、限額與追蹤推薦碼。")
+    with overview_market:
+        st.info("🚩 市集審核\n\n下一階段將在此處理累積檢舉的模板。")
+
+    with st.expander("👥 會員與權益管理", expanded=True):
         st.caption("可補回或扣除測試生成次數，也可建立不收款的測試購買。所有操作都會記錄操作者、原因與時間。")
         search_text = st.text_input(
             "搜尋會員 Email 或名稱（空白會顯示最近 100 位）",
@@ -4128,7 +4141,7 @@ def _beta_render_admin_console(session):
         members = st.session_state.get("beta_admin_members", [])
         if not isinstance(members, list) or not members:
             st.info("輸入 Email 後按「查詢會員」，即可進行補次或扣次。")
-            return
+            return True
 
         options = {}
         for member in members:
@@ -4141,7 +4154,7 @@ def _beta_render_admin_console(session):
             options[label] = member
         if not options:
             st.info("找不到符合的會員。")
-            return
+            return True
 
         selected_label = st.selectbox(
             "選擇會員", list(options.keys()), key="beta_admin_selected_member"
@@ -4164,7 +4177,7 @@ def _beta_render_admin_console(session):
         if st.button("確認調整會員生成次數", type="primary", key="beta_admin_adjust_credits"):
             if int(adjustment) == 0 or len(note.strip()) < 3:
                 st.warning("請填寫非 0 的調整次數與至少 3 個字的原因。")
-                return
+                return True
             try:
                 result = _beta_admin_adjust_credits(
                     session, selected["user_id"], adjustment, note
@@ -4239,6 +4252,7 @@ def _beta_render_admin_console(session):
                     )
                 except Exception:
                     st.error("測試購買建立失敗，請確認資料庫遷移已完成後再試。")
+    return True
 
 
 def _beta_render_account_panel():
@@ -9298,6 +9312,12 @@ st.markdown("""<style>
 
 </style>""",unsafe_allow_html=True)
 
+# OAuth redirects arrive with a short-lived code in the URL. Handle it before
+# reading the navigation role so an administrator sees the private entry on the
+# first clean page render after signing in.
+if _beta_config():
+    _beta_complete_oauth_callback()
+
 
 # ============================================================
 # V12｜STEP 01A①
@@ -9335,6 +9355,7 @@ st.markdown(
     .st-key-v12_nav_create button,
     .st-key-v12_nav_pricing button,
     .st-key-v12_nav_library button,
+    .st-key-v12_nav_admin button,
     .st-key-v12_footer_library button{
       width:100% !important;
       min-height:52px !important;
@@ -9350,6 +9371,7 @@ st.markdown(
     .st-key-v12_nav_create button:hover,
     .st-key-v12_nav_pricing button:hover,
     .st-key-v12_nav_library button:hover,
+    .st-key-v12_nav_admin button:hover,
     .st-key-v12_footer_library button:hover{
       background:#FF3333 !important;
       background-color:#FF3333 !important;
@@ -9359,6 +9381,7 @@ st.markdown(
     .st-key-v12_nav_create button p,
     .st-key-v12_nav_pricing button p,
     .st-key-v12_nav_library button p,
+    .st-key-v12_nav_admin button p,
     .st-key-v12_footer_library button p{
       color:#FFFFFF !important;
       font-weight:800 !important;
@@ -9369,11 +9392,13 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-_v12_nav_cols = st.columns(3)
+_v12_nav_admin_session = _beta_current_user() if _beta_config() else None
+_v12_nav_is_admin = _beta_refresh_admin_access(_v12_nav_admin_session)
+_v12_nav_cols = st.columns(4 if _v12_nav_is_admin else 3)
 with _v12_nav_cols[0]:
     # V12 微調：創作頁上方改為「聯繫作者」；其他頁面保留「開始製作」。
     _v12_current_view = st.session_state.get("v12_view", "create")
-    if _v12_current_view in {"library", "pricing", "marketplace"}:
+    if _v12_current_view in {"library", "pricing", "marketplace", "admin"}:
         st.button(
             t("nav_create"),
             key="v12_nav_create",
@@ -9407,6 +9432,15 @@ with _v12_nav_cols[2]:
             "preserve_creation": True,
         },
     )
+if _v12_nav_is_admin:
+    with _v12_nav_cols[3]:
+        st.button(
+            "🛠️ 管理後台",
+            key="v12_nav_admin",
+            use_container_width=True,
+            on_click=_v12_navigate_callback,
+            kwargs={"view": "admin"},
+        )
 
 # This is a real Streamlit button, visually placed in the expanded floating
 # menu so it follows the exact same in-page navigation as "My Works" above.
@@ -9495,6 +9529,19 @@ if st.session_state["v12_view"] == "marketplace":
             key="v12_shared_template_login_back",
             on_click=_v12_navigate_callback,
             kwargs={"view": "library"},
+        )
+    st.stop()
+
+
+if st.session_state["v12_view"] == "admin":
+    _admin_page_session = _beta_current_user() if _beta_config() else None
+    if not _beta_render_admin_console(_admin_page_session):
+        st.error("你沒有管理後台權限，或目前登入狀態已失效。")
+        st.button(
+            "← 返回開始製作",
+            key="v12_admin_access_back",
+            on_click=_v12_navigate_callback,
+            kwargs={"view": "create"},
         )
     st.stop()
 
@@ -9918,12 +9965,6 @@ def _v12_capture_style_reference_details_draft():
         ).strip()[:1200],
     )
 
-# OAuth redirects arrive with a short-lived code in the URL.  Handle it before
-# creating the rest of the widgets so a successful login returns to a clean app.
-if _beta_config():
-    _beta_complete_oauth_callback()
-
-
 # API 使用模式常數必須在所有 callback / widget 使用前先建立。
 # Streamlit 會由上而下執行整個 script，因此不可放在 AI 文案區之後。
 _ALLOWED_API_MODES = [BETA_API_MODE]
@@ -9949,7 +9990,7 @@ for _deprecated_key_state in (
     st.session_state.pop(_deprecated_key_state, None)
 
 _beta_session = _beta_render_account_panel()
-_beta_render_admin_console(_beta_session)
+# 管理後台已在主導航的 admin view 中獨立呈現；此處只保留會員帳號區。
 
 if not _beta_session:
     st.warning(t("login_required"))
