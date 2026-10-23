@@ -4190,6 +4190,38 @@ def _beta_admin_toggle_referral_code_callback(session, code_id, code, next_activ
         st.session_state["beta_admin_referral_error"] = "推薦碼狀態暫時無法更新，請稍後再試。"
 
 
+def _beta_admin_create_referral_code_callback(session):
+    """Create a referral code in one callback after the live form fields rerender."""
+    normalized_code = str(st.session_state.get("beta_admin_referral_code", "") or "").strip().upper()
+    if not re.fullmatch(r"[A-Z0-9]{4,24}", normalized_code):
+        st.session_state["beta_admin_referral_error"] = "推薦碼請使用 4～24 位英文大寫字母或數字。"
+        return
+
+    expiry_date = (
+        st.session_state.get("beta_admin_referral_expiry")
+        if st.session_state.get("beta_admin_referral_set_expiry")
+        else None
+    )
+    expiry_value = f"{expiry_date.isoformat()}T23:59:59+08:00" if expiry_date else None
+    try:
+        _beta_admin_create_referral_code(
+            session,
+            normalized_code,
+            int(st.session_state.get("beta_admin_referral_limit", 100) or 100),
+            int(st.session_state.get("beta_admin_referral_credits", 1) or 1),
+            expiry_value,
+            str(st.session_state.get("beta_admin_referral_note", "") or "").strip(),
+        )
+        st.session_state["beta_admin_referral_notice"] = f"推薦碼「{normalized_code}」已建立。"
+        st.session_state.pop("beta_admin_referral_error", None)
+    except Exception as exc:
+        if "duplicate" in str(exc).lower() or "unique" in str(exc).lower():
+            message = "這組推薦碼已存在，請換一組。"
+        else:
+            message = "推薦碼暫時無法建立，請稍後再試。"
+        st.session_state["beta_admin_referral_error"] = message
+
+
 def _beta_redeem_referral_code_callback(session):
     """Redeem once in the callback pass so a double click cannot grant twice."""
     code = str(st.session_state.get("beta_referral_code_input", "") or "").strip().upper()
@@ -4323,72 +4355,44 @@ def _beta_render_admin_console(session):
 
     with st.expander("🎁 推薦碼管理", expanded=True):
         st.caption("建立後可立即發送給使用者。每個帳號一生只能成功兌換一組推薦碼；獎勵次數自兌換日起保留 60 天。")
-        with st.form("beta_admin_create_referral_form", clear_on_submit=True):
-            create_code, create_limit, create_credits = st.columns([3, 2, 2])
-            with create_code:
-                referral_code = st.text_input(
-                    "推薦碼（英文／數字）",
-                    placeholder="例如：WELCOME100",
-                    max_chars=24,
-                    key="beta_admin_referral_code",
-                )
-            with create_limit:
-                referral_limit = st.number_input(
-                    "可兌換名額",
-                    min_value=1,
-                    max_value=100000,
-                    value=100,
-                    step=1,
-                    key="beta_admin_referral_limit",
-                )
-            with create_credits:
-                referral_credits = st.number_input(
-                    "每人獎勵次數",
-                    min_value=1,
-                    max_value=100,
-                    value=1,
-                    step=1,
-                    key="beta_admin_referral_credits",
-                )
-            set_expiry = st.checkbox(
-                "設定推薦碼截止日期",
-                key="beta_admin_referral_set_expiry",
+        create_code, create_limit, create_credits = st.columns([3, 2, 2])
+        with create_code:
+            st.text_input(
+                "推薦碼（英文／數字）",
+                placeholder="例如：WELCOME100",
+                max_chars=24,
+                key="beta_admin_referral_code",
             )
-            referral_expiry = (
-                st.date_input("截止日期（台灣時間）", key="beta_admin_referral_expiry")
-                if set_expiry else None
+        with create_limit:
+            st.number_input(
+                "可兌換名額",
+                min_value=1,
+                max_value=100000,
+                value=100,
+                step=1,
+                key="beta_admin_referral_limit",
             )
-            referral_note = st.text_input(
-                "內部備註（選填）",
-                max_chars=160,
-                key="beta_admin_referral_note",
+        with create_credits:
+            st.number_input(
+                "每人獎勵次數",
+                min_value=1,
+                max_value=100,
+                value=1,
+                step=1,
+                key="beta_admin_referral_credits",
             )
-            submitted_referral = st.form_submit_button("建立推薦碼", type="primary")
 
-        if submitted_referral:
-            normalized_code = str(referral_code or "").strip().upper()
-            if not re.fullmatch(r"[A-Z0-9]{4,24}", normalized_code):
-                st.error("推薦碼請使用 4～24 位英文大寫字母或數字。")
-            else:
-                expiry_value = (
-                    f"{referral_expiry.isoformat()}T23:59:59+08:00"
-                    if referral_expiry else None
-                )
-                try:
-                    _beta_admin_create_referral_code(
-                        session,
-                        normalized_code,
-                        referral_limit,
-                        referral_credits,
-                        expiry_value,
-                        referral_note,
-                    )
-                    st.success(f"推薦碼「{normalized_code}」已建立。")
-                except Exception as exc:
-                    if "duplicate" in str(exc).lower() or "unique" in str(exc).lower():
-                        st.error("這組推薦碼已存在，請換一組。")
-                    else:
-                        st.error("推薦碼暫時無法建立，請稍後再試。")
+        st.checkbox("設定推薦碼截止日期", key="beta_admin_referral_set_expiry")
+        if st.session_state.get("beta_admin_referral_set_expiry"):
+            st.date_input("截止日期（台灣時間）", key="beta_admin_referral_expiry")
+        st.text_input("內部備註（選填）", max_chars=160, key="beta_admin_referral_note")
+        st.button(
+            "建立推薦碼",
+            type="primary",
+            key="beta_admin_create_referral_code",
+            on_click=_beta_admin_create_referral_code_callback,
+            args=(session,),
+        )
 
         if st.session_state.get("beta_admin_referral_notice"):
             st.success(st.session_state.pop("beta_admin_referral_notice"))
