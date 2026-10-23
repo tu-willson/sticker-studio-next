@@ -1058,7 +1058,7 @@ st.markdown("""
   width:100% !important;
 }
 .st-key-v12_basket_line_creator_link [data-testid="stLinkButton"]{
-  width:calc(100% - 11px) !important;
+  width:calc(100% - 18px) !important;
   margin-left:auto !important;
   margin-right:auto !important;
 }
