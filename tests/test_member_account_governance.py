@@ -7,6 +7,9 @@ APP = (ROOT / "app.py").read_text(encoding="utf-8")
 MIGRATION = (
     ROOT / "supabase" / "migrations" / "20261024_000057_admin_member_account_governance.sql"
 ).read_text(encoding="utf-8")
+MEMBERSHIP_MIGRATION = (
+    ROOT / "supabase" / "migrations" / "20261024_000058_admin_remove_member_entitlements.sql"
+).read_text(encoding="utf-8")
 
 
 class MemberAccountGovernanceTests(unittest.TestCase):
@@ -36,6 +39,11 @@ class MemberAccountGovernanceTests(unittest.TestCase):
         self.assertIn("輸入 DELETE 以確認", APP)
         self.assertIn("確認執行帳號管理操作", APP)
         self.assertIn("🛡️ 帳號、作品與市集限制", APP)
+
+    def test_membership_removal_preserves_non_paid_credit_sources(self):
+        self.assertIn("移除會員資格（回復免費會員）", APP)
+        self.assertIn("source_kind in ('subscription', 'credit_pack')", MEMBERSHIP_MIGRATION)
+        self.assertIn("推薦碼、基本體驗／管理員補次與市集創作者回饋不受影響", APP)
 
 
 if __name__ == "__main__":

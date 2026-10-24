@@ -5140,6 +5140,7 @@ def _beta_render_admin_operations_policy():
 
             - 帳號停權會禁止該會員繼續使用創作功能，並同步限制市集功能及下架其公開膠卷；解除帳號停權不會自動解除市集限制。
             - 市集限制可獨立套用或解除；解除後不會自動恢復已下架的公開膠卷。
+            - 「移除會員資格」會立即終止訂閱方案與 7 次生成包的有效權益，並清除該兩類別尚未使用的額度，使帳號回復免費會員規則；推薦碼、基本體驗／管理員補次與市集創作者回饋不受影響。
             - 「永久刪除私人作品與素材」會刪除作品集、私人膠卷及相關人物／畫風素材，並將原創公開膠卷改為不可見；已購入者的私人快照、訂單與稽核紀錄不受影響。
             - 「註銷帳號」會同時停用帳號、清除私人作品與去識別化會員公開資料；為保留已購買內容與必要管理稽核，系統不直接刪除 Supabase Auth 身分及其不可竄改紀錄。
             - 上述操作都必須填寫 3～300 字原因、明確確認；刪除類操作另須輸入 DELETE。管理員帳號不可由此功能停權、限制或刪除。
@@ -5474,6 +5475,7 @@ def _beta_render_admin_console(session):
                     "解除帳號停權（市集限制維持原狀）": "restore_account",
                     "限制市集功能（同步下架公開膠卷）": "suspend_marketplace",
                     "解除市集功能限制（不會自動重新上架）": "restore_marketplace",
+                    "移除會員資格（回復免費會員）": "remove_membership_entitlements",
                     "永久刪除所有私人作品與素材": "delete_private_works",
                     "註銷帳號並清除所有私人作品": "delete_account",
                 }
@@ -5486,6 +5488,7 @@ def _beta_render_admin_console(session):
                     "解除市集功能限制（不會自動重新上架）"
                     if marketplace_restricted else "限制市集功能（同步下架公開膠卷）"
                 )
+                available_action_labels.append("移除會員資格（回復免費會員）")
                 available_action_labels.extend([
                     "永久刪除所有私人作品與素材",
                     "註銷帳號並清除所有私人作品",
@@ -5552,6 +5555,7 @@ def _beta_render_admin_console(session):
                                 "restore_account": "已解除帳號停權；市集限制維持原狀。",
                                 "suspend_marketplace": "已限制市集功能並下架公開膠卷。",
                                 "restore_marketplace": "已解除市集功能限制；公開膠卷不會自動重新上架。",
+                                "remove_membership_entitlements": "已移除訂閱／7 次生成包資格與其未使用額度，帳號已回復免費會員規則。",
                                 "delete_private_works": "已永久刪除私人作品與素材（" + removed_summary + "）。",
                                 "delete_account": "已註銷帳號並清除私人作品（" + removed_summary + "）。",
                             }
@@ -5578,6 +5582,7 @@ def _beta_render_admin_console(session):
                     "restore_account": "解除帳號停權",
                     "suspend_marketplace": "限制市集功能",
                     "restore_marketplace": "解除市集限制",
+                    "remove_membership_entitlements": "移除會員資格",
                     "delete_private_works": "刪除私人作品",
                     "delete_account": "註銷帳號",
                 }
