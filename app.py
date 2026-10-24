@@ -14641,14 +14641,14 @@ st.caption("")
 
 
 # ─────────────────────────────────────────────
-# LINE 貼圖官方網站
+# LINE 貼圖官方網站／上傳教學
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
-div[data-testid="stLinkButton"] > a,
-div[data-testid="stLinkButton"] > a:visited,
-div[data-testid="stLinkButton"] > a:hover,
-div[data-testid="stLinkButton"] > a:active {
+/* 僅處理創作頁最下方的 LINE 連結，不能影響其他連結按鈕。 */
+.st-key-v12_footer_line_links [data-testid="stLinkButton"] > a,
+.st-key-v12_footer_line_links [data-testid="stLinkButton"] > a:visited,
+.st-key-v12_footer_line_links [data-testid="stLinkButton"] > a:active {
     width: 100% !important;
     min-height: 52px !important;
     border-radius: 10px !important;
@@ -14657,25 +14657,27 @@ div[data-testid="stLinkButton"] > a:active {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    background: #FF4B4B !important;
-    background-color: #FF4B4B !important;
+    background: #b799e4 !important;
+    background-color: #b799e4 !important;
     background-image: none !important;
     color: #FFFFFF !important;
-    border: 1px solid #FF4B4B !important;
+    border: 1px solid #cbb5ef !important;
     box-shadow: none !important;
     text-decoration: none !important;
     opacity: 1 !important;
+    transition: background .18s ease, border-color .18s ease, transform .18s ease !important;
 }
-div[data-testid="stLinkButton"] > a span,
-div[data-testid="stLinkButton"] > a p {
+.st-key-v12_footer_line_links [data-testid="stLinkButton"] > a span,
+.st-key-v12_footer_line_links [data-testid="stLinkButton"] > a p {
     color: #FFFFFF !important;
     font-weight: 800 !important;
 }
-div[data-testid="stLinkButton"] > a:hover {
-    background: #FF3333 !important;
-    background-color: #FF3333 !important;
-    border-color: #FF3333 !important;
+.st-key-v12_footer_line_links [data-testid="stLinkButton"] > a:hover {
+    background: #9167d2 !important;
+    background-color: #9167d2 !important;
+    border-color: #dfc5ff !important;
     color: #FFFFFF !important;
+    transform: translateY(-1px);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -14722,11 +14724,20 @@ with _link_col:
 
     st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
 
-    st.link_button(
-        t("line_creator_link"),
-        "https://creator.line.me/zh-hant/",
-        use_container_width=True,
-    )
+    with st.container(key="v12_footer_line_links"):
+        _line_official_col, _line_tutorial_col = st.columns(2, gap="small")
+        with _line_official_col:
+            st.link_button(
+                "開啟LINE貼圖官網",
+                "https://creator.line.me/zh-hant/",
+                use_container_width=True,
+            )
+        with _line_tutorial_col:
+            st.link_button(
+                "網頁貼圖上傳教學",
+                "https://www.threads.com/share/EB_9jnZTz/",
+                use_container_width=True,
+            )
 
 
 # ============================================================
