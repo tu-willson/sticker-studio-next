@@ -4063,6 +4063,41 @@ def _beta_verify_access_token(access_token):
     return user
 
 
+def _beta_account_access_status(session, max_age_seconds=15):
+    """Read the server-side account suspension state without hammering each rerun."""
+    user_id = str((session or {}).get("user", {}).get("id", "") or "")
+    cached = st.session_state.get("beta_account_access_status")
+    now = time.time()
+    if (
+        isinstance(cached, dict)
+        and cached.get("user_id") == user_id
+        and now - float(cached.get("checked_at", 0) or 0) < max_age_seconds
+    ):
+        return cached
+    try:
+        response = _beta_rpc(
+            "get_my_account_access", {}, access_token=session["access_token"]
+        )
+        if isinstance(response, list):
+            response = response[0] if response else {}
+        if not isinstance(response, dict):
+            raise RuntimeError("invalid_account_access_status")
+        status = {
+            "user_id": user_id,
+            "checked_at": now,
+            "is_active": bool(response.get("is_active", False)),
+            "account_state": str(response.get("account_state", "") or ""),
+            "reason": str(response.get("reason", "") or ""),
+        }
+        st.session_state["beta_account_access_status"] = status
+        return status
+    except Exception:
+        # The migration may not have reached the database during a deploy.
+        # Do not sign every member out merely because this optional status
+        # check is briefly unavailable.
+        return {"user_id": user_id, "is_active": True, "account_state": "unknown", "reason": ""}
+
+
 def _beta_current_user():
     """Refresh when needed, then verify the token with Supabase before using credits."""
     session = st.session_state.get("beta_auth_session")
@@ -4082,9 +4117,21 @@ def _beta_current_user():
         else:
             user = _beta_verify_access_token(str(session.get("access_token", "") or ""))
             session["user"] = user
+        account_access = _beta_account_access_status(session)
+        if not account_access.get("is_active", True):
+            state = account_access.get("account_state", "")
+            st.session_state["beta_login_error"] = (
+                "此帳號已由管理員刪除，無法繼續使用。"
+                if state == "deleted"
+                else "此帳號目前已被停權，請聯絡客服。"
+            )
+            st.session_state.pop("beta_auth_session", None)
+            st.session_state.pop("beta_account_access_status", None)
+            return None
         return session
     except Exception:
         st.session_state.pop("beta_auth_session", None)
+        st.session_state.pop("beta_account_access_status", None)
         return None
 
 
@@ -4121,6 +4168,7 @@ def _beta_logout_callback():
     """Clear login state before Streamlit's normal one-click rerun."""
     st.session_state.pop("beta_auth_session", None)
     st.session_state.pop("beta_pending_login_url", None)
+    st.session_state.pop("beta_account_access_status", None)
     _beta_clear_cached_copy_usage_status()
 
 
@@ -4407,6 +4455,44 @@ def _beta_admin_list_member_operations(session, user_id, limit=50):
         access_token=session["access_token"],
     )
     return response if isinstance(response, list) else []
+
+
+def _beta_admin_get_member_governance_status(session, user_id):
+    """Read the selected member's account, marketplace, and work status."""
+    response = _beta_rpc(
+        "admin_get_member_governance_status",
+        {"p_user_id": str(user_id)},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
+
+
+def _beta_admin_list_member_account_actions(session, user_id, limit=30):
+    """Read auditable account governance actions for the selected member."""
+    response = _beta_rpc(
+        "admin_list_member_account_actions",
+        {"p_user_id": str(user_id), "p_limit": max(1, min(int(limit), 100))},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_admin_manage_member_account(session, user_id, action, note):
+    """Perform exactly one server-authorized, audited account governance action."""
+    response = _beta_rpc(
+        "admin_manage_member_account",
+        {
+            "p_user_id": str(user_id),
+            "p_action": str(action or ""),
+            "p_note": str(note or "")[:300],
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
 
 
 def _beta_redeem_referral_code(session, code):
@@ -5049,6 +5135,14 @@ def _beta_render_admin_operations_policy():
             - 雲端作品每組最多保存 40 張已選貼圖；MAIN／TAB 規格圖不計入 40 張上限。作品載回後可編輯並覆蓋同一份雲端作品。
             - 管理員測試購買不收款、不寄付款通知、不對外顯示正式訂單；僅可用於驗證方案權益，且需選擇指定帳號與留下備註。
             - 會員搜尋、補／扣次數、測試購買、推薦碼建立／停用均只允許資料庫授權管理員執行；不可把後台畫面或 RPC 權限提供給一般帳號。
+
+            ### 7. 會員帳號治理
+
+            - 帳號停權會禁止該會員繼續使用創作功能，並同步限制市集功能及下架其公開膠卷；解除帳號停權不會自動解除市集限制。
+            - 市集限制可獨立套用或解除；解除後不會自動恢復已下架的公開膠卷。
+            - 「永久刪除私人作品與素材」會刪除作品集、私人膠卷及相關人物／畫風素材，並將原創公開膠卷改為不可見；已購入者的私人快照、訂單與稽核紀錄不受影響。
+            - 「註銷帳號」會同時停用帳號、清除私人作品與去識別化會員公開資料；為保留已購買內容與必要管理稽核，系統不直接刪除 Supabase Auth 身分及其不可竄改紀錄。
+            - 上述操作都必須填寫 3～300 字原因、明確確認；刪除類操作另須輸入 DELETE。管理員帳號不可由此功能停權、限制或刪除。
             """
         )
 
@@ -5326,6 +5420,186 @@ def _beta_render_admin_console(session):
                 st.dataframe(operation_rows, hide_index=True, use_container_width=True)
             else:
                 st.caption("尚無可顯示的操作紀錄。")
+
+        st.divider()
+        st.markdown("#### 🛡️ 帳號、作品與市集限制")
+        st.caption(
+            "停權會禁止該帳號使用創作功能並同步限制市集；市集限制可獨立使用。"
+            "刪除操作會永久清除私人作品與人物素材，但保留已購入者的私人快照及管理稽核紀錄。"
+        )
+        try:
+            governance = _beta_admin_get_member_governance_status(
+                session, selected["user_id"]
+            )
+            governance_actions = _beta_admin_list_member_account_actions(
+                session, selected["user_id"]
+            )
+        except Exception:
+            governance, governance_actions = {}, []
+            st.warning("帳號管理資料暫時無法讀取；請確認帳號治理資料庫遷移已完成。")
+        else:
+            if st.session_state.get("beta_admin_governance_notice"):
+                st.success(st.session_state.pop("beta_admin_governance_notice"))
+            if st.session_state.get("beta_admin_governance_error"):
+                st.error(st.session_state.pop("beta_admin_governance_error"))
+
+            account_deleted = bool(governance.get("account_deleted", False))
+            account_suspended = bool(governance.get("account_suspended", False))
+            marketplace_restricted = bool(governance.get("marketplace_restricted", False))
+            governance_metrics = st.columns(3)
+            governance_metrics[0].metric(
+                "帳號狀態",
+                "已刪除" if account_deleted else "已停權" if account_suspended else "正常",
+            )
+            governance_metrics[1].metric(
+                "市集權限", "已限制" if marketplace_restricted else "正常"
+            )
+            governance_metrics[2].metric(
+                "私人作品",
+                f"作品集 {int(governance.get('library_project_count', 0) or 0)}｜"
+                f"膠卷 {int(governance.get('creator_reel_count', 0) or 0)}",
+            )
+            if account_suspended and governance.get("account_suspension_reason"):
+                st.caption("停權原因：" + str(governance["account_suspension_reason"]))
+            if marketplace_restricted and governance.get("marketplace_restriction_reason"):
+                st.caption("市集限制原因：" + str(governance["marketplace_restriction_reason"]))
+            if account_deleted:
+                st.warning(
+                    "此帳號已完成註銷，無法解除停權或恢復資料；"
+                    "已購入者的私人快照與管理稽核紀錄仍會保留。"
+                )
+            else:
+                account_action_labels = {
+                    "停權此帳號（同步限制市集）": "suspend_account",
+                    "解除帳號停權（市集限制維持原狀）": "restore_account",
+                    "限制市集功能（同步下架公開膠卷）": "suspend_marketplace",
+                    "解除市集功能限制（不會自動重新上架）": "restore_marketplace",
+                    "永久刪除所有私人作品與素材": "delete_private_works",
+                    "註銷帳號並清除所有私人作品": "delete_account",
+                }
+                available_action_labels = []
+                available_action_labels.append(
+                    "解除帳號停權（市集限制維持原狀）"
+                    if account_suspended else "停權此帳號（同步限制市集）"
+                )
+                available_action_labels.append(
+                    "解除市集功能限制（不會自動重新上架）"
+                    if marketplace_restricted else "限制市集功能（同步下架公開膠卷）"
+                )
+                available_action_labels.extend([
+                    "永久刪除所有私人作品與素材",
+                    "註銷帳號並清除所有私人作品",
+                ])
+                with st.form(
+                    f"beta_admin_member_governance_{selected['user_id']}",
+                    clear_on_submit=False,
+                ):
+                    selected_action_label = st.selectbox(
+                        "管理操作",
+                        available_action_labels,
+                        key=f"beta_admin_governance_action_{selected['user_id']}",
+                    )
+                    selected_action = account_action_labels[selected_action_label]
+                    is_destructive = selected_action in {
+                        "delete_private_works", "delete_account"
+                    }
+                    if is_destructive:
+                        st.warning(
+                            "此操作不可復原。請輸入 DELETE 並確認後才會執行；"
+                            "已購入者的私人快照不會被刪除。"
+                        )
+                        destructive_confirmation = st.text_input(
+                            "輸入 DELETE 以確認",
+                            key=f"beta_admin_governance_delete_confirm_{selected['user_id']}",
+                        )
+                    else:
+                        destructive_confirmation = "DELETE"
+                    governance_note = st.text_area(
+                        "處理原因（會永久寫入管理紀錄）",
+                        max_chars=300,
+                        key=f"beta_admin_governance_note_{selected['user_id']}",
+                    )
+                    governance_confirmed = st.checkbox(
+                        "我已確認此會員、處理範圍與影響",
+                        key=f"beta_admin_governance_confirm_{selected['user_id']}",
+                    )
+                    submit_governance = st.form_submit_button(
+                        "確認執行帳號管理操作",
+                        type="primary",
+                    )
+                if submit_governance:
+                    if not governance_confirmed:
+                        st.session_state["beta_admin_governance_error"] = "請先勾選確認欄位。"
+                    elif is_destructive and destructive_confirmation.strip().upper() != "DELETE":
+                        st.session_state["beta_admin_governance_error"] = "請正確輸入 DELETE 後再執行。"
+                    elif len(governance_note.strip()) < 3:
+                        st.session_state["beta_admin_governance_error"] = "請填寫至少 3 個字的處理原因。"
+                    else:
+                        try:
+                            result = _beta_admin_manage_member_account(
+                                session,
+                                selected["user_id"],
+                                selected_action,
+                                governance_note,
+                            )
+                            removed_summary = (
+                                f"作品集 {int(result.get('affected_library_projects', 0) or 0)} 組、"
+                                f"膠卷 {int(result.get('affected_creator_reels', 0) or 0)} 卷、"
+                                f"市集膠卷 {int(result.get('affected_shared_templates', 0) or 0)} 組"
+                            )
+                            action_result_labels = {
+                                "suspend_account": "已停權帳號並限制市集功能。",
+                                "restore_account": "已解除帳號停權；市集限制維持原狀。",
+                                "suspend_marketplace": "已限制市集功能並下架公開膠卷。",
+                                "restore_marketplace": "已解除市集功能限制；公開膠卷不會自動重新上架。",
+                                "delete_private_works": "已永久刪除私人作品與素材（" + removed_summary + "）。",
+                                "delete_account": "已註銷帳號並清除私人作品（" + removed_summary + "）。",
+                            }
+                            st.session_state["beta_admin_governance_notice"] = action_result_labels[selected_action]
+                            st.session_state["beta_admin_members"] = _beta_admin_list_members(
+                                session, search_text
+                            )
+                            st.rerun()
+                        except Exception as exc:
+                            error_text = str(exc).lower()
+                            if "administrator_target_protected" in error_text:
+                                message = "不可對管理員帳號執行此操作。"
+                            elif "member_account_deleted" in error_text:
+                                message = "此帳號已註銷，無法再變更。"
+                            else:
+                                message = "帳號管理操作未完成，請確認資料庫遷移已執行後再試。"
+                            st.session_state["beta_admin_governance_error"] = message
+                            st.rerun()
+
+            if governance_actions:
+                st.markdown("##### 🧾 帳號與作品管理紀錄")
+                action_name_map = {
+                    "suspend_account": "帳號停權",
+                    "restore_account": "解除帳號停權",
+                    "suspend_marketplace": "限制市集功能",
+                    "restore_marketplace": "解除市集限制",
+                    "delete_private_works": "刪除私人作品",
+                    "delete_account": "註銷帳號",
+                }
+                st.dataframe(
+                    [
+                        {
+                            "時間": str(item.get("created_at", "") or "-")[:16],
+                            "操作": action_name_map.get(str(item.get("action", "")), str(item.get("action", ""))),
+                            "原因": str(item.get("note", "") or "-"),
+                            "影響範圍": (
+                                f"作品集 {int(item.get('affected_library_projects', 0) or 0)}｜"
+                                f"膠卷 {int(item.get('affected_creator_reels', 0) or 0)}｜"
+                                f"市集 {int(item.get('affected_shared_templates', 0) or 0)}"
+                            ),
+                            "操作者": str(item.get("operator_email", "") or "-") or "-",
+                        }
+                        for item in governance_actions
+                        if isinstance(item, dict)
+                    ],
+                    hide_index=True,
+                    use_container_width=True,
+                )
 
         st.divider()
         st.markdown("#### ➕ 手動補／扣生成次數")
