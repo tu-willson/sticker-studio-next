@@ -659,6 +659,20 @@ def _v12_save_style_editor():
     # Keep the legacy combined structure synchronized, but derive it only
     # from the authoritative Style Bank.
     _save_v10_presets()
+    # A Style Bank belongs to the signed-in member, not to this one
+    # Streamlit browser session.  The helper is defined later with the
+    # Supabase authentication functions; resolving it at click time keeps
+    # the early style-editor declarations lightweight.
+    session = _beta_current_user() if _beta_config() else None
+    if session:
+        try:
+            _beta_save_member_custom_style_bank(session, bank)
+            st.session_state["v12_member_style_bank_synced_user_id"] = str(
+                (session.get("user") or {}).get("id", "") or ""
+            )
+        except Exception:
+            st.session_state["v12_style_editor_cloud_sync_error"] = True
+            return False
     return True
 
 
@@ -4134,6 +4148,67 @@ def _beta_current_user():
         return None
 
 
+def _beta_load_member_custom_style_bank(session):
+    """Load only the current member's 01–10 custom-style bank."""
+    response = _beta_rpc(
+        "get_my_custom_style_bank", {}, access_token=session["access_token"]
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if response is None:
+        response = {}
+    if not isinstance(response, dict):
+        raise RuntimeError("member_custom_style_bank_invalid")
+    return _public02a_normalize_style_bank(response)
+
+
+def _beta_save_member_custom_style_bank(session, bank):
+    """Persist a member's own Style Bank through the authenticated RPC."""
+    normalized = _public02a_normalize_style_bank(bank)
+    response = _beta_rpc(
+        "save_my_custom_style_bank",
+        {"p_style_bank": normalized},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if response is not None and not isinstance(response, dict):
+        raise RuntimeError("member_custom_style_bank_invalid")
+    return normalized
+
+
+def _v12_sync_member_custom_style_bank(session):
+    """Hydrate the signed-in member's custom styles once per app session.
+
+    A fresh login must never inherit the previous browser user's styles.  The
+    cloud record is therefore authoritative, including when it is empty.
+    """
+    user_id = str((session.get("user") or {}).get("id", "") or "")
+    if not user_id or st.session_state.get("v12_member_style_bank_synced_user_id") == user_id:
+        return
+    try:
+        bank = _beta_load_member_custom_style_bank(session)
+        _public02a_set_style_bank(bank)
+        _save_v10_presets()
+        # These widgets have not rendered yet when this runs from the account
+        # panel.  Clear stale editor values so the selected slot loads the
+        # newly authenticated member's content instead.
+        for key in (
+            "v12_style_editor_name",
+            "v12_style_editor_prompt",
+            "v12_style_editor_loaded_choice",
+            "v12_saved_custom_style_choice",
+        ):
+            st.session_state.pop(key, None)
+        st.session_state["v12_member_style_bank_synced_user_id"] = user_id
+        st.session_state.pop("v12_style_editor_cloud_sync_error", None)
+    except Exception:
+        # Do not repeatedly issue a failing request during every interactive
+        # rerun.  Saving a style will retry the authenticated sync.
+        st.session_state["v12_member_style_bank_synced_user_id"] = user_id
+        st.session_state["v12_member_style_bank_load_error"] = True
+
+
 def _beta_complete_oauth_callback():
     """Consume a PKCE verifier once and exchange the returned authorization code."""
     code = str(st.query_params.get("code", "") or "")
@@ -4168,6 +4243,8 @@ def _beta_logout_callback():
     st.session_state.pop("beta_auth_session", None)
     st.session_state.pop("beta_pending_login_url", None)
     st.session_state.pop("beta_account_access_status", None)
+    st.session_state.pop("v12_member_style_bank_synced_user_id", None)
+    st.session_state.pop("v12_member_style_bank_load_error", None)
     _beta_clear_cached_copy_usage_status()
 
 
@@ -5719,6 +5796,7 @@ def _beta_render_account_panel():
     _beta_complete_oauth_callback()
     session = _beta_current_user()
     if session:
+        _v12_sync_member_custom_style_bank(session)
         st.markdown(f"#### {t('login_title')}")
         user = session.get("user", {})
         email = html.escape(str(user.get("email", "Member") or "Member"))
@@ -11038,7 +11116,9 @@ def _v12_save_style_editor_callback():
         str(st.session_state.get("v12_style_editor_name", "") or "").strip()
         or f"使用者自定{slot}"
     )
-    _v12_save_style_editor()
+    if not _v12_save_style_editor():
+        st.session_state["v12_show_saved_style_notice"] = False
+        return
     st.session_state["v12_pending_saved_custom_style_choice"] = f"{slot:02d}｜{name}"
     st.session_state["v12_show_saved_style_notice"] = True
 
@@ -11079,6 +11159,13 @@ def _v12_clear_style_editor_callback():
     bank[str(slot)] = {"name": f"使用者自定{slot}", "prompt": ""}
     _public02a_set_style_bank(bank)
     _save_v10_presets()
+    session = _beta_current_user() if _beta_config() else None
+    if session:
+        try:
+            _beta_save_member_custom_style_bank(session, bank)
+        except Exception:
+            st.session_state["v12_style_editor_cloud_sync_error"] = True
+            return
     st.session_state["v12_style_editor_clear_pending"] = True
 
 
@@ -12246,6 +12333,9 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
         _show_saved_style_notice = bool(
             st.session_state.pop("v12_show_saved_style_notice", False)
         )
+        _style_cloud_sync_error = bool(
+            st.session_state.pop("v12_style_editor_cloud_sync_error", False)
+        )
         if _pending_saved_style_choice in _saved_labels:
             # 必須在 selectbox 建立前更新，才能安全地同步新名稱與選取狀態。
             st.session_state["v12_saved_custom_style_choice"] = _pending_saved_style_choice
@@ -12256,6 +12346,8 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
         )
         if _show_saved_style_notice:
             st.success("✅ 此風格已儲存，並已同步更新到上方選單。")
+        if _style_cloud_sync_error:
+            st.error("自定義風格已暫存於目前頁面，但雲端同步未完成；請稍後再按一次儲存。")
         if _saved_choice != "↓ 請選擇已儲存風格":
             st.session_state.pop("v12_loaded_project_custom_style", None)
             _v12_sync_saved_style_choice_to_editor(_saved_choice)
