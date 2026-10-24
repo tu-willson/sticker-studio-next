@@ -1055,16 +1055,15 @@ st.markdown("""
   background:#17639c !important;
   border-color:#17639c !important;
 }
-/* 創作頁底部 LINE 官方網站捷徑：保持低干擾紫色，滑過時才加深。 */
-.st-key-v12_basket_line_creator_link{
+/* 生成完成後的 LINE 捷徑：保持低干擾紫色，滑過時才加深。 */
+.st-key-v12_basket_line_creator_links{
   width:100% !important;
 }
-.st-key-v12_basket_line_creator_link [data-testid="stLinkButton"]{
-  width:calc(100% - 22px) !important;
-  margin-left:auto !important;
-  margin-right:auto !important;
+.st-key-v12_basket_line_creator_links [data-testid="stLinkButton"]{
+  width:100% !important;
+  margin:0 !important;
 }
-.st-key-v12_basket_line_creator_link a{
+.st-key-v12_basket_line_creator_links a{
   display:flex !important;
   width:100% !important;
   box-sizing:border-box !important;
@@ -1075,7 +1074,7 @@ st.markdown("""
   font-weight:800 !important;
   transition:background .18s ease,border-color .18s ease,transform .18s ease !important;
 }
-.st-key-v12_basket_line_creator_link a:hover{
+.st-key-v12_basket_line_creator_links a:hover{
   background:#9167d2 !important;
   border-color:#dfc5ff !important;
   color:#fff !important;
@@ -14394,12 +14393,20 @@ function saveBlob(blob,name){''',
             on_click=_v12_navigate_callback,
             kwargs={"view": "library", "preserve_creation": True},
         )
-        with st.container(key="v12_basket_line_creator_link"):
-            st.link_button(
-                "開啟LINE貼圖官網",
-                "https://creator.line.me/zh-hant/",
-                use_container_width=True,
-            )
+        with st.container(key="v12_basket_line_creator_links"):
+            _basket_line_official_col, _basket_line_tutorial_col = st.columns(2, gap="small")
+            with _basket_line_official_col:
+                st.link_button(
+                    "開啟LINE貼圖官網",
+                    "https://creator.line.me/zh-hant/",
+                    use_container_width=True,
+                )
+            with _basket_line_tutorial_col:
+                st.link_button(
+                    "網頁貼圖上傳教學",
+                    "https://www.threads.com/share/EB_9jnZTz/",
+                    use_container_width=True,
+                )
 
     # 舊版 01～08 立即打包區保留在原始碼中作為回溯參考，但不再執行。
     # 新版以作品暫存區作為唯一的裁切後工作流程。
