@@ -294,7 +294,7 @@ Sticker Studio Next 是一項 AI 輔助 LINE 貼圖創作服務。會員可上�
 | 進階方案 | NT$199／月 | 40 次 | 25 次 | 40 組 |
 | 單次生成包 | NT$49／包 | 7 次 | 7 次 | 7 組 |
 
-膠捲與市集規則請至「我的作品」頁面查看。
+膠捲與市集規則請至「作品｜市集」頁面查看。
 
 #### ✨ 圖片生成次數與使用方式
 
@@ -771,7 +771,7 @@ def _public02a_init():
         })
 
     # V12 FIX5｜關鍵修正：
-    # Streamlit 切到「我的作品」後，創作頁的 widget key 可能被移除，
+    # Streamlit 切到「作品｜市集」後，創作頁的 widget key 可能被移除，
     # 但 public02a_initialized 仍然是 True。
     # FIX4 之前因此不會再次執行 setdefault，造成回到創作頁時風格變空白。
     #
@@ -1058,7 +1058,7 @@ st.markdown("""
   max-width:820px;
   margin:4px auto 0 !important;
 }
-/* 「存入我的作品」是獨立於 ZIP 打包的雲端保存動作。 */
+/* 「存入作品｜市集」是獨立於 ZIP 打包的雲端保存動作。 */
 .st-key-v12_basket_save_to_library button{
   background:#2478b9 !important;
   border-color:#2478b9 !important;
@@ -5853,7 +5853,7 @@ def _beta_render_account_panel():
             with st.container(key="v12_member_rules"):
                 st.markdown(_v12_member_rules_markdown(), unsafe_allow_html=True)
                 st.button(
-                    "📚 前往我的作品了解膠捲與市集規則",
+                    "📚 前往作品｜市集了解膠捲與市集規則",
                     key="beta_rules_go_library",
                     on_click=_v12_navigate_callback,
                     kwargs={"view": "library", "library_section": "home", "preserve_creation": True},
@@ -7404,7 +7404,7 @@ def _v12_render_sticker_basket_workspace():
     if not name_preview:
         st.caption(t("project_default", name=_v12_default_project_name()))
 
-    # 雲端保存僅由「存入我的作品」按鈕執行；ZIP 打包不再附帶同步。
+    # 雲端保存僅由「存入作品｜市集」按鈕執行；ZIP 打包不再附帶同步。
     cloud_session = _beta_current_user() if _beta_config() else None
     _active_style_reference_for_save = (
         st.session_state.get("v12_style_source_mode") == V12_STYLE_REFERENCE_MODE
@@ -7478,7 +7478,7 @@ def _v12_render_sticker_basket_workspace():
                 if str(exc) == "library_assets_missing":
                     st.warning("雲端覆蓋尚未完成：最後確認時缺少可驗證的素材。本機暫存與原有雲端作品都沒有被刪除；請稍後再試。")
                 elif str(exc) == "library_project_not_found":
-                    st.warning("雲端覆蓋尚未完成：原作品已不存在或目前登入帳號不符。請從「我的作品」重新載入後再試。")
+                    st.warning("雲端覆蓋尚未完成：原作品已不存在或目前登入帳號不符。請從「作品｜市集」重新載入後再試。")
                 elif str(exc).startswith("beta_request_failed_http_"):
                     _http_code = str(exc).rsplit("_", 1)[-1]
                     st.warning(f"雲端覆蓋的最後確認未完成（系統診斷碼：HTTP {_http_code}）。本機暫存與原有雲端作品都沒有被刪除。")
@@ -9580,7 +9580,7 @@ st.session_state.setdefault("v12_ai_copy_topic", "")
 st.session_state.setdefault("v12_ai_copy_tone", "😂 搞笑自然")
 st.session_state.setdefault("v12_ai_copy_selected", [])
 
-# 「我的作品」頁不會建立 STEP 01～03 的 Streamlit widgets；而 Streamlit
+# 「作品｜市集」頁不會建立 STEP 01～03 的 Streamlit widgets；而 Streamlit
 # 會在該次 rerun 結束時清除未渲染 widget 的值。把創作中的關鍵資料先放到
 # 非 widget 的草稿快照，回到「開始製作」時再提前還原，避免照片、畫風、
 # 預設風格與人物設定因為單純換頁而消失。
@@ -11425,7 +11425,7 @@ if _beta_config():
 
 # ============================================================
 # V12｜STEP 01A①
-# 主導航：開始製作 / 我的作品
+# 主導航：開始製作 / 作品｜市集
 # ============================================================
 if "v12_ui_locale" not in st.session_state:
     _requested_locale = str(st.query_params.get("lang", "") or "")
@@ -13538,7 +13538,7 @@ _v12_project_name_initial = _v12_normalize_project_name(
 if "v12_project_name_top_input" not in st.session_state:
     st.session_state["v12_project_name_top_input"] = _v12_project_name_initial
 st.markdown("### 🏷️ 作品名稱")
-st.caption("此名稱會同時用於「我的作品」內的所有紀錄。")
+st.caption("此名稱會同時用於「作品｜市集」內的所有紀錄。")
 st.text_input(
     "為這組作品命名",
     key="v12_project_name_top_input",
@@ -14618,7 +14618,7 @@ function saveBlob(blob,name){''',
     # 放在最後打包按鈕正上方
     # ============================================================
     st.markdown("### 🏷️ 作品名稱")
-    st.caption("此名稱會同時用於「我的作品」紀錄與 ZIP 下載檔案名稱。")
+    st.caption("此名稱會同時用於「作品｜市集」紀錄與 ZIP 下載檔案名稱。")
     st.text_input(
         "為這組作品命名",
         key="v12_project_name_input",
@@ -14632,7 +14632,7 @@ function saveBlob(blob,name){''',
 
     _cloud_sync_session = _beta_current_user() if _beta_config() else None
     _save_to_cloud = st.checkbox(
-        "☁️ 同步保存到雲端「我的作品」",
+        "☁️ 同步保存到雲端作品庫",
         value=False,
         key="v12_save_to_cloud_on_package",
         disabled=not bool(_cloud_sync_session),
@@ -14640,7 +14640,7 @@ function saveBlob(blob,name){''',
     if _cloud_sync_session:
         st.caption("勾選後會同步保存到雲端，需要等候較久時間，請勿重新整理網頁。")
     else:
-        st.caption("登入會員後可選擇同步保存到雲端「我的作品」。未勾選時，作品僅暫存於本次瀏覽。")
+        st.caption("登入會員後可選擇同步保存到雲端作品庫。未勾選時，作品僅暫存於本次瀏覽。")
 
     if st.button("📦 完成裁切＋製作貼圖檔案＋一鍵打包", type="primary", use_container_width=True):
         try:
@@ -14667,7 +14667,7 @@ function saveBlob(blob,name){''',
 
             _zipbuf.seek(0)
 
-            # V12｜STEP 01A③：打包成功後自動加入「我的作品」暫存。
+            # V12｜STEP 01A③：打包成功後自動加入「作品｜市集」暫存。
             _history_stickers = {}
             for _no, _im in cropped_images.items():
                 _history_stickers[f"{_no:02d}"] = _v12_png_bytes(_im)
@@ -14690,7 +14690,7 @@ function saveBlob(blob,name){''',
 
             st.success(
                 f"🎉 完成！MAIN={main_no}、TAB={tab_no}，"
-                "已將 01～08＋main.png＋tab.png 打包，並加入「我的作品」。"
+                "已將 01～08＋main.png＋tab.png 打包，並加入「作品｜市集」。"
             )
             _cloud_session = _beta_current_user() if _save_to_cloud and _beta_config() else None
             if _save_to_cloud and _cloud_session:
@@ -14716,14 +14716,14 @@ function saveBlob(blob,name){''',
                         _cloud_progress.empty()
                         st.warning(
                             f"雲端作品庫已達 {_cloud_save['saved_count']}／"
-                            f"{_cloud_save['library_capacity']} 組；請到「我的作品」下載並刪除一組後再保存。"
+                            f"{_cloud_save['library_capacity']} 組；請到「作品｜市集」下載並刪除一組後再保存。"
                         )
                 except Exception:
                     st.warning("本次作品已保留在本機暫存，但雲端保存暫時未完成。請稍後重新打包再試。")
             elif _save_to_cloud:
                 st.warning("雲端保存尚未執行：請重新登入會員後再試。")
             else:
-                st.caption("本次未同步保存到雲端；作品仍可在本次瀏覽的「我的作品」中下載。")
+                st.caption("本次未同步保存到雲端；作品仍可在本次瀏覽的「作品｜市集」中下載。")
             st.download_button(
                 "⬇️ 下載完整 LINE 套件 ZIP",
                 data=_zipbuf.getvalue(),
