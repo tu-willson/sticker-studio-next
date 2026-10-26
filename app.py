@@ -3622,6 +3622,10 @@ def _beta_save_creator_reel(session, snapshot, grid_bytes,
             access_token=session["access_token"],
         )
     except Exception as exc:
+        _beta_record_operational_event(
+            session, "creator_reel_save", "failed", "creator_reel_reservation_failed",
+            {"operation": "automatic_reel"},
+        )
         raise RuntimeError("creator_reel_reservation_failed") from exc
     if isinstance(reservation, list):
         reservation = reservation[0] if reservation else {}
@@ -3665,6 +3669,10 @@ def _beta_save_creator_reel(session, snapshot, grid_bytes,
             access_token=session["access_token"],
         )
     except Exception as exc:
+        _beta_record_operational_event(
+            session, "creator_reel_save", "failed", f"creator_reel_{stage}_failed",
+            {"operation": "automatic_reel"},
+        )
         try:
             _beta_rpc(
                 "cancel_creator_reel_upload",
@@ -3845,6 +3853,7 @@ def _beta_save_library_project(session, record, progress_callback=None,
     source_webp = _v12_webp_bytes(source_photo, quality=90) if source_photo else b""
     style_webp = _v12_webp_bytes(style_reference, quality=90) if style_reference else b""
     total_sticker_bytes = sum(len(image_bytes) for _, image_bytes in selected_stickers)
+    save_stage = "sticker_upload"
     try:
         _report(25, "正在上傳已選貼圖…")
         for index, ((_, image_bytes), path) in enumerate(
@@ -3855,23 +3864,27 @@ def _beta_save_library_project(session, record, progress_callback=None,
             )
             progress = 25 + round(50 * index / len(selected_stickers))
             _report(progress, f"正在上傳已選貼圖 {index}／{len(selected_stickers)}…")
+        save_stage = "preview_upload"
         _report(78, "正在上傳作品預覽圖…")
         _beta_storage_upload(
             session, prefix + "preview.webp", preview_webp, "image/webp",
             upsert=is_overwrite,
         )
         if source_webp:
+            save_stage = "source_photo_upload"
             _report(85, "正在保存私人創作素材…")
             _beta_storage_upload(
                 session, prefix + "source-photo.webp", source_webp, "image/webp",
                 upsert=is_overwrite,
             )
         if style_webp:
+            save_stage = "style_reference_upload"
             _report(89, "正在保存畫風參考…")
             _beta_storage_upload(
                 session, prefix + "style-reference.webp", style_webp, "image/webp",
                 upsert=is_overwrite,
             )
+        save_stage = "completion"
         _report(94, "正在確認雲端作品資料…")
         if is_overwrite:
             slot = _beta_update_library_project(
@@ -3893,6 +3906,10 @@ def _beta_save_library_project(session, record, progress_callback=None,
                 access_token=session["access_token"],
             )
     except Exception:
+        _beta_record_operational_event(
+            session, "cloud_save", "failed", f"library_{save_stage}_failed",
+            {"operation": "overwrite" if is_overwrite else "new_project"},
+        )
         # A newly allocated slot can be reclaimed.  An overwrite must not
         # delete the member's original cloud project when a network error
         # happens midway through updating it.
@@ -3907,6 +3924,10 @@ def _beta_save_library_project(session, record, progress_callback=None,
             except Exception:
                 pass
         raise
+    if is_overwrite:
+        _beta_record_operational_event(
+            session, "cloud_save", metadata={"operation": "overwrite"}
+        )
     _report(100, "雲端作品保存完成！")
     return {
         "saved": True,
@@ -4141,6 +4162,7 @@ def _beta_current_user():
             st.session_state.pop("beta_auth_session", None)
             st.session_state.pop("beta_account_access_status", None)
             return None
+        _beta_record_login_once(session)
         return session
     except Exception:
         st.session_state.pop("beta_auth_session", None)
@@ -4245,6 +4267,7 @@ def _beta_logout_callback():
     st.session_state.pop("beta_account_access_status", None)
     st.session_state.pop("v12_member_style_bank_synced_user_id", None)
     st.session_state.pop("v12_member_style_bank_load_error", None)
+    st.session_state.pop("beta_operational_login_user_id", None)
     _beta_clear_cached_copy_usage_status()
 
 
@@ -4341,6 +4364,38 @@ def _beta_finish_generation(session, job_id, failure_code=None):
     if failure_code:
         payload["p_failure_code"] = str(failure_code)[:80]
     return _beta_rpc(function_name, payload, access_token=session["access_token"])
+
+
+def _beta_record_operational_event(session, event_type, outcome="succeeded",
+                                   failure_code=None, metadata=None):
+    """Best-effort operational telemetry with no creative/private payloads."""
+    if not session or not session.get("access_token"):
+        return False
+    safe_metadata = metadata if isinstance(metadata, dict) else {}
+    try:
+        _beta_rpc(
+            "record_my_operational_event",
+            {
+                "p_event_type": str(event_type or "")[:40],
+                "p_outcome": str(outcome or "succeeded")[:20],
+                "p_failure_code": str(failure_code or "")[:100] or None,
+                "p_metadata": safe_metadata,
+            },
+            access_token=session["access_token"],
+        )
+        return True
+    except Exception:
+        # Monitoring must never make a creation, save, or login fail.
+        return False
+
+
+def _beta_record_login_once(session):
+    """Record one successful login per browser work session, not every rerun."""
+    user_id = str((session.get("user") or {}).get("id", "") or "")
+    if not user_id or st.session_state.get("beta_operational_login_user_id") == user_id:
+        return
+    if _beta_record_operational_event(session, "login", metadata={"channel": "web"}):
+        st.session_state["beta_operational_login_user_id"] = user_id
 
 
 def _beta_copy_usage_status(session):
@@ -5155,6 +5210,174 @@ def _beta_render_marketplace_moderation_center(session):
                 st.caption("尚無市集審核操作紀錄。")
 
 
+def _beta_admin_get_operational_dashboard(session, period):
+    response = _beta_rpc(
+        "admin_get_operational_dashboard",
+        {"p_period": str(period or "week")},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
+
+
+def _beta_admin_list_operational_trend(session, period):
+    response = _beta_rpc(
+        "admin_list_operational_trend",
+        {"p_period": str(period or "week")},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_admin_list_recent_operational_failures(session, period, limit=30):
+    response = _beta_rpc(
+        "admin_list_recent_operational_failures",
+        {"p_period": str(period or "week"), "p_limit": max(1, min(int(limit), 100))},
+        access_token=session["access_token"],
+    )
+    return response if isinstance(response, list) else []
+
+
+def _beta_dashboard_count(summary, key):
+    try:
+        return max(0, int((summary or {}).get(key, 0) or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _beta_render_operational_dashboard(session):
+    """Keep the operational overview separate from the long member tools."""
+    st.markdown("### 📊 全站營運儀表板")
+    st.caption(
+        "顯示站內登入活躍會員與營運事件；不蒐集訪客 IP、人物照片、提示詞或創作內容。"
+        "正式金流啟用前，付款異常僅會顯示已接入的正式金流事件。"
+    )
+    period_options = {"近 24 小時": "day", "近 7 天": "week", "近 30 天": "month"}
+    chosen_period_label = st.radio(
+        "統計期間",
+        list(period_options.keys()),
+        horizontal=True,
+        key="beta_admin_operational_period",
+    )
+    period = period_options[chosen_period_label]
+    try:
+        summary = _beta_admin_get_operational_dashboard(session, period)
+        trend = _beta_admin_list_operational_trend(session, period)
+        failures = _beta_admin_list_recent_operational_failures(session, period)
+    except Exception:
+        st.error("營運資料暫時無法讀取；請確認營運事件資料庫遷移已完成。")
+        return
+
+    if not summary:
+        st.warning("尚未取得營運摘要。請重新整理後再試。")
+        return
+
+    st.caption(
+        "統計區間："
+        f"{str(summary.get('range_start', '') or '')[:16]} ～ "
+        f"{str(summary.get('range_end', '') or '')[:16]}（台北時間顯示依瀏覽器設定）"
+    )
+    first_row = st.columns(4)
+    first_row[0].metric("登入活躍會員", f"{_beta_dashboard_count(summary, 'signed_in_members')} 位")
+    first_row[1].metric("新增會員", f"{_beta_dashboard_count(summary, 'new_members')} 位")
+    first_row[2].metric(
+        "正式付費訂閱會員",
+        f"{_beta_dashboard_count(summary, 'paid_members')} 位",
+        help="不計管理員測試購買；7 次生成包屬一次性額度，不列入訂閱會員數。",
+    )
+    first_row[3].metric(
+        "測試訂閱帳號",
+        f"{_beta_dashboard_count(summary, 'test_members')} 位",
+        help="只供內部測試辨識，與正式付費數分開。",
+    )
+
+    second_row = st.columns(4)
+    second_row[0].metric("成功生成", f"{_beta_dashboard_count(summary, 'generation_succeeded')} 次")
+    second_row[1].metric("生成失敗", f"{_beta_dashboard_count(summary, 'generation_failed')} 次")
+    second_row[2].metric("雲端保存失敗", f"{_beta_dashboard_count(summary, 'cloud_save_failed')} 次")
+    second_row[3].metric("膠卷保存失敗", f"{_beta_dashboard_count(summary, 'reel_save_failed')} 次")
+
+    third_row = st.columns(4)
+    third_row[0].metric("推薦碼兌換", f"{_beta_dashboard_count(summary, 'referral_redemptions')} 次")
+    third_row[1].metric("市集購入", f"{_beta_dashboard_count(summary, 'marketplace_purchases')} 次")
+    third_row[2].metric("市集回饋次數", f"{_beta_dashboard_count(summary, 'marketplace_credits')} 次")
+    third_row[3].metric("本期檢舉", f"{_beta_dashboard_count(summary, 'report_count')} 件")
+
+    st.markdown("#### 🚨 待處理與異常提醒")
+    alerts = []
+    generation_success = _beta_dashboard_count(summary, "generation_succeeded")
+    generation_failed = _beta_dashboard_count(summary, "generation_failed")
+    generation_total = generation_success + generation_failed
+    if generation_failed >= 3 and generation_total and generation_failed / generation_total >= 0.15:
+        alerts.append(f"生成失敗率偏高：{generation_failed}／{generation_total} 次，請優先查看失敗原因。")
+    if _beta_dashboard_count(summary, "cloud_save_failed"):
+        alerts.append(f"偵測到 {_beta_dashboard_count(summary, 'cloud_save_failed')} 次雲端保存失敗。")
+    if _beta_dashboard_count(summary, "reel_save_failed"):
+        alerts.append(f"偵測到 {_beta_dashboard_count(summary, 'reel_save_failed')} 次自動膠卷保存失敗。")
+    if _beta_dashboard_count(summary, "payment_failed"):
+        alerts.append(f"偵測到 {_beta_dashboard_count(summary, 'payment_failed')} 筆正式付款失敗／取消。")
+    if _beta_dashboard_count(summary, "pending_reviews"):
+        alerts.append(f"市集待審核膠卷：{_beta_dashboard_count(summary, 'pending_reviews')} 組。")
+    if _beta_dashboard_count(summary, "expiring_referral_codes"):
+        alerts.append(f"7 天內到期的啟用推薦碼：{_beta_dashboard_count(summary, 'expiring_referral_codes')} 組。")
+    if alerts:
+        for alert in alerts:
+            st.warning(alert)
+    else:
+        st.success("目前沒有達到警示門檻的營運事件。")
+
+    st.markdown("#### 📈 趨勢")
+    trend_rows = []
+    for item in trend:
+        if not isinstance(item, dict):
+            continue
+        bucket = str(item.get("bucket_at", "") or "")
+        trend_rows.append({
+            "時間": bucket[5:16] if len(bucket) >= 16 else bucket,
+            "登入會員": _beta_dashboard_count(item, "signed_in_members"),
+            "成功生成": _beta_dashboard_count(item, "generation_succeeded"),
+            "生成失敗": _beta_dashboard_count(item, "generation_failed"),
+            "雲端保存失敗": _beta_dashboard_count(item, "cloud_save_failed"),
+            "推薦碼兌換": _beta_dashboard_count(item, "referral_redemptions"),
+            "市集購入": _beta_dashboard_count(item, "marketplace_purchases"),
+            "檢舉": _beta_dashboard_count(item, "reports"),
+        })
+    if trend_rows:
+        st.line_chart(
+            trend_rows,
+            x="時間",
+            y=["成功生成", "生成失敗", "雲端保存失敗", "市集購入"],
+            use_container_width=True,
+        )
+        with st.expander("查看完整趨勢資料", expanded=False):
+            st.dataframe(trend_rows, hide_index=True, use_container_width=True)
+    else:
+        st.caption("此統計區間尚無可繪製的趨勢資料。")
+
+    st.markdown("#### 🧪 最近失敗原因")
+    if failures:
+        event_labels = {
+            "generation": "圖片生成",
+            "cloud_save": "雲端保存",
+            "creator_reel_save": "膠卷保存",
+            "payment": "付款",
+        }
+        failure_rows = [
+            {
+                "時間": str(item.get("occurred_at", "") or "")[:16],
+                "類型": event_labels.get(str(item.get("event_type", "") or ""), str(item.get("event_type", "") or "－")),
+                "診斷代碼": str(item.get("failure_code", "") or "unknown"),
+                "來源": str(item.get("source", "") or "－"),
+                "會員": str(item.get("member_email", "") or "－"),
+            }
+            for item in failures if isinstance(item, dict)
+        ]
+        st.dataframe(failure_rows, hide_index=True, use_container_width=True)
+    else:
+        st.caption("這段期間沒有記錄到失敗事件。")
+
+
 def _beta_render_admin_operations_policy():
     """Keep the current operational rules in one admin-only, maintainable view."""
     with st.expander("📜 管理者使用規章（內部版）", expanded=False):
@@ -5220,6 +5443,13 @@ def _beta_render_admin_operations_policy():
             - 「永久刪除私人作品與素材」會刪除作品集、私人膠卷及相關人物／畫風素材，並將原創公開膠卷改為不可見；已購入者的私人快照、訂單與稽核紀錄不受影響。
             - 「註銷帳號」會同時停用帳號、清除私人作品與去識別化會員公開資料；為保留已購買內容與必要管理稽核，系統不直接刪除 Supabase Auth 身分及其不可竄改紀錄。
             - 上述操作都必須填寫 3～300 字原因、明確確認；刪除類操作另須輸入 DELETE。管理員帳號不可由此功能停權、限制或刪除。
+
+            ### 8. 營運事件與全站儀表板
+
+            - 儀表板僅供資料庫授權管理員使用。登入、生成結果、雲端／膠卷保存、推薦碼兌換、市集購入與付款結果會記錄時間、結果與安全的診斷代碼；不保存人物照片、提示詞或私人創作內容。
+            - 「登入活躍會員」代表成功登入本服務的會員，不代表匿名網頁瀏覽量。匿名流量分析若要啟用，需另行導入具同意機制的網站分析服務。
+            - 正式付款失敗只統計非 `admin_test` 的訂單；綠界正式回呼上線後才會有可用的付款成功／失敗監控資料。
+            - 警示門檻目前為：生成失敗至少 3 次且失敗率達 15%、任一雲端／膠卷保存失敗、待審核市集膠卷、以及 7 天內到期的啟用推薦碼。調整門檻時應同步更新本規章。
             """
         )
 
@@ -5231,6 +5461,17 @@ def _beta_render_admin_console(session):
 
     st.markdown('<div class="v10-main-title">🛠️ 管理後台</div>', unsafe_allow_html=True)
     st.caption("僅限資料庫授權的管理員。所有會員權益操作都會記錄操作者、原因與時間。")
+    admin_section = st.radio(
+        "管理後台分頁",
+        ["📊 全站營運儀表板", "🧭 會員、市集與規則管理"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="beta_admin_section",
+    )
+    if admin_section == "📊 全站營運儀表板":
+        _beta_render_operational_dashboard(session)
+        return True
+
     overview_members, overview_codes, overview_market = st.columns(3)
     with overview_members:
         st.info("👥 會員與權益\n\n搜尋會員、補／扣生成次數與測試購買。")
