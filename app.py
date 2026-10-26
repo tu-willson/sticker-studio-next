@@ -291,7 +291,7 @@ Sticker Studio Next 是一項 AI 輔助 LINE 貼圖創作服務。會員可上�
 | --- | ---: | ---: | ---: | ---: |
 | 基本方案 | NT$99／月 | 20 次 | 15 次 | 20 組 |
 | 標準方案 | NT$149／月 | 30 次 | 20 次 | 30 組 |
-| 進階方案 | NT$199／月 | 40 次 | 25 次 | 40 組 |
+| 進階方案 | NT$199／月 | 45 次 | 25 次 | 40 組 |
 | 單次生成包 | NT$49／包 | 7 次 | 7 次 | 7 組 |
 
 膠捲與市集規則請至「作品｜市集」頁面查看。
@@ -322,7 +322,7 @@ Sticker Studio Next is an AI-assisted LINE sticker creation service. Members can
 | --- | ---: | ---: | ---: | ---: |
 | Basic | NT$99/month | 20 | 15 | 20 |
 | Standard | NT$149/month | 30 | 20 | 30 |
-| Advanced | NT$199/month | 40 | 25 | 40 |
+| Advanced | NT$199/month | 45 | 25 | 40 |
 | One-time pack | NT$49/pack | 7 | 7 | 7 |
 
 #### ✨ Image generations and use
@@ -348,7 +348,7 @@ Sticker Studio Next は、AI を活用した LINE ステッカー制作サービ
 | --- | ---: | ---: | ---: | ---: |
 | ベーシック | NT$99／月 | 20回 | 15回 | 20組 |
 | スタンダード | NT$149／月 | 30回 | 20回 | 30組 |
-| アドバンス | NT$199／月 | 40回 | 25回 | 40組 |
+| アドバンス | NT$199／月 | 45回 | 25回 | 40組 |
 | 単発パック | NT$49／パック | 7回 | 7回 | 7組 |
 
 #### ✨ 画像生成と利用方法
@@ -5167,7 +5167,7 @@ def _beta_render_admin_operations_policy():
             | --- | --- | --- |
             | 一般會員 | 可使用貼圖生成與膠捲功能；不可使用市集膠卷。 | 依帳號目前可用次數。 |
             | 7 次生成包 | 圖片生成 7 次、AI 幫想每日 7 次、雲端作品 7 組。 | 購買後 30 天。 |
-            | 基本／標準／進階訂閱 | 每月圖片生成 20／30／40 次；AI 幫想每日 15／20／25 次；雲端作品 20／30／40 組。 | 訂閱額度可保留至下一個帳務週期結束；系統優先使用最早到期的次數。 |
+            | 基本／標準／進階訂閱 | 每月圖片生成 20／30／45 次；AI 幫想每日 15／20／25 次；雲端作品 20／30／40 組。 | 訂閱額度可保留至下一個帳務週期結束；系統優先使用最早到期的次數。 |
             | 推薦碼獎勵 | 可使用不同推薦碼加點；同一組碼每帳號限兌換一次，舊推薦碼獎勵用完前不得再兌換下一組。推薦碼可設定名額、獎勵次數、截止日與停用狀態。 | 每次兌換後 60 天。 |
             | 市集創作者回饋 | 購買者首次購入膠卷所支付的生成次數，全數回饋原創者。 | 回饋額度 90 天，且最後才消耗。 |
             | 管理員手動補次 | 僅限有明確原因的客服、測試或補償處理。 | 目前核發後 365 天；每筆都需留下原因。 |
@@ -5739,7 +5739,7 @@ def _beta_render_admin_console(session):
             "7 次生成包｜圖片生成 7 次／AI幫想每日 7 次／作品集 7 組｜效期 30 天": "credit_pack_7",
             "基本方案｜圖片生成 20 次／AI幫想每日 15 次／作品集 20 組｜週期 1 個月": "basic_monthly",
             "標準方案｜圖片生成 30 次／AI幫想每日 20 次／作品集 30 組｜週期 1 個月": "standard_monthly",
-            "進階方案｜圖片生成 40 次／AI幫想每日 25 次／作品集 40 組｜週期 1 個月": "advanced_monthly",
+            "進階方案｜圖片生成 45 次／AI幫想每日 25 次／作品集 40 組｜週期 1 個月": "advanced_monthly",
         }
         selected_product_label = st.selectbox(
             "模擬購買方案", list(product_options.keys()), key="beta_admin_test_purchase_product"
@@ -11293,7 +11293,7 @@ def _v12_render_pricing_page():
             "name": t("plan_advanced"),
             "price": "NT$199",
             "period": t("period_monthly"),
-            "credits": t("benefit_credits", count=40, suffix=_v12_generation_suffix()),
+            "credits": t("benefit_credits", count=45, suffix=_v12_generation_suffix()),
             "copy": t("benefit_copy", count=25),
             "library": t("benefit_library", count=40),
             "reels": t("benefit_reels", count=40),
