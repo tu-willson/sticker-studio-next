@@ -285,7 +285,7 @@ def _v12_member_rules_markdown():
 
 #### 💳 方案與提供額度
 
-<div class="v12-member-rules-callout v12-member-rules-callout-free"><strong>免費會員權益：</strong>可使用基礎貼圖創作、首次登入 <strong>2 次</strong>圖片生成體驗額度、每日 <strong>2 次</strong> AI 幫想，以及雲端作品庫 <strong>5 組</strong>。</div>
+<div class="v12-member-rules-callout v12-member-rules-callout-free"><strong>免費會員權益：</strong>可使用基礎貼圖創作、首次登入 <strong>2 次</strong>圖片生成體驗額度、每日 <strong>2 次</strong> AI 幫想，以及雲端作品庫 <strong>2 組</strong>。</div>
 
 | 方案 | 月費／售價 | 每月圖片生成次數 | AI幫想每日額度 | 雲端作品庫上限 |
 | --- | ---: | ---: | ---: | ---: |
@@ -304,7 +304,7 @@ def _v12_member_rules_markdown():
 
 - 每組作品可保存原始人物照片、已上傳的畫風參考與使用者選取的貼圖成品；單組最多保存 **40 張貼圖**，**MAIN／TAB** 規格圖不計入此上限。
 - 未勾選保存的裁切貼圖不會寫入作品庫；ZIP 壓縮檔不會另行保存，可在日後將作品載回創作頁後重新下載。
-- 作品庫容量依目前有效方案計算；免費會員預設可保存 5 組作品，訂閱或單次生成包則依方案權益提供容量。
+- 作品庫容量依目前有效方案計算；免費會員預設可保存 2 組作品，訂閱或單次生成包則依方案權益提供容量。
 
 #### 📌 重要提醒
 
@@ -333,7 +333,7 @@ Line Sticker Studio is an AI-assisted LINE sticker creation service. Members can
 
 - A project can save the original character photo, any uploaded style reference, and selected sticker results. Each project supports up to **40 stickers**; **MAIN/TAB** export images do not count.
 - Cropped stickers not selected for saving are not written to the library. ZIP files are not stored; load the project back into the studio to create another download.
-- Capacity follows the current active benefit. Free members can save 5 projects; subscriptions and one-time packs provide the capacity shown above.
+- Capacity follows the current active benefit. Free members can save 2 projects; subscriptions and one-time packs provide the capacity shown above.
 
 #### 📌 Important notice
 
@@ -359,7 +359,7 @@ Sticker Studio Next は、AI を活用した LINE ステッカー制作サービ
 
 - 作品には人物写真、アップロードした画風参考、選択したステッカー成品を保存できます。1作品につき最大 **40枚** 保存でき、**MAIN／TAB** は上限に含まれません。
 - 保存を選択しなかった切り抜きステッカーは作品庫へ保存されません。ZIP は保存されませんが、作品を制作ページに読み戻して再ダウンロードできます。
-- 保存容量は現在有効な特典に応じます。無料会員は5作品、サブスクリプションと単発パックは上表の容量を利用できます。
+- 保存容量は現在有効な特典に応じます。無料会員は2作品、サブスクリプションと単発パックは上表の容量を利用できます。
 
 #### 📌 ご注意
 
@@ -3046,7 +3046,7 @@ def _beta_library_status(session):
         raise RuntimeError("library_status_invalid")
     return {
         "saved_count": max(0, int(response.get("saved_count", 0) or 0)),
-        "library_capacity": max(1, int(response.get("library_capacity", 5) or 5)),
+        "library_capacity": max(1, int(response.get("library_capacity", 2) or 2)),
     }
 
 
@@ -3833,7 +3833,7 @@ def _beta_save_library_project(session, record, progress_callback=None,
             return {
                 "saved": False,
                 "saved_count": int(slot.get("saved_count", 0) or 0),
-                "library_capacity": int(slot.get("library_capacity", 5) or 5),
+                "library_capacity": int(slot.get("library_capacity", 2) or 2),
             }
 
     user_id = str(session.get("user", {}).get("id", "") or "")
@@ -3932,7 +3932,7 @@ def _beta_save_library_project(session, record, progress_callback=None,
     return {
         "saved": True,
         "saved_count": int(slot.get("saved_count", 0) or 0),
-        "library_capacity": int(slot.get("library_capacity", 5) or 5),
+        "library_capacity": int(slot.get("library_capacity", 2) or 2),
     }
 
 
