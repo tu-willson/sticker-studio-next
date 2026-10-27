@@ -281,7 +281,7 @@ def _v12_member_rules_markdown():
     if locale == "zh-TW":
         return """#### 🎨 服務內容
 
-Sticker Studio Next 是一項 AI 輔助 LINE 貼圖創作服務。會員可上傳人物照片、選擇貼圖風格或上傳畫風參考，設定貼圖文字與動作後，產生 4×2 貼圖總圖；完成裁切後，可挑選單張貼圖下載或保存至雲端作品庫。
+**LINE 貼圖創作室**是一項 AI 輔助 LINE 貼圖創作服務。會員可上傳人物照片、選擇貼圖風格或上傳畫風參考，設定貼圖文字與動作後，產生 4×2 貼圖總圖；完成裁切後，可挑選單張貼圖下載或保存至雲端作品庫。
 
 #### 💳 方案與提供額度
 
@@ -314,7 +314,7 @@ Sticker Studio Next 是一項 AI 輔助 LINE 貼圖創作服務。會員可上�
     if locale == "en":
         return """#### 🎨 What the service provides
 
-Sticker Studio Next is an AI-assisted LINE sticker creation service. Members can upload a character photo, choose a sticker style or upload a style reference, set text and actions, generate a 4×2 sticker grid, then download selected stickers individually or save them to their cloud library.
+Line Sticker Studio is an AI-assisted LINE sticker creation service. Members can upload a character photo, choose a sticker style or upload a style reference, set text and actions, generate a 4×2 sticker grid, then download selected stickers individually or save them to their cloud library.
 
 #### 💳 Plans and allowances
 
