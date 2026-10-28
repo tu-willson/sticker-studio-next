@@ -234,7 +234,7 @@ def _v12_pricing_rules_markdown():
         - Each successfully generated **4×2 original sticker grid** uses **1 image generation**. Failed generations do not use a generation.
         - The AI Ideas allowance resets daily in Taiwan time and is separate from image generations.
         - A one-time generation pack does not renew automatically and is valid for 30 days.
-        - A subscription starts on its successful-payment date. Unused subscription generations carry over until the end of the following billing cycle; the earliest-expiring generations are used first.
+        - Each subscription cycle is a fixed **30 days** starting on successful payment. Unused subscription generations carry over until the end of the following billing cycle; the earliest-expiring generations are used first.
 
         > **Example:** If you start Basic on May 10 with 20 generations and have 5 left on June 9, 20 more are added on June 10, giving you 25. The carried-over 5 are available until July 9 and are used first.
 
@@ -249,7 +249,7 @@ def _v12_pricing_rules_markdown():
         - **4×2 の元ステッカー総画像**を1回正常に生成すると、画像生成回数を **1回** 使用します。生成失敗時は回数を消費しません。
         - AIアイデアの利用枠は台湾時間で毎日計算され、画像生成回数とは別に管理されます。
         - 単発の生成パックは自動更新されず、購入後30日間有効です。
-        - サブスクリプションは決済成功日から開始します。未使用の生成回数は次の請求期間の終了まで繰り越せ、期限の早い回数から使用されます。
+        - サブスクリプションの1サイクルは決済成功日から固定 **30日間** です。未使用の生成回数は次の請求期間の終了まで繰り越せ、期限の早い回数から使用されます。
 
         > **例：**5月10日にベーシックで20回分を取得し、6月9日に5回残っている場合、6月10日にさらに20回分が追加され合計25回になります。繰り越した5回分は7月9日まで利用でき、先に使用されます。
 
@@ -262,7 +262,7 @@ def _v12_pricing_rules_markdown():
     return textwrap.dedent("""
     - 每次成功生成 1 張 **4×2 原始貼圖總圖**，扣除 1 次圖片生成次數；生成失敗不扣次數。
     - AI幫想額度按台灣時間每日計算，與圖片生成次數分開計算。
-    - 訂閱方案每月自付款成功日生效；未使用的訂閱生成次數可保留至下一個帳務週期結束，系統優先使用最早到期的次數。
+    - 訂閱一個循環固定為 **30 天**，自付款成功日開始計算；未使用的訂閱生成次數可保留至下一個帳務週期結束，系統優先使用最早到期的次數。
 
     > **例子：**你在 5 月 10 日訂閱基本方案，取得 20 次圖片生成次數；到了 6 月 9 日還剩 5 次。6 月 10 日進入新一期後會再加入 20 次，因此共有 25 次可用；原本保留的 5 次最晚可用到 7 月 9 日，系統會優先使用這 5 次。
 
@@ -281,39 +281,40 @@ def _v12_plan_change_policy_markdown():
     if locale == "en":
         return """#### Plan changes (applies when live billing is enabled)
 
-- **Upgrade:** takes effect after payment succeeds. The server calculates a prorated price difference from the remaining days; the billing end date is not reset.
-- **Renewal:** buying the same plan extends its end date. **Downgrade:** takes effect after the current plan ends; no partial refund is issued.
+- **Upgrade:** takes effect after payment succeeds. The new plan is purchased at its full listed price and starts a new 30-day subscription cycle.
+- **Unused generations:** remaining subscription generations from the previous plan are retained. The new plan's full generation allowance is then added; existing grant expiry rules still apply.
+- **Renewal:** buying again starts a new 30-day cycle from successful payment. **Downgrade:** takes effect after the current plan ends; no partial refund is issued.
 - **One-time 7-generation pack:** is separate from subscriptions and can be used alongside them.
 
-> **Example:** Upgrading Basic NT$99 to Standard NT$149 with 15 of 30 days remaining costs `(149 − 99) × 15 ÷ 30 = NT$25`. Standard benefits apply immediately, the original end date remains unchanged, and the upgrade adds the 10-generation allowance difference for the remaining cycle."""
+> **Example:** If Basic started on June 10 with 5 generations remaining and Standard is purchased on June 25, Standard takes effect immediately. The account has the retained 5 plus Standard's 30 generations, and the new subscription benefits run for 30 days from June 25."""
     if locale == "ja":
         return """#### プラン変更（正式決済開始後に適用）
 
-- **アップグレード：** 決済成功後すぐに反映し、残り日数に応じた差額をサーバー側で計算します。終了日はリセットしません。
-- **同一プランの再購入：** 有効期限を延長します。**ダウングレード：** 現行プラン終了後に反映され、日割り返金はありません。
+- **アップグレード：** 決済成功後すぐに反映され、新プランを定価で購入して新たに30日間の利用期間を開始します。
+- **未使用の生成回数：** 旧プランで残っている生成回数は保持され、新プランの全生成回数が加算されます。既存の付与分の有効期限ルールは維持されます。
+- **同一プランの再購入：** 決済成功日から新たに30日間の利用期間を開始します。**ダウングレード：** 現行プラン終了後に反映され、日割り返金はありません。
 - **7回生成パック：** サブスクリプションとは別の単発パックで、併用できます。"""
     return """#### 🔄 方案升級、續訂與降級說明
 
-> **正式金流啟用後適用：** 金額與剩餘天數一律由伺服器計算並鎖定；付款頁只會顯示試算結果，不能由瀏覽器自行修改金額。
+> **正式金流啟用後適用：** 方案價格與付款金額一律由伺服器鎖定；付款頁不能由瀏覽器自行修改金額。
 
 | 情況 | 規則 |
 | --- | --- |
-| **升級方案** | 付款成功後立即生效，按目前方案的**剩餘天數**收取新舊方案差額；原本帳務到期日不重置。 |
-| **同方案再次購買** | 視為續訂，效期由原到期日往後延長，不會重複建立兩份相同訂閱。 |
+| **升級方案** | 付款成功後立即生效，依新方案的**完整售價**購買；新方案自成功付款時起重新計算 **30 天**。 |
+| **同方案再次購買** | 視為重新續訂，成功付款時起重新計算 **30 天**。 |
 | **降級方案** | 不提供當期部分退款；目前方案可用到原到期日，下一期才套用較低方案。 |
 | **7 次生成包** | 不屬於訂閱升降級，可與訂閱方案同時持有，依各自效期使用。 |
 | **市集／膠卷權益** | 升級後立即採用新方案的容量與發布上限；既有內容不會自動刪除。若日後降級且內容超過新上限，仍可查看與使用，但須整理至上限內才能再新增。 |
 
-#### 🧮 升級補差額與次數範例
+#### 🧮 升級與次數範例
 
-基本方案為 **NT$99／20 次**，標準方案為 **NT$149／30 次**。若基本方案尚餘 **15／30 天**：
+基本方案為 **NT$99／20 次**，標準方案為 **NT$149／30 次**。你在 **6 月 10 日**訂閱基本方案，尚餘 **5 次**，原訂閱權益會在 **7 月 9 日**到期；若在 **6 月 25 日**購入標準方案：
 
-- **升級補款：** `(149 − 99) × 15 ÷ 30 = NT$25`。
-- **生效時間：** NT$25 付款成功後立刻改用標準方案的 AI 幫想、雲端作品庫、膠卷與市集上限；原本到期日維持不變，不會重新起算 30 天。
-- **圖片生成次數：** 原本尚未用完的基本方案次數保留到原到期日；另補發基本與標準方案之間的 **10 次差額**，同樣於原到期日失效。
-- **具體例子：** 若基本方案的 20 次已使用 8 次，升級後會保有剩餘 12 次，再加上 10 次升級差額；該帳務週期內共有 **22 次**可用。
+- **付款金額：** 依標準方案完整售價支付 **NT$149**，不再依剩餘天數計算差額。
+- **生效時間：** NT$149 付款成功後，立刻採用標準方案的 AI 幫想、雲端作品庫、膠卷與市集上限；新一期訂閱自 **6 月 25 日**起算 30 天，到期日為 **7 月 24 日**。
+- **圖片生成次數：** 原本剩下的 **5 次**會保留，再加入標準方案完整的 **30 次**，因此可使用 **5＋30＝35 次**；系統仍依既有點數效期與優先順序扣除。
 
-> 目前 PAYUNi 沙盒階段只驗證付款與回呼；正式升級金額會在建立訂單前由伺服器依實際到期時間重新計算與驗證。"""
+> 目前 PAYUNi 沙盒階段已驗證付款與回呼；正式付款也會依此完整新一期方案的規則發放權益。"""
 
 
 def _v12_member_rules_markdown():
