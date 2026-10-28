@@ -11740,9 +11740,11 @@ def _v12_render_pricing_page():
             pass
 
     current_subscription_rank = subscription_ranks.get(current_code, 0)
+    selected_subscription_rank = subscription_ranks.get(selected_code, 0)
     if (
         current_subscription_rank
-        and subscription_ranks.get(selected_code, 0) <= current_subscription_rank
+        and selected_subscription_rank
+        and selected_subscription_rank <= current_subscription_rank
     ):
         # A stale selection must not keep an ineligible checkout visible after
         # payment, refresh, or a change of active subscription.
