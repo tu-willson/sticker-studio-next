@@ -2342,15 +2342,6 @@ html{scroll-behavior:smooth;}
 .v12-pricing-price{margin:.28rem 0 .75rem;color:#ff9cad;font-size:1.7rem;font-weight:950;line-height:1;}
 .v12-pricing-price span{display:block;margin-top:.26rem;color:rgba(221,230,246,.78);font-size:.73rem;font-weight:750;}
 .v12-pricing-benefit{margin:.4rem 0;color:rgba(244,247,253,.94);font-size:.87rem;font-weight:730;line-height:1.35;}
-.v12-pricing-selection{
-  width:min(720px,100%);
-  margin:1.35rem auto;
-  padding:1rem 1.15rem;
-  border:1px solid rgba(255,161,179,.48);
-  border-radius:16px;
-  background:rgba(255,79,103,.11);
-}
-.v12-pricing-selection h3{text-align:center;margin:.1rem 0 .65rem;}
 @media (max-width:900px){.v12-pricing-card{min-height:288px;padding:.9rem .72rem;}.v12-pricing-plan-name{font-size:1.08rem;}.v12-pricing-price{font-size:1.42rem;}.v12-pricing-benefit{font-size:.78rem;}}
 @media (max-width:640px){.v12-pricing-hero{padding:1rem .8rem;border-radius:16px;}.v12-pricing-hero p{font-size:.9rem;}.v12-pricing-contact{font-size:.72rem;}.v12-pricing-card{min-height:0;margin-bottom:.42rem;padding:.78rem .55rem;}.v12-pricing-plan-name{font-size:.95rem;}.v12-pricing-price{font-size:1.16rem;}.v12-pricing-benefit{font-size:.7rem;}.v12-pricing-badge,.v12-pricing-current{padding:.15rem .32rem;font-size:.57rem;}}
 
@@ -11705,7 +11696,6 @@ def _v12_render_pricing_page():
             "reels": t("benefit_reels", count=30),
             "market_publish": t("benefit_market_publish", count=15),
             "button": t("pricing_choose_standard"),
-            "recommended": True,
         },
         {
             "code": "advanced_monthly",
@@ -11826,9 +11816,9 @@ def _v12_render_pricing_page():
             and product_subscription_rank
             and product_subscription_rank <= current_subscription_rank
         )
-        card_class = " v12-pricing-card-featured" if product.get("recommended") else ""
+        card_class = " v12-pricing-card-featured" if is_selected else ""
         with col:
-            badge = f'<div class="v12-pricing-badge">{t("pricing_recommended")}</div>' if product.get("recommended") else ""
+            badge = f'<div class="v12-pricing-badge">{t("pricing_selected_badge")}</div>' if is_selected else ""
             state = f'<div class="v12-pricing-current">{t("pricing_current")}</div>' if is_current else ""
             st.markdown(
                 f"""
@@ -11853,7 +11843,7 @@ def _v12_render_pricing_page():
                     else product["button"]
                 ),
                 key=f"v12_select_product_{product['code']}",
-                type="primary" if product.get("recommended") else "secondary",
+                type="primary" if is_selected else "secondary",
                 use_container_width=True,
                 disabled=is_current or is_subscription_locked,
                 on_click=_v12_select_purchase_product_callback,
@@ -11862,7 +11852,6 @@ def _v12_render_pricing_page():
 
     chosen = next((item for item in products if item["code"] == selected_code), None)
     if chosen:
-        st.markdown("<div class='v12-pricing-selection'>", unsafe_allow_html=True)
         st.markdown(f"### {t('pricing_selected', name=chosen['name'], price=chosen['price'])}")
         if session:
             if _beta_payuni_sandbox_enabled():
@@ -11910,7 +11899,6 @@ def _v12_render_pricing_page():
                 on_click=_v12_navigate_callback,
                 kwargs={"view": "create"},
             )
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with st.container(key="v12_pricing_rules_guide"):
         st.markdown(f"### {t('pricing_rules_heading')}")
