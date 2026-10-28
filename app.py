@@ -6245,36 +6245,43 @@ def _beta_render_account_panel():
         st.markdown(f"#### {t('login_title')}")
         user = session.get("user", {})
         email = html.escape(str(user.get("email", "Member") or "Member"))
-        account_status_col, refresh_balance_col = st.columns([5, 1], vertical_alignment="center")
+        account_status_col, refresh_balance_col, _account_spacer = st.columns(
+            [4, 1.15, 6.85], vertical_alignment="center"
+        )
         with account_status_col:
             try:
                 balance = _beta_credit_balance(session)
                 st.success(t("account_balance", email=email, balance=balance))
             except Exception:
                 st.warning(t("account_unavailable", email=email))
-            else:
-                try:
-                    credit_breakdown = _beta_credit_balance_breakdown(session)
-                    marketplace_reward = (
-                        f"　｜　{t('account_marketplace_reward', count=credit_breakdown['marketplace_creator_reward_credits'])}"
-                        if credit_breakdown["marketplace_creator_reward_credits"]
-                        else ""
+            st.button(
+                t("logout"),
+                type="primary",
+                key="beta_logout",
+                on_click=_beta_logout_callback,
+            )
+            try:
+                credit_breakdown = _beta_credit_balance_breakdown(session)
+                marketplace_reward = (
+                    f"　｜　{t('account_marketplace_reward', count=credit_breakdown['marketplace_creator_reward_credits'])}"
+                    if credit_breakdown["marketplace_creator_reward_credits"]
+                    else ""
+                )
+                st.markdown(
+                    "<div class=\"v12-credit-breakdown\">"
+                    + t(
+                        "account_credit_breakdown",
+                        basic=credit_breakdown["basic_member_credits"],
+                        referral=credit_breakdown["referral_credits"],
+                        subscription=credit_breakdown["subscription_or_pack_credits"],
                     )
-                    st.markdown(
-                        "<div class=\"v12-credit-breakdown\">"
-                        + t(
-                            "account_credit_breakdown",
-                            basic=credit_breakdown["basic_member_credits"],
-                            referral=credit_breakdown["referral_credits"],
-                            subscription=credit_breakdown["subscription_or_pack_credits"],
-                        )
-                        + marketplace_reward
-                        + "</div>"
-                        + f"<p class=\"v12-credit-priority\">{t('account_credit_priority')}</p>",
-                        unsafe_allow_html=True,
-                    )
-                except Exception:
-                    pass
+                    + marketplace_reward
+                    + "</div>"
+                    + f"<p class=\"v12-credit-priority\">{t('account_credit_priority')}</p>",
+                    unsafe_allow_html=True,
+                )
+            except Exception:
+                pass
         with refresh_balance_col:
             if st.button(t("refresh"), key="beta_refresh_credit_balance", use_container_width=True):
                 _beta_clear_cached_copy_usage_status()
@@ -6302,12 +6309,6 @@ def _beta_render_account_panel():
             st.caption(t("copy_quota_unavailable"))
         with st.container(key="v12_referral_redeem"):
             _beta_render_referral_redemption(session)
-        st.button(
-            t("logout"),
-            type="primary",
-            key="beta_logout",
-            on_click=_beta_logout_callback,
-        )
         if not _beta_site_openai_key():
             st.info("會員登入與生成次數帳本已啟用；站方生成 API 正在進行最後設定。")
         if _v12_ui_locale() != "zh-TW":
