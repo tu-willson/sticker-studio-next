@@ -2259,6 +2259,41 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
   line-height:1.62;
   text-shadow:0 1px 2px rgba(0,0,0,.45);
 }
+.v12-account-emphasis{
+  margin:.42rem 0 .08rem;
+  color:#f8fbff;
+  font-size:1.12rem;
+  font-weight:950;
+  line-height:1.58;
+  text-shadow:0 1px 3px rgba(0,0,0,.62);
+}
+.st-key-v12_referral_redeem,
+.st-key-v12_member_rules_expander{margin-top:.72rem;}
+.st-key-v12_referral_redeem [data-testid="stExpander"],
+.st-key-v12_member_rules_expander [data-testid="stExpander"]{
+  overflow:hidden;
+  border-radius:13px;
+}
+.st-key-v12_referral_redeem [data-testid="stExpander"]{
+  border:1px solid rgba(255,204,112,.62) !important;
+  background:rgba(138,96,22,.20) !important;
+}
+.st-key-v12_member_rules_expander [data-testid="stExpander"]{
+  border:1px solid rgba(126,187,255,.62) !important;
+  background:rgba(39,94,157,.20) !important;
+}
+.st-key-v12_referral_redeem [data-testid="stExpander"] summary,
+.st-key-v12_member_rules_expander [data-testid="stExpander"] summary{
+  min-height:54px;
+  padding:.55rem .9rem;
+}
+.st-key-v12_referral_redeem [data-testid="stExpander"] summary p,
+.st-key-v12_member_rules_expander [data-testid="stExpander"] summary p{
+  color:#f8fbff !important;
+  font-size:1.08rem !important;
+  font-weight:950 !important;
+  text-shadow:0 1px 3px rgba(0,0,0,.48);
+}
 @media(max-width:680px){
   .v12-reel-rules th,.v12-reel-rules td{padding:.62rem .58rem;font-size:.87rem;}
   .v12-reel-rules th:nth-child(2),.v12-reel-rules td:nth-child(2){display:none;}
@@ -2267,6 +2302,11 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
   .st-key-v12_member_rules{padding:.85rem .8rem;}
   .v12-credit-breakdown{font-size:1rem;}
   .v12-credit-priority{font-size:.98rem;}
+  .v12-account-emphasis{font-size:1.02rem;}
+  .st-key-v12_referral_redeem [data-testid="stExpander"] summary,
+  .st-key-v12_member_rules_expander [data-testid="stExpander"] summary{min-height:50px;}
+  .st-key-v12_referral_redeem [data-testid="stExpander"] summary p,
+  .st-key-v12_member_rules_expander [data-testid="stExpander"] summary p{font-size:1rem !important;}
   .st-key-v12_member_rules [data-testid="stMarkdownContainer"] th,
   .st-key-v12_member_rules [data-testid="stMarkdownContainer"] td{padding:.56rem .52rem;font-size:.87rem;}
 }
@@ -6239,19 +6279,29 @@ def _beta_render_account_panel():
             if st.button(t("refresh"), key="beta_refresh_credit_balance", use_container_width=True):
                 _beta_clear_cached_copy_usage_status()
         try:
-            st.markdown(f"**📋 {_beta_entitlement_label(_beta_effective_entitlement(session))}**")
+            entitlement_label = html.escape(_beta_entitlement_label(_beta_effective_entitlement(session)))
+            st.markdown(
+                f'<div class="v12-account-emphasis">📋 {entitlement_label}</div>',
+                unsafe_allow_html=True,
+            )
         except Exception:
             st.caption(t("plan_unavailable"))
         try:
             copy_status = _beta_copy_usage_status_cached(session)
-            st.markdown("**" + t(
-                "copy_quota",
-                remaining=copy_status["remaining_count"],
-                limit=copy_status["daily_limit"],
-            ) + "**")
+            st.markdown(
+                '<div class="v12-account-emphasis">'
+                + t(
+                    "copy_quota",
+                    remaining=copy_status["remaining_count"],
+                    limit=copy_status["daily_limit"],
+                )
+                + "</div>",
+                unsafe_allow_html=True,
+            )
         except Exception:
             st.caption(t("copy_quota_unavailable"))
-        _beta_render_referral_redemption(session)
+        with st.container(key="v12_referral_redeem"):
+            _beta_render_referral_redemption(session)
         st.button(
             t("logout"),
             type="primary",
@@ -6264,15 +6314,16 @@ def _beta_render_account_panel():
             with st.expander(t("rules_title"), expanded=False):
                 st.markdown(_v12_member_rules_markdown())
             return session
-        with st.expander("📜 生成次數與雲端作品庫規則", expanded=False):
-            with st.container(key="v12_member_rules"):
-                st.markdown(_v12_member_rules_markdown(), unsafe_allow_html=True)
-                st.button(
-                    "📚 前往作品｜市集了解膠捲與市集規則",
-                    key="beta_rules_go_library",
-                    on_click=_v12_navigate_callback,
-                    kwargs={"view": "library", "library_section": "home", "preserve_creation": True},
-                )
+        with st.container(key="v12_member_rules_expander"):
+            with st.expander("📜 生成次數與雲端作品庫規則", expanded=False):
+                with st.container(key="v12_member_rules"):
+                    st.markdown(_v12_member_rules_markdown(), unsafe_allow_html=True)
+                    st.button(
+                        "📚 前往作品｜市集了解膠捲與市集規則",
+                        key="beta_rules_go_library",
+                        on_click=_v12_navigate_callback,
+                        kwargs={"view": "library", "library_section": "home", "preserve_creation": True},
+                    )
         return session
 
     login_error = st.session_state.pop("beta_login_error", "")
