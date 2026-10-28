@@ -11719,14 +11719,15 @@ def _v12_render_pricing_page():
     # session state so a rejected sandbox request is actionable.
     provider_result = str(st.query_params.get("payment_result", "") or "").strip()
     provider_message = str(st.query_params.get("payment_message", "") or "").strip()
-    if provider_message:
+    provider_succeeded = provider_result.upper() in {"SUCCESS", "OK"}
+    if provider_message and not provider_succeeded:
         st.warning(f"PAYUNi 測試付款未完成：{provider_message[:180]}")
-    elif provider_result and provider_result.upper() not in {"SUCCESS", "OK"}:
+    elif provider_result and not provider_succeeded:
         st.warning(f"PAYUNi 測試付款未完成（狀態：{provider_result[:60]}）。")
 
     payment_order = str(st.query_params.get("payment_order", "") or "")
     if payment_order and not session:
-        if provider_result.upper() in {"SUCCESS", "OK"}:
+        if provider_succeeded:
             st.success("PAYUNi 已回傳付款成功。請關閉此回傳分頁，回到原付款頁重新整理以查看最新會員權益。")
         elif provider_result or provider_message:
             st.warning("PAYUNi 已回傳未完成的付款結果；請依上方原因調整後重新測試。")
