@@ -2267,6 +2267,15 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
   line-height:1.58;
   text-shadow:0 1px 3px rgba(0,0,0,.62);
 }
+.v12-referral-guidance{
+  margin:.28rem 0;
+  color:#f4f7ff;
+  font-size:1rem;
+  font-weight:800;
+  line-height:1.72;
+  text-shadow:0 1px 3px rgba(0,0,0,.68);
+}
+.v12-referral-guidance strong{color:#ffffff;font-weight:950;}
 div.st-key-beta_refresh_credit_balance button{
   background:linear-gradient(135deg,rgba(74,159,232,.92),rgba(67,118,214,.92)) !important;
   border:1px solid rgba(184,225,255,.72) !important;
@@ -5146,13 +5155,19 @@ def _beta_render_referral_redemption(session):
 
         referral_credits = int(breakdown.get("referral_credits", 0) or 0)
         if referral_credits:
-            st.info(
-                f"🎁 目前推薦碼獎勵尚有 **{referral_credits} 次**可用。"
-                "一般推薦碼需使用完既有一般獎勵才能再兌換；"
-                "限已消費會員推薦碼可與一般推薦碼獎勵併存。"
+            st.markdown(
+                '<div class="v12-referral-guidance">'
+                f'🎁 目前推薦碼獎勵尚有 <strong>{referral_credits} 次</strong>可用。'
+                '</div>',
+                unsafe_allow_html=True,
             )
         else:
-            st.caption("目前沒有未使用的推薦碼獎勵，可輸入一般或限已消費會員推薦碼。")
+            st.markdown(
+                '<div class="v12-referral-guidance">'
+                '目前沒有未使用的推薦碼獎勵，可輸入「一般」或「限已消費會員」推薦碼。'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
         if redemptions:
             latest = redemptions[0] if isinstance(redemptions[0], dict) else {}
@@ -5161,10 +5176,13 @@ def _beta_render_referral_redemption(session):
                 f"（+{int(latest.get('reward_credits', 0) or 0)} 次）。"
             )
 
-        st.caption(
-            "每組推薦碼每個帳號限兌換一次。一般推薦碼需依序使用；"
-            "限已消費會員推薦碼可與一般推薦碼獎勵合併。"
-            "獎勵次數自各次兌換日起 60 天內可使用。"
+        st.markdown(
+            '<div class="v12-referral-guidance">'
+            '每組推薦碼每個帳號限兌換一次。不同推薦碼「需先用完前一筆推薦碼獎勵次數」才能兌換。'
+            '<br>「限已消費會員使用的推薦碼」可與一般推薦碼獎勵合併。'
+            '獎勵次數自各次兌換日起 60 天內可使用。'
+            '</div>',
+            unsafe_allow_html=True,
         )
         with st.form("beta_referral_redeem_form", clear_on_submit=False):
             st.text_input(
