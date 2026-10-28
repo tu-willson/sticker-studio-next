@@ -281,18 +281,18 @@ def _v12_plan_change_policy_markdown():
     if locale == "en":
         return """#### Plan changes (applies when live billing is enabled)
 
-- **Upgrade:** takes effect after payment succeeds. The new plan is purchased at its full listed price and starts a new 30-day subscription cycle.
+- **Upgrade only while active:** a current subscriber may only buy a higher subscription plan. It takes effect after payment succeeds, at the new plan's full listed price, and starts a new 30-day cycle.
 - **Unused generations:** remaining subscription generations from the previous plan are retained. The new plan's full generation allowance is then added; existing grant expiry rules still apply.
-- **Renewal:** buying again starts a new 30-day cycle from successful payment. **Downgrade:** takes effect after the current plan ends; no partial refund is issued.
+- **Same plan / downgrade:** repurchase and downgrade are not available while a subscription is active. Once PAYUNi recurring billing is approved, the same plan renews automatically at the end of its 30-day cycle. Sandbox checkout never charges automatically.
 - **One-time 7-generation pack:** is separate from subscriptions and can be used alongside them.
 
 > **Example:** If Basic started on June 10 with 5 generations remaining and Standard is purchased on June 25, Standard takes effect immediately. The account has the retained 5 plus Standard's 30 generations, and the new subscription benefits run for 30 days from June 25."""
     if locale == "ja":
         return """#### プラン変更（正式決済開始後に適用）
 
-- **アップグレード：** 決済成功後すぐに反映され、新プランを定価で購入して新たに30日間の利用期間を開始します。
+- **有効期間中はアップグレードのみ：** 現在より上位のプランだけ購入できます。決済成功後すぐに反映され、新プランを定価で購入して新たに30日間の利用期間を開始します。
 - **未使用の生成回数：** 旧プランで残っている生成回数は保持され、新プランの全生成回数が加算されます。既存の付与分の有効期限ルールは維持されます。
-- **同一プランの再購入：** 決済成功日から新たに30日間の利用期間を開始します。**ダウングレード：** 現行プラン終了後に反映され、日割り返金はありません。
+- **同一プラン／ダウングレード：** 有効な契約期間中は購入できません。PAYUNi の定期課金承認後は、30日周期の終了時に同一プランが自動更新されます。サンドボックスでは自動課金されません。
 - **7回生成パック：** サブスクリプションとは別の単発パックで、併用できます。"""
     return """#### 🔄 方案升級、續訂與降級說明
 
@@ -300,9 +300,9 @@ def _v12_plan_change_policy_markdown():
 
 | 情況 | 規則 |
 | --- | --- |
-| **升級方案** | 付款成功後立即生效，依新方案的**完整售價**購買；新方案自成功付款時起重新計算 **30 天**。 |
-| **同方案再次購買** | 視為重新續訂，成功付款時起重新計算 **30 天**。 |
-| **降級方案** | 不提供當期部分退款；目前方案可用到原到期日，下一期才套用較低方案。 |
+| **升級方案** | 有效訂閱期間只可升級至更高方案；付款成功後立即生效，依新方案的**完整售價**購買，並自成功付款時起重新計算 **30 天**。 |
+| **同方案再次購買** | 有效訂閱期間不開放重複購買。PAYUNi 定期定額核准後，會在 30 天週期到期時自動續訂同一方案；目前沙盒不會自動扣款。 |
+| **降級方案** | 有效訂閱期間不開放直接降級或購買較低方案；可在目前週期結束後重新選擇。 |
 | **7 次生成包** | 不屬於訂閱升降級，可與訂閱方案同時持有，依各自效期使用。 |
 | **市集／膠卷權益** | 升級後立即採用新方案的容量與發布上限；既有內容不會自動刪除。若日後降級且內容超過新上限，仍可查看與使用，但須整理至上限內才能再新增。 |
 
@@ -2997,6 +2997,7 @@ def _beta_http(method, path, payload=None, access_token=None):
             "referral_code_limit_reached",
             "marketplace_report_membership_required",
             "marketplace_report_daily_limit_reached",
+            "subscription_plan_not_upgrade",
         }
         if error_code in known_codes:
             raise RuntimeError(error_code) from exc
@@ -11482,9 +11483,12 @@ def _v12_create_payuni_checkout_callback(session, product_code):
             session, product_code
         )
         st.session_state.pop("v12_payuni_checkout_error", None)
+    except RuntimeError as exc:
+        st.session_state.pop("v12_payuni_checkout", None)
+        st.session_state["v12_payuni_checkout_error"] = str(exc)
     except Exception:
         st.session_state.pop("v12_payuni_checkout", None)
-        st.session_state["v12_payuni_checkout_error"] = True
+        st.session_state["v12_payuni_checkout_error"] = "unknown"
 
 
 def _v12_load_workspace_project_callback(project):
@@ -11728,6 +11732,11 @@ def _v12_render_pricing_page():
             "button": t("pricing_choose_pack"),
         },
     ]
+    subscription_ranks = {
+        "basic_monthly": 1,
+        "standard_monthly": 2,
+        "advanced_monthly": 3,
+    }
     selected_code = str(st.session_state.get("v12_pending_purchase_product", "") or "")
     session = _beta_current_user() if _beta_config() else None
     current_code = ""
@@ -11739,6 +11748,18 @@ def _v12_render_pricing_page():
             current_label = _beta_entitlement_label(entitlement)
         except Exception:
             pass
+
+    current_subscription_rank = subscription_ranks.get(current_code, 0)
+    if (
+        current_subscription_rank
+        and subscription_ranks.get(selected_code, 0) <= current_subscription_rank
+    ):
+        # A stale selection must not keep an ineligible checkout visible after
+        # payment, refresh, or a change of active subscription.
+        st.session_state.pop("v12_pending_purchase_product", None)
+        st.session_state.pop("v12_payuni_checkout", None)
+        st.session_state.pop("v12_payuni_checkout_error", None)
+        selected_code = ""
 
     st.markdown(
         f"""
@@ -11755,6 +11776,11 @@ def _v12_render_pricing_page():
         st.success(f"📋 {current_label}")
     else:
         st.info(t("pricing_login_notice"))
+    if current_subscription_rank:
+        if current_subscription_rank == max(subscription_ranks.values()):
+            st.info(t("pricing_highest_plan_notice"))
+        else:
+            st.info(t("pricing_upgrade_only_notice"))
 
     # The signed PAYUNi return may be opened after the Streamlit session has
     # restarted. Show its compact provider message independently of member
@@ -11793,7 +11819,13 @@ def _v12_render_pricing_page():
     plan_cols = st.columns(4, gap="medium")
     for col, product in zip(plan_cols, products):
         is_selected = selected_code == product["code"]
-        is_current = current_code == product["code"]
+        product_subscription_rank = subscription_ranks.get(product["code"], 0)
+        is_current = bool(product_subscription_rank and current_code == product["code"])
+        is_subscription_locked = bool(
+            current_subscription_rank
+            and product_subscription_rank
+            and product_subscription_rank <= current_subscription_rank
+        )
         card_class = " v12-pricing-card-featured" if product.get("recommended") else ""
         with col:
             badge = f'<div class="v12-pricing-badge">{t("pricing_recommended")}</div>' if product.get("recommended") else ""
@@ -11815,11 +11847,15 @@ def _v12_render_pricing_page():
                 unsafe_allow_html=True,
             )
             st.button(
-                "✓ " + t("pricing_current") if is_selected else product["button"],
+                "✓ " + t("pricing_current") if is_current else (
+                    t("pricing_subscription_locked")
+                    if is_subscription_locked
+                    else product["button"]
+                ),
                 key=f"v12_select_product_{product['code']}",
                 type="primary" if product.get("recommended") else "secondary",
                 use_container_width=True,
-                disabled=is_current,
+                disabled=is_current or is_subscription_locked,
                 on_click=_v12_select_purchase_product_callback,
                 args=(product["code"],),
             )
@@ -11848,7 +11884,12 @@ def _v12_render_pricing_page():
                         on_click=_v12_create_payuni_checkout_callback,
                         args=(session, chosen["code"]),
                     )
-                if st.session_state.get("v12_payuni_checkout_error"):
+                checkout_error = str(
+                    st.session_state.get("v12_payuni_checkout_error", "") or ""
+                )
+                if checkout_error == "subscription_plan_not_upgrade":
+                    st.error(t("pricing_subscription_not_upgrade_error"))
+                elif checkout_error:
                     st.error(t("pricing_sandbox_error"))
             else:
                 st.info(t("pricing_pending"))
