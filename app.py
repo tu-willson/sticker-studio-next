@@ -3025,6 +3025,58 @@ def _beta_payuni_checkout_url(checkout_id):
     )
 
 
+def _beta_payuni_checkout_payload(checkout_id):
+    """Fetch a short-lived, signed PAYUNi form payload from our Edge Function."""
+    checkout_url = _beta_payuni_checkout_url(checkout_id)
+    if not checkout_url:
+        raise RuntimeError("payuni_checkout_invalid")
+    request = urllib.request.Request(
+        checkout_url,
+        headers={"Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8") or "{}")
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError) as exc:
+        raise RuntimeError("payuni_checkout_payload_failed") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError("payuni_checkout_payload_invalid")
+    fields = payload.get("fields")
+    if payload.get("action") != "https://sandbox-api.payuni.com.tw/api/upp" or not isinstance(fields, dict):
+        raise RuntimeError("payuni_checkout_payload_invalid")
+    required = ("MerID", "Version", "EncryptInfo", "HashInfo")
+    if any(not str(fields.get(name, "") or "") for name in required):
+        raise RuntimeError("payuni_checkout_payload_invalid")
+    return {"action": payload["action"], "fields": {name: str(fields[name]) for name in required}}
+
+
+def _v12_render_payuni_sandbox_form(checkout):
+    """Show a user-clicked signed POST form without exposing PAYUNi secrets."""
+    payload = _beta_payuni_checkout_payload(checkout.get("checkout_id"))
+    hidden_fields = "".join(
+        f'<input type="hidden" name="{html.escape(name)}" value="{html.escape(value)}">'
+        for name, value in payload["fields"].items()
+    )
+    label = html.escape(t("pricing_sandbox_open"))
+    components.html(
+        f"""
+        <style>
+          html, body {{ margin: 0; background: transparent; font-family: sans-serif; }}
+          form {{ margin: 0; }}
+          button {{ width: 100%; border: 0; border-radius: 0.5rem; padding: 0.62rem 1rem;
+                    background: #ff5579; color: white; font-size: 1rem; font-weight: 700; cursor: pointer; }}
+          button:hover {{ background: #e94069; }}
+        </style>
+        <form action="{html.escape(payload['action'])}" method="post" target="_blank">
+          {hidden_fields}<button type="submit">{label}</button>
+        </form>
+        """,
+        height=53,
+        scrolling=False,
+    )
+
+
 def _beta_my_commerce_order_status(session, order_id):
     """Read only the signed-in member's own order state after a payment return."""
     if not re.fullmatch(
@@ -11717,14 +11769,10 @@ def _v12_render_pricing_page():
                 _checkout = st.session_state.get("v12_payuni_checkout")
                 if isinstance(_checkout, dict) and _checkout.get("product_name"):
                     st.success(t("pricing_sandbox_ready"))
-                    _checkout_url = _beta_payuni_checkout_url(_checkout.get("checkout_id"))
-                    if _checkout_url:
-                        st.link_button(
-                            t("pricing_sandbox_open"),
-                            _checkout_url,
-                            type="primary",
-                            use_container_width=True,
-                        )
+                    try:
+                        _v12_render_payuni_sandbox_form(_checkout)
+                    except Exception:
+                        st.error(t("pricing_sandbox_error"))
                     st.caption(t("pricing_sandbox_scope"))
                 else:
                     st.info(t("pricing_sandbox_intro"))

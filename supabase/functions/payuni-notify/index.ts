@@ -2,7 +2,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { constantTimeEqual, decryptPayuniInfo, payuniHashInfo, payuniResultValues, requestFields } from "../_shared/payuni.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+function supabaseAdminKey(): string {
+  try {
+    const keys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}") as Record<string, unknown>;
+    if (typeof keys.default === "string" && keys.default) return keys.default;
+  } catch {
+    // Fall through to the legacy key for projects that have not migrated yet.
+  }
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+}
+
+const SERVICE_ROLE_KEY = supabaseAdminKey();
 const MERCHANT_ID = Deno.env.get("PAYUNI_MERCHANT_ID") || "";
 const HASH_KEY = Deno.env.get("PAYUNI_HASH_KEY") || "";
 const HASH_IV = Deno.env.get("PAYUNI_HASH_IV") || "";
