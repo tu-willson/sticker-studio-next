@@ -71,7 +71,9 @@ Deno.serve(async (request) => {
     action: SANDBOX_URL,
     fields: {
       MerID: MERCHANT_ID,
-      Version: "1.0",
+      // UPP's current API specification requires Version 2.0. Sending the
+      // old 1.0 value is rejected before PAYUNi can display its payment page.
+      Version: "2.0",
       EncryptInfo: encryptedInfo,
       HashInfo: hashInfo,
     },
