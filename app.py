@@ -2242,11 +2242,21 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
   border-left:4px solid #4fdb8b;
   background:rgba(35,133,81,.2);
 }
-.v12-referral-credit-note{
-  margin:.42rem 0 .1rem;
+.v12-credit-breakdown{
+  margin:.46rem 0 .08rem;
   color:#fff0c2;
+  font-size:1.1rem;
   font-weight:900;
-  line-height:1.55;
+  line-height:1.65;
+  text-shadow:0 1px 2px rgba(0,0,0,.45);
+}
+.v12-credit-breakdown strong{color:#fff8dd;font-weight:950;}
+.v12-credit-priority{
+  margin:.08rem 0 .16rem;
+  color:#fff5cf;
+  font-size:1.08rem;
+  font-weight:900;
+  line-height:1.62;
   text-shadow:0 1px 2px rgba(0,0,0,.45);
 }
 @media(max-width:680px){
@@ -2255,6 +2265,8 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
   .v12-reel-market-guide{padding:.85rem .8rem;}
   .st-key-v12_pricing_rules_guide{padding:.85rem .8rem;}
   .st-key-v12_member_rules{padding:.85rem .8rem;}
+  .v12-credit-breakdown{font-size:1rem;}
+  .v12-credit-priority{font-size:.98rem;}
   .st-key-v12_member_rules [data-testid="stMarkdownContainer"] th,
   .st-key-v12_member_rules [data-testid="stMarkdownContainer"] td{padding:.56rem .52rem;font-size:.87rem;}
 }
@@ -6203,12 +6215,22 @@ def _beta_render_account_panel():
             else:
                 try:
                     credit_breakdown = _beta_credit_balance_breakdown(session)
+                    marketplace_reward = (
+                        f"　｜　{t('account_marketplace_reward', count=credit_breakdown['marketplace_creator_reward_credits'])}"
+                        if credit_breakdown["marketplace_creator_reward_credits"]
+                        else ""
+                    )
                     st.markdown(
-                        "<p class=\"v12-referral-credit-note\">"
-                        "🎁 推薦碼獎勵："
-                        f"{credit_breakdown['referral_credits']} 次"
-                        "｜基本會員次數以及推薦碼次數會優先使用，再使用訂閱／生成包額度。"
-                        "</p>",
+                        "<div class=\"v12-credit-breakdown\">"
+                        + t(
+                            "account_credit_breakdown",
+                            basic=credit_breakdown["basic_member_credits"],
+                            referral=credit_breakdown["referral_credits"],
+                            subscription=credit_breakdown["subscription_or_pack_credits"],
+                        )
+                        + marketplace_reward
+                        + "</div>"
+                        + f"<p class=\"v12-credit-priority\">{t('account_credit_priority')}</p>",
                         unsafe_allow_html=True,
                     )
                 except Exception:
