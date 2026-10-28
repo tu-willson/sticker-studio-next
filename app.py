@@ -275,6 +275,47 @@ def _v12_pricing_rules_markdown():
     """).strip()
 
 
+def _v12_plan_change_policy_markdown():
+    """Explain the planned paid-plan change policy without changing sandbox billing."""
+    locale = _v12_ui_locale()
+    if locale == "en":
+        return """#### Plan changes (applies when live billing is enabled)
+
+- **Upgrade:** takes effect after payment succeeds. The server calculates a prorated price difference from the remaining days; the billing end date is not reset.
+- **Renewal:** buying the same plan extends its end date. **Downgrade:** takes effect after the current plan ends; no partial refund is issued.
+- **One-time 7-generation pack:** is separate from subscriptions and can be used alongside them.
+
+> **Example:** Upgrading Basic NT$99 to Standard NT$149 with 15 of 30 days remaining costs `(149 − 99) × 15 ÷ 30 = NT$25`. Standard benefits apply immediately, the original end date remains unchanged, and the upgrade adds the 10-generation allowance difference for the remaining cycle."""
+    if locale == "ja":
+        return """#### プラン変更（正式決済開始後に適用）
+
+- **アップグレード：** 決済成功後すぐに反映し、残り日数に応じた差額をサーバー側で計算します。終了日はリセットしません。
+- **同一プランの再購入：** 有効期限を延長します。**ダウングレード：** 現行プラン終了後に反映され、日割り返金はありません。
+- **7回生成パック：** サブスクリプションとは別の単発パックで、併用できます。"""
+    return """#### 🔄 方案升級、續訂與降級說明
+
+> **正式金流啟用後適用：** 金額與剩餘天數一律由伺服器計算並鎖定；付款頁只會顯示試算結果，不能由瀏覽器自行修改金額。
+
+| 情況 | 規則 |
+| --- | --- |
+| **升級方案** | 付款成功後立即生效，按目前方案的**剩餘天數**收取新舊方案差額；原本帳務到期日不重置。 |
+| **同方案再次購買** | 視為續訂，效期由原到期日往後延長，不會重複建立兩份相同訂閱。 |
+| **降級方案** | 不提供當期部分退款；目前方案可用到原到期日，下一期才套用較低方案。 |
+| **7 次生成包** | 不屬於訂閱升降級，可與訂閱方案同時持有，依各自效期使用。 |
+| **市集／膠卷權益** | 升級後立即採用新方案的容量與發布上限；既有內容不會自動刪除。若日後降級且內容超過新上限，仍可查看與使用，但須整理至上限內才能再新增。 |
+
+#### 🧮 升級補差額與次數範例
+
+基本方案為 **NT$99／20 次**，標準方案為 **NT$149／30 次**。若基本方案尚餘 **15／30 天**：
+
+- **升級補款：** `(149 − 99) × 15 ÷ 30 = NT$25`。
+- **生效時間：** NT$25 付款成功後立刻改用標準方案的 AI 幫想、雲端作品庫、膠卷與市集上限；原本到期日維持不變，不會重新起算 30 天。
+- **圖片生成次數：** 原本尚未用完的基本方案次數保留到原到期日；另補發基本與標準方案之間的 **10 次差額**，同樣於原到期日失效。
+- **具體例子：** 若基本方案的 20 次已使用 8 次，升級後會保有剩餘 12 次，再加上 10 次升級差額；該帳務週期內共有 **22 次**可用。
+
+> 目前 PAYUNi 沙盒階段只驗證付款與回呼；正式升級金額會在建立訂單前由伺服器依實際到期時間重新計算與驗證。"""
+
+
 def _v12_member_rules_markdown():
     """Expanded member-rule content; the checkout version stays compact."""
     locale = _v12_ui_locale()
@@ -11833,6 +11874,8 @@ def _v12_render_pricing_page():
         st.markdown(f"### {t('pricing_rules_heading')}")
         with st.expander(t("pricing_rules_title"), expanded=True):
             st.markdown(_v12_pricing_rules_markdown())
+        with st.expander("🔄 方案升級／續訂／降級說明", expanded=False):
+            st.markdown(_v12_plan_change_policy_markdown())
         st.caption(t("pricing_footer"))
 
 
