@@ -2267,6 +2267,19 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
   line-height:1.58;
   text-shadow:0 1px 3px rgba(0,0,0,.62);
 }
+div.st-key-beta_refresh_credit_balance button{
+  background:linear-gradient(135deg,rgba(74,159,232,.92),rgba(67,118,214,.92)) !important;
+  border:1px solid rgba(184,225,255,.72) !important;
+  color:#fff !important;
+  font-weight:900 !important;
+  box-shadow:0 5px 13px rgba(14,71,142,.24);
+  transition:transform .16s ease,filter .16s ease,background .16s ease;
+}
+div.st-key-beta_refresh_credit_balance button:hover{
+  background:linear-gradient(135deg,rgba(104,193,250,.98),rgba(91,137,239,.98)) !important;
+  filter:brightness(1.08);
+  transform:translateY(-1px);
+}
 .st-key-v12_referral_redeem,
 .st-key-v12_member_rules_expander{margin-top:.72rem;}
 .st-key-v12_referral_redeem [data-testid="stExpander"],
@@ -6245,46 +6258,51 @@ def _beta_render_account_panel():
         st.markdown(f"#### {t('login_title')}")
         user = session.get("user", {})
         email = html.escape(str(user.get("email", "Member") or "Member"))
-        account_status_col, refresh_balance_col = st.columns(
-            [5, 1], vertical_alignment="center"
+        try:
+            balance = _beta_credit_balance(session)
+            st.success(t("account_balance", email=email, balance=balance))
+        except Exception:
+            st.warning(t("account_unavailable", email=email))
+        logout_col, refresh_balance_col, _account_actions_spacer = st.columns(
+            [1, 1, 1], vertical_alignment="center"
         )
-        with account_status_col:
-            try:
-                balance = _beta_credit_balance(session)
-                st.success(t("account_balance", email=email, balance=balance))
-            except Exception:
-                st.warning(t("account_unavailable", email=email))
+        with logout_col:
             st.button(
                 t("logout"),
                 type="primary",
                 key="beta_logout",
                 on_click=_beta_logout_callback,
             )
-            try:
-                credit_breakdown = _beta_credit_balance_breakdown(session)
-                marketplace_reward = (
-                    f"　｜　{t('account_marketplace_reward', count=credit_breakdown['marketplace_creator_reward_credits'])}"
-                    if credit_breakdown["marketplace_creator_reward_credits"]
-                    else ""
-                )
-                st.markdown(
-                    "<div class=\"v12-credit-breakdown\">"
-                    + t(
-                        "account_credit_breakdown",
-                        basic=credit_breakdown["basic_member_credits"],
-                        referral=credit_breakdown["referral_credits"],
-                        subscription=credit_breakdown["subscription_or_pack_credits"],
-                    )
-                    + marketplace_reward
-                    + "</div>"
-                    + f"<p class=\"v12-credit-priority\">{t('account_credit_priority')}</p>",
-                    unsafe_allow_html=True,
-                )
-            except Exception:
-                pass
         with refresh_balance_col:
-            if st.button(t("refresh"), key="beta_refresh_credit_balance", use_container_width=True):
+            if st.button(
+                t("refresh"),
+                key="beta_refresh_credit_balance",
+                type="secondary",
+                use_container_width=True,
+            ):
                 _beta_clear_cached_copy_usage_status()
+        try:
+            credit_breakdown = _beta_credit_balance_breakdown(session)
+            marketplace_reward = (
+                f"　｜　{t('account_marketplace_reward', count=credit_breakdown['marketplace_creator_reward_credits'])}"
+                if credit_breakdown["marketplace_creator_reward_credits"]
+                else ""
+            )
+            st.markdown(
+                "<div class=\"v12-credit-breakdown\">"
+                + t(
+                    "account_credit_breakdown",
+                    basic=credit_breakdown["basic_member_credits"],
+                    referral=credit_breakdown["referral_credits"],
+                    subscription=credit_breakdown["subscription_or_pack_credits"],
+                )
+                + marketplace_reward
+                + "</div>"
+                + f"<p class=\"v12-credit-priority\">{t('account_credit_priority')}</p>",
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            pass
         try:
             entitlement_label = html.escape(_beta_entitlement_label(_beta_effective_entitlement(session)))
             st.markdown(
