@@ -11726,7 +11726,12 @@ def _v12_render_pricing_page():
 
     payment_order = str(st.query_params.get("payment_order", "") or "")
     if payment_order and not session:
-        st.info("PAYUNi 已將交易結果送回。請關閉此回傳分頁，回到原付款頁重新整理以查看最新會員權益。")
+        if provider_result.upper() in {"SUCCESS", "OK"}:
+            st.success("PAYUNi 已回傳付款成功。請關閉此回傳分頁，回到原付款頁重新整理以查看最新會員權益。")
+        elif provider_result or provider_message:
+            st.warning("PAYUNi 已回傳未完成的付款結果；請依上方原因調整後重新測試。")
+        else:
+            st.info("PAYUNi 已將交易結果送回。請關閉此回傳分頁，回到原付款頁重新整理以查看最新會員權益。")
         return
     if session and payment_order:
         try:
