@@ -6245,8 +6245,8 @@ def _beta_render_account_panel():
         st.markdown(f"#### {t('login_title')}")
         user = session.get("user", {})
         email = html.escape(str(user.get("email", "Member") or "Member"))
-        account_status_col, refresh_balance_col, _account_spacer = st.columns(
-            [4, 1.15, 6.85], vertical_alignment="center"
+        account_status_col, refresh_balance_col = st.columns(
+            [5, 1], vertical_alignment="center"
         )
         with account_status_col:
             try:
