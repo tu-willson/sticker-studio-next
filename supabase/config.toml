@@ -1,0 +1,10 @@
+project_id = "iffmdhpqbezdrunwoxyh"
+
+[functions.payuni-checkout]
+verify_jwt = false
+
+[functions.payuni-notify]
+verify_jwt = false
+
+[functions.payuni-return]
+verify_jwt = false

@@ -2979,6 +2979,69 @@ def _beta_rpc(function_name, payload, access_token=None):
     )
 
 
+def _beta_payuni_sandbox_enabled():
+    """Keep public checkout disabled until deployment secrets explicitly enable it."""
+    try:
+        value = str(st.secrets.get("PAYUNI_SANDBOX_ENABLED", "") or "").strip().lower()
+    except Exception:
+        return False
+    return value in {"1", "true", "yes", "on"}
+
+
+def _beta_create_payuni_checkout(session, product_code):
+    """Create a member-owned pending order; the browser cannot mark it paid."""
+    response = _beta_rpc(
+        "create_my_payuni_checkout",
+        {
+            "p_product_code": str(product_code or ""),
+            "p_idempotency_key": str(__import__("uuid").uuid4()),
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("payuni_checkout_invalid")
+    checkout_id = str(response.get("checkout_id", "") or "")
+    order_id = str(response.get("order_id", "") or "")
+    if not checkout_id or not order_id:
+        raise RuntimeError("payuni_checkout_invalid")
+    return {
+        "checkout_id": checkout_id,
+        "order_id": order_id,
+        "product_name": str(response.get("product_name", "") or ""),
+        "amount_twd": int(response.get("amount_twd", 0) or 0),
+        "expires_at": str(response.get("expires_at", "") or ""),
+    }
+
+
+def _beta_payuni_checkout_url(checkout_id):
+    config = _beta_config()
+    if not config or not checkout_id:
+        return ""
+    return (
+        f"{config['url']}/functions/v1/payuni-checkout?checkout="
+        f"{urllib.parse.quote(str(checkout_id), safe='')}"
+    )
+
+
+def _beta_my_commerce_order_status(session, order_id):
+    """Read only the signed-in member's own order state after a payment return."""
+    if not re.fullmatch(
+        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+        str(order_id or ""),
+    ):
+        return None
+    response = _beta_rpc(
+        "get_my_commerce_order_status",
+        {"p_order_id": str(order_id)},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        return response[0] if response else None
+    return response if isinstance(response, dict) else None
+
+
 def _beta_raw_http(method, path, body=None, access_token=None,
                    content_type=None, extra_headers=None):
     """Authenticated binary Storage requests; never use a service-role key."""
@@ -5448,7 +5511,7 @@ def _beta_render_admin_operations_policy():
 
             - 儀表板僅供資料庫授權管理員使用。登入、生成結果、雲端／膠卷保存、推薦碼兌換、市集購入與付款結果會記錄時間、結果與安全的診斷代碼；不保存人物照片、提示詞或私人創作內容。
             - 「登入活躍會員」代表成功登入本服務的會員，不代表匿名網頁瀏覽量。匿名流量分析若要啟用，需另行導入具同意機制的網站分析服務。
-            - 正式付款失敗只統計非 `admin_test` 的訂單；綠界正式回呼上線後才會有可用的付款成功／失敗監控資料。
+            - 正式付款失敗只統計非 `admin_test` 的訂單；PAYUNi 正式回呼上線後才會有可用的付款成功／失敗監控資料。
             - 警示門檻目前為：生成失敗至少 3 次且失敗率達 15%、任一雲端／膠卷保存失敗、待審核市集膠卷、以及 7 天內到期的啟用推薦碼。調整門檻時應同步更新本規章。
             """
         )
@@ -11311,6 +11374,20 @@ def _v12_navigate_callback(
 def _v12_select_purchase_product_callback(product_code):
     """Choose a plan before the click's single normal Streamlit rerun."""
     st.session_state["v12_pending_purchase_product"] = product_code
+    st.session_state.pop("v12_payuni_checkout", None)
+    st.session_state.pop("v12_payuni_checkout_error", None)
+
+
+def _v12_create_payuni_checkout_callback(session, product_code):
+    """Create exactly one pending sandbox order in the widget callback pass."""
+    try:
+        st.session_state["v12_payuni_checkout"] = _beta_create_payuni_checkout(
+            session, product_code
+        )
+        st.session_state.pop("v12_payuni_checkout_error", None)
+    except Exception:
+        st.session_state.pop("v12_payuni_checkout", None)
+        st.session_state["v12_payuni_checkout_error"] = True
 
 
 def _v12_load_workspace_project_callback(project):
@@ -11502,7 +11579,7 @@ def _v12_retry_creator_reel_callback():
 
 
 def _v12_render_pricing_page():
-    """Render the public-ready plan selection screen before ECPay checkout goes live."""
+    """Render plan selection and the opt-in PAYUNi sandbox checkout."""
     products = [
         {
             "code": "basic_monthly",
@@ -11582,6 +11659,21 @@ def _v12_render_pricing_page():
     else:
         st.info(t("pricing_login_notice"))
 
+    payment_order = str(st.query_params.get("payment_order", "") or "")
+    if session and payment_order:
+        try:
+            payment_status = _beta_my_commerce_order_status(session, payment_order)
+        except Exception:
+            payment_status = None
+        if not payment_status:
+            st.warning(t("pricing_return_unavailable"))
+        elif str(payment_status.get("status", "")) == "paid":
+            st.success(t("pricing_return_paid"))
+        elif str(payment_status.get("status", "")) == "pending":
+            st.info(t("pricing_return_pending"))
+        else:
+            st.warning(t("pricing_return_failed"))
+
     plan_cols = st.columns(4, gap="medium")
     for col, product in zip(plan_cols, products):
         is_selected = selected_code == product["code"]
@@ -11621,14 +11713,40 @@ def _v12_render_pricing_page():
         st.markdown("<div class='v12-pricing-selection'>", unsafe_allow_html=True)
         st.markdown(f"### {t('pricing_selected', name=chosen['name'], price=chosen['price'])}")
         if session:
-            st.info(t("pricing_pending"))
-            st.button(
-                t("pricing_pending_button"),
-                key="v12_ecpay_checkout_pending",
-                type="primary",
-                use_container_width=True,
-                disabled=True,
-            )
+            if _beta_payuni_sandbox_enabled():
+                _checkout = st.session_state.get("v12_payuni_checkout")
+                if isinstance(_checkout, dict) and _checkout.get("product_name"):
+                    st.success(t("pricing_sandbox_ready"))
+                    _checkout_url = _beta_payuni_checkout_url(_checkout.get("checkout_id"))
+                    if _checkout_url:
+                        st.link_button(
+                            t("pricing_sandbox_open"),
+                            _checkout_url,
+                            type="primary",
+                            use_container_width=True,
+                        )
+                    st.caption(t("pricing_sandbox_scope"))
+                else:
+                    st.info(t("pricing_sandbox_intro"))
+                    st.button(
+                        t("pricing_sandbox_start"),
+                        key="v12_payuni_sandbox_checkout",
+                        type="primary",
+                        use_container_width=True,
+                        on_click=_v12_create_payuni_checkout_callback,
+                        args=(session, chosen["code"]),
+                    )
+                if st.session_state.get("v12_payuni_checkout_error"):
+                    st.error(t("pricing_sandbox_error"))
+            else:
+                st.info(t("pricing_pending"))
+                st.button(
+                    t("pricing_pending_button"),
+                    key="v12_payuni_checkout_pending",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=True,
+                )
         else:
             st.warning(t("pricing_signin_notice"))
             st.button(
@@ -11662,6 +11780,15 @@ st.markdown("""<style>
 # first clean page render after signing in.
 if _beta_config():
     _beta_complete_oauth_callback()
+
+# PAYUNi sends the member back with an opaque order id only.  Show the safe,
+# member-owned status on the pricing page; entitlement issuance remains solely
+# in the verified server-side NotifyURL flow.
+if re.fullmatch(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+    str(st.query_params.get("payment_order", "") or ""),
+):
+    st.session_state["v12_view"] = "pricing"
 
 
 # ============================================================
