@@ -13017,6 +13017,10 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
     st.session_state.setdefault(
         "v12_use_text_only_style", style_mode == V12_TEXT_ONLY_STYLE
     )
+    # 元件建立前先處理跨版本草稿可能留下的兩者同時勾選狀態。
+    # 建立 checkbox 後不可直接寫回同一個 widget key，否則 Streamlit 會報錯。
+    if bool(st.session_state.get("v12_use_text_only_style", False)):
+        st.session_state["v12_use_custom_style"] = False
     # 兩個特殊模式並列在預設風格下拉欄上方：自定義風格與純文字貼圖。
     # 保留明顯間距，讓第二個選項位於右側而不與標籤擠在一起。
     with st.container(key="v12_style_mode_toggles"):
@@ -13034,7 +13038,6 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 on_change=_v12_text_only_style_toggle_changed,
             )
     if _use_text_only_style:
-        st.session_state["v12_use_custom_style"] = False
         st.session_state["v10_style_mode"] = V12_TEXT_ONLY_STYLE
         style_mode = V12_TEXT_ONLY_STYLE
     elif _use_custom_style:
