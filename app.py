@@ -4862,7 +4862,8 @@ def _beta_get_my_referral_redemption(session):
 
 
 def _beta_admin_create_referral_code(
-    session, code, redemption_limit, reward_credits, expires_at, note
+    session, code, redemption_limit, reward_credits, expires_at, note,
+    requires_paid_membership=False,
 ):
     response = _beta_rpc(
         "admin_create_referral_code",
@@ -4872,6 +4873,7 @@ def _beta_admin_create_referral_code(
             "p_reward_credits": int(reward_credits),
             "p_expires_at": expires_at,
             "p_note": str(note or "").strip(),
+            "p_requires_paid_membership": bool(requires_paid_membership),
         },
         access_token=session["access_token"],
     )
@@ -5070,6 +5072,7 @@ def _beta_admin_create_referral_code_callback(session):
             int(st.session_state.get("beta_admin_referral_credits", 1) or 1),
             expiry_value,
             str(st.session_state.get("beta_admin_referral_note", "") or "").strip(),
+            bool(st.session_state.get("beta_admin_referral_requires_paid_membership", False)),
         )
         st.session_state["beta_admin_referral_notice"] = f"推薦碼「{normalized_code}」已建立。"
         st.session_state.pop("beta_admin_referral_error", None)
@@ -5095,7 +5098,9 @@ def _beta_redeem_referral_code_callback(session):
     except Exception as exc:
         error_text = str(exc).lower()
         if "previous_reward_remaining" in error_text:
-            message = "請先使用完目前的推薦碼獎勵次數，才能兌換下一組推薦碼。"
+            message = "請先使用完目前的一般推薦碼獎勵次數，才能兌換下一組一般推薦碼。"
+        elif "paid_member_required" in error_text:
+            message = "此推薦碼僅限已成功購買訂閱方案或 7 次生成包的會員使用。"
         elif "code_already_redeemed" in error_text:
             message = "這組推薦碼已由此帳號兌換過，請改用不同的推薦碼。"
         elif "already_redeemed" in error_text:
@@ -5143,10 +5148,11 @@ def _beta_render_referral_redemption(session):
         if referral_credits:
             st.info(
                 f"🎁 目前推薦碼獎勵尚有 **{referral_credits} 次**可用。"
-                "使用完畢前，不能再兌換下一組推薦碼。"
+                "一般推薦碼需使用完既有一般獎勵才能再兌換；"
+                "限已消費會員推薦碼可與一般推薦碼獎勵併存。"
             )
         else:
-            st.caption("目前沒有未使用的推薦碼獎勵，可輸入新的推薦碼。")
+            st.caption("目前沒有未使用的推薦碼獎勵，可輸入一般或限已消費會員推薦碼。")
 
         if redemptions:
             latest = redemptions[0] if isinstance(redemptions[0], dict) else {}
@@ -5156,7 +5162,8 @@ def _beta_render_referral_redemption(session):
             )
 
         st.caption(
-            "可使用不同推薦碼累積獎勵；每組推薦碼每個帳號限兌換一次。"
+            "每組推薦碼每個帳號限兌換一次。一般推薦碼需依序使用；"
+            "限已消費會員推薦碼可與一般推薦碼獎勵合併。"
             "獎勵次數自各次兌換日起 60 天內可使用。"
         )
         with st.form("beta_referral_redeem_form", clear_on_submit=False):
@@ -5608,7 +5615,7 @@ def _beta_render_admin_operations_policy():
             | 一般會員 | 可使用貼圖生成與膠捲功能；不可使用市集膠卷。 | 依帳號目前可用次數。 |
             | 7 次生成包 | 圖片生成 7 次、AI 幫想每日 7 次、雲端作品 7 組。 | 購買後 30 天。 |
             | 基本／標準／進階訂閱 | 每月圖片生成 20／30／45 次；AI 幫想每日 15／20／25 次；雲端作品 20／30／40 組。 | 訂閱額度可保留至下一個帳務週期結束；系統優先使用最早到期的次數。 |
-            | 推薦碼獎勵 | 可使用不同推薦碼加點；同一組碼每帳號限兌換一次，舊推薦碼獎勵用完前不得再兌換下一組。推薦碼可設定名額、獎勵次數、截止日與停用狀態。 | 每次兌換後 60 天。 |
+            | 推薦碼獎勵 | 一般推薦碼需先用完前一筆一般獎勵；限已消費會員推薦碼限曾成功購買訂閱或 7 次包者使用，且可與一般推薦碼獎勵併存。同一組碼每帳號限兌換一次。推薦碼可設定名額、獎勵次數、截止日、消費資格與停用狀態。 | 每次兌換後 60 天。 |
             | 市集創作者回饋 | 購買者首次購入膠卷所支付的生成次數，全數回饋原創者。 | 回饋額度 90 天，且最後才消耗。 |
             | 管理員手動補次 | 僅限有明確原因的客服、測試或補償處理。 | 目前核發後 365 天；每筆都需留下原因。 |
 
@@ -5618,7 +5625,7 @@ def _beta_render_admin_operations_policy():
 
             - 僅管理員能建立或停用。代碼僅允許 4～24 位英文字母與數字，系統會統一轉為大寫。
             - 每組碼的可兌換名額為 1～100,000 人；每人獎勵 1～100 次。
-            - 每組碼每個帳號限成功兌換一次；使用者可於前一筆推薦碼獎勵用完後，再輸入不同推薦碼。使用者、名額、推薦碼有效期與獎勵額度會在同一筆資料庫交易中確認；連點或多人同時操作不得重複核發。
+            - 每組碼每個帳號限成功兌換一次。一般推薦碼須先用完前一筆一般推薦碼獎勵；限已消費會員推薦碼僅限至少有一筆成功訂閱或 7 次生成包付款紀錄者兌換，並可與一般推薦碼獎勵併存。使用者、名額、資格、推薦碼有效期與獎勵額度會在同一筆資料庫交易中確認；連點或多人同時操作不得重複核發。
             - 停用只阻止新的兌換，不會追回已成功核發的次數。不得刪除有兌換紀錄的推薦碼。
             - 管理者應保留活動來源、對外文案與停用原因於「內部備註」。
 
@@ -5700,7 +5707,7 @@ def _beta_render_admin_console(session):
     _beta_render_admin_operations_policy()
 
     with st.expander("🎁 推薦碼管理", expanded=True):
-        st.caption("建立後可立即發送給使用者。同一組推薦碼每個帳號限兌換一次；前一筆推薦碼獎勵用完後，可再兌換不同推薦碼。每筆獎勵自兌換日起保留 60 天。")
+        st.caption("建立後可立即發送給使用者。一般推薦碼須先使用完前一筆一般獎勵；勾選限已消費會員的推薦碼可與一般推薦碼獎勵合併。每組碼每帳號限兌換一次，獎勵自兌換日起保留 60 天。")
         create_code, create_limit, create_credits = st.columns([3, 2, 2])
         with create_code:
             st.text_input(
@@ -5731,6 +5738,11 @@ def _beta_render_admin_console(session):
         st.checkbox("設定推薦碼截止日期", key="beta_admin_referral_set_expiry")
         if st.session_state.get("beta_admin_referral_set_expiry"):
             st.date_input("截止日期（台灣時間）", key="beta_admin_referral_expiry")
+        st.checkbox(
+            "限已消費會員兌換（訂閱方案或曾購入 7 次生成包）",
+            key="beta_admin_referral_requires_paid_membership",
+            help="兌換者須有至少一筆成功付款的訂閱方案或 7 次生成包訂單；此類推薦碼可與一般推薦碼獎勵併存。",
+        )
         st.text_input("內部備註（選填）", max_chars=160, key="beta_admin_referral_note")
         st.button(
             "建立推薦碼",
@@ -5763,6 +5775,7 @@ def _beta_render_admin_console(session):
                 redeemed = int(referral.get("redeemed_count", 0) or 0)
                 limit = int(referral.get("redemption_limit", 0) or 0)
                 active = bool(referral.get("is_active", False))
+                requires_paid_membership = bool(referral.get("requires_paid_membership", False))
                 expiry = str(referral.get("expires_at", "") or "")[:10]
                 status = "🟢 開放中" if active else "⚪ 已停用"
                 left, middle, right = st.columns([3, 4, 2])
@@ -5773,6 +5786,11 @@ def _beta_render_admin_console(session):
                     st.markdown(
                         f"已兌換 **{redeemed}／{limit}** 人｜"
                         f"每人 **+{int(referral.get('reward_credits', 0) or 0)} 次**"
+                    )
+                    st.caption(
+                        "🔒 限已消費會員兌換｜可與一般推薦碼獎勵併存"
+                        if requires_paid_membership
+                        else "👥 一般推薦碼｜須先使用完前一筆一般推薦碼獎勵"
                     )
                     if referral.get("note"):
                         st.caption(f"備註：{referral['note']}")
