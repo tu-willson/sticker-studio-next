@@ -3068,7 +3068,7 @@ def _v12_render_payuni_sandbox_form(checkout):
                     background: #ff5579; color: white; font-size: 1rem; font-weight: 700; cursor: pointer; }}
           button:hover {{ background: #e94069; }}
         </style>
-        <form action="{html.escape(payload['action'])}" method="post" target="_blank">
+        <form action="{html.escape(payload['action'])}" method="post" target="_top">
           {hidden_fields}<button type="submit">{label}</button>
         </form>
         """,
@@ -11710,6 +11710,16 @@ def _v12_render_pricing_page():
         st.success(f"📋 {current_label}")
     else:
         st.info(t("pricing_login_notice"))
+
+    # The signed PAYUNi return may be opened after the Streamlit session has
+    # restarted. Show its compact provider message independently of member
+    # session state so a rejected sandbox request is actionable.
+    provider_result = str(st.query_params.get("payment_result", "") or "").strip()
+    provider_message = str(st.query_params.get("payment_message", "") or "").strip()
+    if provider_message:
+        st.warning(f"PAYUNi 測試付款未完成：{provider_message[:180]}")
+    elif provider_result and provider_result.upper() not in {"SUCCESS", "OK"}:
+        st.warning(f"PAYUNi 測試付款未完成（狀態：{provider_result[:60]}）。")
 
     payment_order = str(st.query_params.get("payment_order", "") or "")
     if session and payment_order:

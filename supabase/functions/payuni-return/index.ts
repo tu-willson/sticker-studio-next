@@ -21,6 +21,13 @@ function redirect(path: string): Response {
   return new Response(null, { status: 303, headers: { Location: `${SITE_URL}/${path}` } });
 }
 
+function safeProviderText(value: unknown, maxLength = 180): string {
+  return String(value ?? "")
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") return redirect("?payment=invalid");
   try {
@@ -36,7 +43,14 @@ Deno.serve(async (request) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
     const { data } = await admin.from("commerce_orders").select("id").eq("provider_order_reference", reference).maybeSingle();
     if (!data?.id) return redirect("?payment=invalid");
-    return redirect(`?payment_order=${encodeURIComponent(data.id)}`);
+    // NotifyURL is the sole fulfilment path. The return page only conveys a
+    // compact, signature-verified provider result for a useful sandbox error.
+    const result = new URLSearchParams({ payment_order: String(data.id) });
+    const status = safeProviderText(decoded.Status || fields.Status, 60);
+    const message = safeProviderText(decoded.Message, 180);
+    if (status) result.set("payment_result", status);
+    if (message) result.set("payment_message", message);
+    return redirect(`?${result.toString()}`);
   } catch {
     return redirect("?payment=invalid");
   }
