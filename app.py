@@ -5161,13 +5161,6 @@ def _beta_render_referral_redemption(session):
                 '</div>',
                 unsafe_allow_html=True,
             )
-        else:
-            st.markdown(
-                '<div class="v12-referral-guidance">'
-                '目前沒有未使用的推薦碼獎勵，可輸入「一般」或「限已消費會員」推薦碼。'
-                '</div>',
-                unsafe_allow_html=True,
-            )
 
         if redemptions:
             latest = redemptions[0] if isinstance(redemptions[0], dict) else {}
