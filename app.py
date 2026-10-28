@@ -6661,7 +6661,16 @@ V12_STICKER_EXPRESSION_MODE = "😶 使用表情貼圖（無文字）"
 V12_STYLE_PRESET_MODE = "貼圖風格快選"
 V12_STYLE_REFERENCE_MODE = "畫風參考上傳"
 V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
+V12_TEXT_ONLY_STYLE = "📝 純文字創意貼圖（隨機）"
 V12_STYLE_REFERENCE_STRENGTHS = ("柔和融入", "強烈融入")
+V12_TEXT_ONLY_VARIATION_DIRECTIONS = (
+    "以大膽不對稱字距、傾斜角度與高低錯落排版，搭配少量活潑的抽象線條點綴",
+    "以乾淨置中排版、明確層次陰影與細緻紙材／印刷質感，搭配克制的小圖形裝飾",
+    "以誇張立體透視、彈跳節奏與視覺動勢，搭配不規則但不影響閱讀的輪廓細節",
+    "以手作拼貼感、柔和顆粒與有機不規則邊緣，搭配極少量可愛的抽象符號",
+    "以精品海報感、強烈留白、精準對比與單一主視覺焦點，搭配簡潔幾何裝飾",
+    "以漫畫節奏、局部爆發線與趣味文字動態，搭配少量情緒感符號但不產生角色",
+)
 V12_EXPRESSION_EFFECTS = [
     "無額外特效（專注表情特寫）",
     "漫畫速度線",
@@ -7017,6 +7026,8 @@ def _v12_normalize_sticker_action_prompts(value):
 
 
 def _v12_sticker_mode_value(value=None):
+    if str(st.session_state.get("v10_style_mode", "") or "") == V12_TEXT_ONLY_STYLE:
+        return "text"
     value = str(value if value is not None else st.session_state.get(
         "v12_sticker_content_mode", V12_STICKER_TEXT_MODE
     ))
@@ -11387,28 +11398,48 @@ def _v12_render_ai_copy_assistant():
 
 def build_prompt(style, custom_style, selected_character, custom_character,
                  texts, transparent, color_segments=None, ai_copy_topic="", ai_copy_tone="", ai_copy_topics=None,
-                 sticker_mode="text", expression_specs=None, action_prompts=None):
+                 sticker_mode="text", expression_specs=None, action_prompts=None,
+                 text_only=False):
     _layout_instruction = "人物與特效請置中安排，四周保留自然空間，方便後續以裁切線微調。"
     _safety_margin_instruction = "每格左右與上下都要保留至少約 12% 的乾淨透明／背景安全邊距，作為裁切走廊。"
-    p = [
-        "請以我提供的人物照片作為主要人物參考。",
-        "保留人物身份辨識特徵，不任意改變人物核心外觀。",
-        "請一次生成一張清楚的4×2八格LINE貼圖總圖。",
-        "第一排四格、第二排四格；依使用者輸入順序由左至右、由上至下對應。",
-        "八格人物維持同一人物身份與主要視覺風格。",
-        "每一格都是獨立貼圖，請讓人物、手勢、文字、道具與特效適合各自裁切。",
-        "人物與整體動作可維持誇張、自然、有張力；但任何拳頭、手勢、情緒特效都不得碰到或越過格子邊界。",
-        _layout_instruction,
-        "遇到大動作時，請優先整體縮小並保留完整姿勢，而不是把手腳、道具、陰影或裝飾延伸到隔壁格。",
-        "相鄰貼圖之間必須保留一整條連續、乾淨的背景色或透明空間作為裁切走廊；不要畫格線、框線或分隔線。",
-        "【排版硬性規則】將 8 格視為 8 張完全獨立、不可跨越的畫板。每一格的所有像素——人物、文字、道具、特效、光芒、陰影與裝飾——都必須完整留在該格內，絕對不得延伸、重疊或漏進左右／上下相鄰格。",
-        _safety_margin_instruction + "內容較多時必須整體縮小，不可把多出的部分放到隔壁格；尤其第二排第 05～08 格，不可將物件、角色或裝飾跨到鄰格。",
-        "不要拉伸、變形或壓縮人物。",
-        "非常重要：圖片中禁止出現01、02、03、04、05、06、07、08等編號。",
-        "禁止加入格號、序號、位置標籤或數字標記。",
-    ]
-    sticker_mode = "expression" if sticker_mode == "expression" else "text"
-    if sticker_mode == "expression":
+    if text_only:
+        p = [
+            "本次為「純文字創意貼圖」模式，不需人物照片。",
+            "請一次生成一張清楚的4×2八格LINE貼圖總圖。",
+            "第一排四格、第二排四格；依使用者輸入順序由左至右、由上至下對應。",
+            "八格都是獨立的純文字貼圖：只能出現各格指定的文字、該文字的字型筆畫、外框、材質、陰影與抽象裝飾。",
+            "嚴禁出現人物、臉部、身體、動物、角色、手勢、日常物件、場景、風景、對話人物或具象插圖。",
+            "文字必須完全正確、清楚可讀；不可錯字、漏字、改字、加入額外文字、編號、英數符號或水印。",
+            "相鄰貼圖之間必須保留一整條連續、乾淨的背景色或透明空間作為裁切走廊；不要畫格線、框線或分隔線。",
+            "【排版硬性規則】將 8 格視為 8 張完全獨立、不可跨越的畫板。每一格的文字、外框、陰影、光芒與裝飾都必須完整留在該格內，絕對不得延伸、重疊或漏進左右／上下相鄰格。",
+            _safety_margin_instruction + "內容較多時必須整體縮小，不可把多出的部分放到隔壁格。",
+            "非常重要：圖片中禁止出現01、02、03、04、05、06、07、08等編號。",
+            "禁止加入格號、序號、位置標籤或數字標記。",
+            "每次生成可重新設計字體的排版、配色、材質、層次與抽象裝飾；但必須優先保留使用者選擇的字型與文字外框特徵。",
+            "本次隨機創意方向：" + random.choice(V12_TEXT_ONLY_VARIATION_DIRECTIONS) + "。",
+        ]
+    else:
+        p = [
+            "請以我提供的人物照片作為主要人物參考。",
+            "保留人物身份辨識特徵，不任意改變人物核心外觀。",
+            "請一次生成一張清楚的4×2八格LINE貼圖總圖。",
+            "第一排四格、第二排四格；依使用者輸入順序由左至右、由上至下對應。",
+            "八格人物維持同一人物身份與主要視覺風格。",
+            "每一格都是獨立貼圖，請讓人物、手勢、文字、道具與特效適合各自裁切。",
+            "人物與整體動作可維持誇張、自然、有張力；但任何拳頭、手勢、情緒特效都不得碰到或越過格子邊界。",
+            _layout_instruction,
+            "遇到大動作時，請優先整體縮小並保留完整姿勢，而不是把手腳、道具、陰影或裝飾延伸到隔壁格。",
+            "相鄰貼圖之間必須保留一整條連續、乾淨的背景色或透明空間作為裁切走廊；不要畫格線、框線或分隔線。",
+            "【排版硬性規則】將 8 格視為 8 張完全獨立、不可跨越的畫板。每一格的所有像素——人物、文字、道具、特效、光芒、陰影與裝飾——都必須完整留在該格內，絕對不得延伸、重疊或漏進左右／上下相鄰格。",
+            _safety_margin_instruction + "內容較多時必須整體縮小，不可把多出的部分放到隔壁格；尤其第二排第 05～08 格，不可將物件、角色或裝飾跨到鄰格。",
+            "不要拉伸、變形或壓縮人物。",
+            "非常重要：圖片中禁止出現01、02、03、04、05、06、07、08等編號。",
+            "禁止加入格號、序號、位置標籤或數字標記。",
+        ]
+    sticker_mode = "text" if text_only else (
+        "expression" if sticker_mode == "expression" else "text"
+    )
+    if sticker_mode == "expression" and not text_only:
         p.extend([
             "本次為「使用表情貼圖（無文字）」模式。",
             "八格都禁止出現任何漢字、英文字母、數字、標點、對話框文字或標籤。",
@@ -11417,24 +11448,31 @@ def build_prompt(style, custom_style, selected_character, custom_character,
             "八格的主情緒、手勢、臉部表情與視覺特效必須明顯不同；禁止重複同一種比讚、捧臉、微笑、哭泣或驚訝構圖。",
         ])
     else:
-        p.extend([
-            "每格人物完整呈現，不要裁切頭部、臉部、身體或四肢。",
-            "只有使用者指定的貼圖文字可以出現在圖片中。",
-        ])
-    if style != "↓ 請選擇風格":
+        if text_only:
+            p.append("只有使用者指定的貼圖文字可以出現在圖片中；不可用任何具象圖案取代文字。")
+        else:
+            p.extend([
+                "每格人物完整呈現，不要裁切頭部、臉部、身體或四肢。",
+                "只有使用者指定的貼圖文字可以出現在圖片中。",
+            ])
+    if style != "↓ 請選擇風格" and not text_only:
         p.append(f"主要貼圖風格：{style}。")
-    if custom_style.strip():
+    if custom_style.strip() and not text_only:
         p.append(f"使用者自定風格：{custom_style.strip()}。")
-    if selected_character:
+    if selected_character and not text_only:
         p.append("人物與畫面特色：" + "、".join(selected_character) + "。")
-    if custom_character.strip():
+    if custom_character.strip() and not text_only:
         p.append(f"使用者自定人物／場景要求：{custom_character.strip()}。")
     _topic_list = [str(x).strip() for x in (ai_copy_topics or []) if str(x).strip()]
     if not _topic_list and str(ai_copy_topic or "").strip():
         _topic_list = [str(ai_copy_topic).strip()]
     if _topic_list:
         p.append("AI 貼圖創作主題（本次最多三個主題共同參考）：" + "、".join(dict.fromkeys(_topic_list)) + "。")
-        p.append("本次貼圖可同時採用上述多個主題；它們不是互相衝突的不同世界，而是同一套貼圖的不同主題切面。請依各格文字情境自然參考相關主題，並維持整組人物與視覺一致性。")
+        p.append(
+            "請將主題只轉譯為文字的配色、材質、節奏與抽象裝飾；不可因此生成角色、人物或具象場景。"
+            if text_only
+            else "本次貼圖可同時採用上述多個主題；它們不是互相衝突的不同世界，而是同一套貼圖的不同主題切面。請依各格文字情境自然參考相關主題，並維持整組人物與視覺一致性。"
+        )
     if str(ai_copy_tone or "").strip():
         p.append(f"AI 貼圖文案語氣方向：{str(ai_copy_tone).strip()}。")
     if sticker_mode == "expression":
@@ -11457,7 +11495,7 @@ def build_prompt(style, custom_style, selected_character, custom_character,
         for i, t in enumerate(texts):
             p.append(f"第{i+1}格的指定貼圖文字為：「{t.strip() or '（此格未指定文字）'}」。")
         for i, action_prompt in enumerate(_v12_normalize_sticker_action_prompts(action_prompts)):
-            if action_prompt:
+            if action_prompt and not text_only:
                 p.append(
                     f"第{i+1}格需搭配文字情境呈現以下人物動作／互動：「{action_prompt}」。"
                     "請讓動作清楚、有張力，且完整保留在該格可裁切範圍內。"
@@ -12899,7 +12937,7 @@ with _style_reference_col:
 
 # 自定義風格改由獨立勾選啟用，預設風格下拉只保留預設選項。
 _v8_style_items = [x for x in V8_STYLES if not x.startswith("⭐ 自訂")]
-_style_options = ["↓ 請選擇風格"] + _v8_style_items
+_style_options = ["↓ 請選擇風格", V12_TEXT_ONLY_STYLE] + _v8_style_items
 style_mode = str(st.session_state.get("v10_style_mode", "↓ 請選擇風格"))
 style = style_mode
 custom_style = ""
@@ -12947,6 +12985,13 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
             key="v10_style_mode",
         )
         st.session_state["v12_last_preset_style_mode"] = style_mode
+
+    if style_mode == V12_TEXT_ONLY_STYLE:
+        st.info(
+            "📝 已選擇「純文字創意貼圖」：不需上傳人物照片。"
+            "輸入 01～08 的文字後，會以你選擇的字型與外框為核心，"
+            "每次隨機變化排版、配色、材質與抽象裝飾；不會產生人物、角色或場景。"
+        )
 
     if style_mode == "⭐ 自定義風格":
         style = "↓ 請選擇風格"
@@ -13247,7 +13292,12 @@ _v12_update_navigation_safe_creation_draft(
     v10_character_enabled_1=bool(st.session_state.get("v10_character_enabled_1", False)),
 )
 
-st.session_state.setdefault("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
+if str(st.session_state.get("v10_style_mode", "") or "") == V12_TEXT_ONLY_STYLE:
+    # 純文字風格不支援無文字表情模式；在 STEP 04 元件建立前強制回到文字模式，
+    # 避免舊的表情草稿遮住可輸入的 01～08 文字欄位。
+    st.session_state["v12_sticker_content_mode"] = V12_STICKER_TEXT_MODE
+else:
+    st.session_state.setdefault("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
 st.session_state.setdefault("v12_step04_frontend_revision", 1)
 v10_section(t("section_content"), "#3498db")
 st.caption(t("content_intro"))
@@ -14187,6 +14237,7 @@ _v12_prompt_settings_admin = bool(st.session_state.get("v12_is_beta_admin", Fals
 if _v12_prompt_settings_admin:
     v10_subsection(t("settings_review"), "#ff9f43")
 style_mode = st.session_state.get("v10_style_mode", "↓ 請選擇風格")
+_text_only_generation = style_mode == V12_TEXT_ONLY_STYLE
 
 _prompt_color_segments = _v12_valid_color_segments(texts)
 _prompt_sticker_action_prompts = _v12_get_sticker_action_prompts()
@@ -14205,6 +14256,7 @@ prompt = build_prompt(
     sticker_mode=_sticker_mode,
     expression_specs=_prompt_expression_specs,
     action_prompts=_prompt_sticker_action_prompts,
+    text_only=_text_only_generation,
 )
 
 if _style_reference_active:
@@ -14242,7 +14294,7 @@ elif style_mode == V8_STYLE_CUSTOM_OPTION:
         "\n【V10 風格模式】目前使用「自定義風格」模式。"
         "請不要另外套用任何 預設風格，只依照使用者自定義風格描述生成。"
     )
-else:
+elif not _text_only_generation:
     prompt += (
         f"\n【V10 風格模式】目前使用預設風格：「{style_mode}」。"
         "不要把未選取的自定義風格加入生成。"
@@ -14502,7 +14554,7 @@ else:
     )
 
 if _generate_clicked:
-    if not st.session_state.uploaded_image_bytes:
+    if not _text_only_generation and not st.session_state.uploaded_image_bytes:
         st.warning(t("upload_first"))
         st.stop()
 
@@ -14601,7 +14653,11 @@ if st.session_state.get("v11_generation_pending", False):
         _generation_client = OpenAI(api_key=_server_openai_key)
 
         with st.spinner("🎬 貼圖小劇場開拍中，請稍候……"):
-            ib = BytesIO(st.session_state.uploaded_image_bytes)
+            ib = (
+                BytesIO(st.session_state.uploaded_image_bytes)
+                if not _text_only_generation
+                else None
+            )
             # 這是使用者可理解的製作階段提示，不假裝是 AI 的精準完成百分比。
             # 180 秒後逾時；不自動 retry，沿用原本的例外／退款路徑。
             _showtime = st.empty()
@@ -14651,16 +14707,24 @@ if st.session_state.get("v11_generation_pending", False):
                 # 只有使用者勾選「使用透明背景 PNG」時，才送出 transparent 參數
                 # 與透明 Alpha 強制提示；未勾選時完全不傳 background。
                 _generation_prompt = prompt
-                _image_edit_kwargs = {
+                _image_request_kwargs = {
                     # V12｜模型分流：一般背景沿用 gpt-image-2；
                     # 原生透明 PNG 使用已實測支援 Alpha 的 gpt-image-2.5-sunburst。
                     "model": "gpt-image-2.5-sunburst" if transparent else "gpt-image-2",
-                    "image": ("person.png", ib, "image/png"),
                     "size": "1536x1024",
                     "output_format": "png",
                 }
-                _stage_two_title = "🎨 美術組正在調配這次的貼圖畫風"
-                _stage_two_note = "畫面已送進 AI 畫室，正在準備貼圖構圖。"
+                if _text_only_generation:
+                    # 純文字模式不帶任何人物圖片，改走 images.generate；這樣人物
+                    # 照片既不是必填素材，也不可能意外滲入文字貼圖結果。
+                    _image_request = _generation_client.with_options(timeout=180).images.generate
+                    _stage_two_title = "📝 美術組正在設計這次的文字版式"
+                    _stage_two_note = "字型是主角；配色、材質與抽象裝飾會為這次創作隨機發揮。"
+                else:
+                    _image_request = _generation_client.with_options(timeout=180).images.edit
+                    _image_request_kwargs["image"] = ("person.png", ib, "image/png")
+                    _stage_two_title = "🎨 美術組正在調配這次的貼圖畫風"
+                    _stage_two_note = "畫面已送進 AI 畫室，正在準備貼圖構圖。"
 
                 if _style_reference_active:
                     _style_reference_bytes = bytes(
@@ -14668,7 +14732,7 @@ if st.session_state.get("v11_generation_pending", False):
                     )
                     if not _style_reference_bytes:
                         raise RuntimeError("畫風參考圖已失效，請重新上傳後再生成。")
-                    _image_edit_kwargs["image"] = [
+                    _image_request_kwargs["image"] = [
                         ("person.png", ib, "image/png"),
                         ("style-reference.jpg", BytesIO(_style_reference_bytes), "image/jpeg"),
                     ]
@@ -14683,24 +14747,27 @@ if st.session_state.get("v11_generation_pending", False):
                         "\n絕對不要用棋盤格、灰白方格或任何圖案來模擬透明背景。"
                         "\n人物、物件與文字保留正常不透明像素，只有背景透明。"
                     )
-                    _image_edit_kwargs["background"] = "transparent"
+                    _image_request_kwargs["background"] = "transparent"
 
-                _image_edit_kwargs["prompt"] = _generation_prompt
+                _image_request_kwargs["prompt"] = _generation_prompt
                 # 圖片 API 本身不會回傳可用的真實百分比。改在背景等待，
                 # 請求會先立刻送出；畫面則以每幕 3～5 秒的節奏顯示
                 # 1→2→3→4，接著停在第 4 幕直到 API 真正回傳，最後才進
                 # 入第 5 幕。這是等待階段，不冒充精準的 AI 生成百分比。
                 with ThreadPoolExecutor(max_workers=1) as _image_executor:
                     _image_future = _image_executor.submit(
-                        _generation_client.with_options(timeout=180).images.edit,
-                        **_image_edit_kwargs,
+                        _image_request,
+                        **_image_request_kwargs,
                     )
 
                     _show_generation_scene(
                         "第 1 幕／5", "🎬 導演正在替八格貼圖排戲",
                         "先把人物、文字和動作指令排成一場小劇場。", 8,
                     )
-                    _status.info("🎨 正在分析你的照片……")
+                    _status.info(
+                        "📝 正在解析你的 01～08 文字與字型設定……"
+                        if _text_only_generation else "🎨 正在分析你的照片……"
+                    )
                     time.sleep(random.uniform(4.0, 7.0))
 
                     _show_generation_scene(
@@ -14708,13 +14775,20 @@ if st.session_state.get("v11_generation_pending", False):
                     )
                     _status.info(
                         "🖼️ 正在分析人物照片與畫風參考圖……"
-                        if _style_reference_active else "🖌️ 正在準備貼圖構圖……"
+                        if _style_reference_active else (
+                            "🔤 正在安排純文字貼圖的版式……"
+                            if _text_only_generation else "🖌️ 正在準備貼圖構圖……"
+                        )
                     )
                     time.sleep(random.uniform(4.0, 7.0))
 
                     _show_generation_scene(
                         "第 3 幕／5", "🪄 AI 正在畫布上施展貼圖魔法",
-                        "角色、表情與小動作正在合成為 4×2 的完整畫面。", 57,
+                        (
+                            "八組文字正在套入不同的字型細節與抽象裝飾。"
+                            if _text_only_generation
+                            else "角色、表情與小動作正在合成為 4×2 的完整畫面。"
+                        ), 57,
                     )
                     _status.info("🪄 AI 正在繪製貼圖畫面……")
                     time.sleep(random.uniform(4.0, 7.0))
