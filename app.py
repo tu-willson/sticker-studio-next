@@ -648,9 +648,39 @@ def _v12_load_style_editor_from_slot():
 
 def _v12_custom_style_toggle_changed():
     """Start a fresh selection sync whenever custom style is toggled."""
+    if bool(st.session_state.get("v12_use_custom_style", False)):
+        st.session_state["v12_use_text_only_style"] = False
     st.session_state["v12_custom_style_toggle_version"] = (
         int(st.session_state.get("v12_custom_style_toggle_version", 0) or 0) + 1
     )
+
+
+def _v12_text_only_style_toggle_changed():
+    """Keep the text-only mode independent from all person/image style inputs."""
+    enabled = bool(st.session_state.get("v12_use_text_only_style", False))
+    if enabled:
+        st.session_state["v12_use_custom_style"] = False
+        st.session_state["v10_style_mode"] = V12_TEXT_ONLY_STYLE
+        st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
+        st.session_state["v12_sticker_content_mode"] = V12_STICKER_TEXT_MODE
+        # This is an explicit mode switch: the current draft must not retain a
+        # person or a second style image that could influence text-only output.
+        st.session_state["uploaded_image_bytes"] = None
+        st.session_state.pop("v12_person_photo_upload_widget", None)
+        st.session_state["v12_style_reference_clear_upload_control"] = True
+        st.session_state["v12_style_reference_image_bytes"] = None
+        st.session_state["v12_style_reference_filename"] = ""
+        st.session_state["v12_style_reference_fingerprint"] = ""
+    elif str(st.session_state.get("v10_style_mode", "") or "") == V12_TEXT_ONLY_STYLE:
+        last_preset = str(
+            st.session_state.get("v12_last_preset_style_mode", "↓ 請選擇風格")
+            or "↓ 請選擇風格"
+        )
+        # 舊版純文字模式曾放在下拉選單；若草稿留下該值，取消勾選時
+        # 回到安全的預設項目，避免 selectbox 收到已不存在的選項。
+        if last_preset not in V8_STYLES:
+            last_preset = "↓ 請選擇風格"
+        st.session_state["v10_style_mode"] = last_preset
 
 
 def _v12_sync_saved_style_choice_to_editor(choice):
@@ -1095,10 +1125,26 @@ st.markdown("""
   border-color:#8ed8ff !important;
   box-shadow:0 0 0 2px rgba(74, 183, 244, .28) !important;
 }
-/* 與「貼圖風格」下拉欄左緣對齊，讓它成為該欄位上方的模式切換。 */
-.st-key-v12_custom_style_toggle{
-  max-width:820px;
+/* 與「貼圖風格」下拉欄左緣對齊，讓兩個模式切換並列在上方。 */
+.st-key-v12_style_mode_toggles{
+  max-width:920px;
   margin:4px auto 0 !important;
+}
+.st-key-v12_use_text_only_style [data-testid="stCheckbox"] label p{
+  font-size:20px !important;
+  font-weight:850 !important;
+}
+.st-key-v12_use_text_only_style [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div{
+  width:23px !important;
+  height:23px !important;
+  background:rgba(76, 47, 126, .72) !important;
+  border:2px solid #a98ae8 !important;
+  box-shadow:0 0 0 2px rgba(169,138,232,.14) !important;
+}
+.st-key-v12_use_text_only_style [data-testid="stCheckbox"] [data-baseweb="checkbox"]:has(input:checked) > div{
+  background:#7d52c7 !important;
+  border-color:#ddcaff !important;
+  box-shadow:0 0 0 2px rgba(202,171,255,.26) !important;
 }
 /* 「存入作品｜市集」是獨立於 ZIP 打包的雲端保存動作。 */
 .st-key-v12_basket_save_to_library button{
@@ -6661,7 +6707,7 @@ V12_STICKER_EXPRESSION_MODE = "😶 使用表情貼圖（無文字）"
 V12_STYLE_PRESET_MODE = "貼圖風格快選"
 V12_STYLE_REFERENCE_MODE = "畫風參考上傳"
 V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
-V12_TEXT_ONLY_STYLE = "📝 純文字創意貼圖（隨機）"
+V12_TEXT_ONLY_STYLE = "📝 純文字創意貼圖"
 V12_STYLE_REFERENCE_STRENGTHS = ("柔和融入", "強烈融入")
 V12_TEXT_ONLY_VARIATION_DIRECTIONS = (
     "以大膽不對稱字距、傾斜角度與高低錯落排版，搭配少量活潑的抽象線條點綴",
@@ -10085,6 +10131,7 @@ st.session_state.setdefault("v12_style_reference_image_bytes", None)
 st.session_state.setdefault("v12_style_reference_filename", "")
 st.session_state.setdefault("v12_style_reference_fingerprint", "")
 st.session_state.setdefault("v12_style_source_mode", V12_STYLE_PRESET_MODE)
+st.session_state.setdefault("v12_use_text_only_style", False)
 st.session_state.setdefault("v12_expression_used_recipe_ids", [])
 st.session_state.setdefault("v12_expression_used_visual_pack_ids", [])
 st.session_state.setdefault("v12_expression_last_recipe_labels", [])
@@ -10115,6 +10162,7 @@ _V12_CREATION_DRAFT_KEYS = (
     "v10_style_mode",
     "v12_last_preset_style_mode",
     "v12_use_custom_style",
+    "v12_use_text_only_style",
     "v12_style_reference_image_bytes",
     "v12_style_reference_filename",
     "v12_style_reference_fingerprint",
@@ -10481,6 +10529,7 @@ def _v12_clear_active_creation_callback():
     st.session_state["v10_style_mode"] = "↓ 請選擇風格"
     st.session_state["v12_last_preset_style_mode"] = "↓ 請選擇風格"
     st.session_state["v12_use_custom_style"] = False
+    st.session_state["v12_use_text_only_style"] = False
     st.session_state["v12_saved_custom_style_choice"] = "↓ 請選擇已儲存風格"
     st.session_state["v12_style_reference_image_bytes"] = None
     st.session_state["v12_style_reference_filename"] = ""
@@ -12840,42 +12889,47 @@ with _clear_creation_col:
     )
 if st.session_state.pop("v12_reset_creation_feedback", False):
     st.success("已清空本次創作設定與暫存內容；已收藏膠捲、雲端作品與個人風格庫都保留不變。")
-with st.container(key="v12_person_photo_upload"):
-    uploaded = _beta_image_uploader(
-        t("photo_select"),
-        session=_beta_session,
-        type=["jpg", "jpeg", "png", "webp"],
-        key="v12_person_photo_upload_widget",
-    )
-if uploaded:
-    try:
-        uploaded.seek(0)
-        im = Image.open(uploaded)
-        im.load()
-        b = BytesIO()
-        im.convert("RGBA").save(b, "PNG")
-        st.session_state.uploaded_image_bytes = b.getvalue()
-        _img_c1,_img_c2,_img_c3=st.columns([1,2,1])
-        with _img_c2:
-            st.image(im, caption=t("photo_preview"), width=420)
-        st.success(t("photo_loaded"))
-    except Exception as e:
-        st.error(t("photo_failed"))
-        st.code(str(e))
-elif st.session_state.get("uploaded_image_bytes"):
-    # 載回作品時，瀏覽器安全機制不允許替 file_uploader 回填原始檔名。
-    # 但已保存的照片仍存在 Session，必須明確顯示，避免誤以為人物照遺失。
-    try:
-        restored_photo = Image.open(
-            BytesIO(st.session_state["uploaded_image_bytes"])
+_text_only_mode_active = bool(st.session_state.get("v12_use_text_only_style", False))
+uploaded = None
+if _text_only_mode_active:
+    st.info("📝 已啟用純文字創意貼圖；人物照片已強制移除，此模式不接受人物照片。")
+else:
+    with st.container(key="v12_person_photo_upload"):
+        uploaded = _beta_image_uploader(
+            t("photo_select"),
+            session=_beta_session,
+            type=["jpg", "jpeg", "png", "webp"],
+            key="v12_person_photo_upload_widget",
         )
-        restored_photo.load()
-        _img_c1, _img_c2, _img_c3 = st.columns([1, 2, 1])
-        with _img_c2:
-            st.image(restored_photo, caption=t("photo_restored_preview"), width=420)
-        st.info(t("photo_restored"))
-    except Exception:
-        st.warning(t("photo_restore_failed"))
+    if uploaded:
+        try:
+            uploaded.seek(0)
+            im = Image.open(uploaded)
+            im.load()
+            b = BytesIO()
+            im.convert("RGBA").save(b, "PNG")
+            st.session_state.uploaded_image_bytes = b.getvalue()
+            _img_c1,_img_c2,_img_c3=st.columns([1,2,1])
+            with _img_c2:
+                st.image(im, caption=t("photo_preview"), width=420)
+            st.success(t("photo_loaded"))
+        except Exception as e:
+            st.error(t("photo_failed"))
+            st.code(str(e))
+    elif st.session_state.get("uploaded_image_bytes"):
+        # 載回作品時，瀏覽器安全機制不允許替 file_uploader 回填原始檔名。
+        # 但已保存的照片仍存在 Session，必須明確顯示，避免誤以為人物照遺失。
+        try:
+            restored_photo = Image.open(
+                BytesIO(st.session_state["uploaded_image_bytes"])
+            )
+            restored_photo.load()
+            _img_c1, _img_c2, _img_c3 = st.columns([1, 2, 1])
+            with _img_c2:
+                st.image(restored_photo, caption=t("photo_restored_preview"), width=420)
+            st.info(t("photo_restored"))
+        except Exception:
+            st.warning(t("photo_restore_failed"))
 
 _v12_update_navigation_safe_creation_draft(
     uploaded_image_bytes=st.session_state.get("uploaded_image_bytes"),
@@ -12893,6 +12947,7 @@ def _v12_set_style_source_mode(mode):
     if mode == V12_STYLE_REFERENCE_MODE:
         st.session_state["v10_style_mode"] = "↓ 請選擇風格"
         st.session_state["v12_use_custom_style"] = False
+        st.session_state["v12_use_text_only_style"] = False
         st.session_state.pop("v12_loaded_project_custom_style", None)
 
 
@@ -12937,7 +12992,7 @@ with _style_reference_col:
 
 # 自定義風格改由獨立勾選啟用，預設風格下拉只保留預設選項。
 _v8_style_items = [x for x in V8_STYLES if not x.startswith("⭐ 自訂")]
-_style_options = ["↓ 請選擇風格", V12_TEXT_ONLY_STYLE] + _v8_style_items
+_style_options = ["↓ 請選擇風格"] + _v8_style_items
 style_mode = str(st.session_state.get("v10_style_mode", "↓ 請選擇風格"))
 style = style_mode
 custom_style = ""
@@ -12945,6 +13000,8 @@ _style_reference_active = False
 
 if _style_source_mode == V12_STYLE_PRESET_MODE:
     st.caption(t("style_preset_caption"))
+    if style_mode == V12_TEXT_ONLY_STYLE:
+        st.session_state["v12_use_text_only_style"] = True
     st.session_state.setdefault(
         "v12_use_custom_style", style_mode == V8_STYLE_CUSTOM_OPTION
     )
@@ -12957,14 +13014,30 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
         ).strip().lower() in {"1", "true", "yes", "on"} or (
             style_mode == V8_STYLE_CUSTOM_OPTION
         )
-    # 對齊下方的「貼圖風格」欄位，避免模式切換落在整個頁面的最左側。
-    with st.container(key="v12_custom_style_toggle"):
-        _use_custom_style = st.checkbox(
-            t("custom_style_enable"),
-            key="v12_use_custom_style",
-            on_change=_v12_custom_style_toggle_changed,
-        )
-    if _use_custom_style:
+    st.session_state.setdefault(
+        "v12_use_text_only_style", style_mode == V12_TEXT_ONLY_STYLE
+    )
+    # 兩個特殊模式並列在預設風格下拉欄上方：自定義風格與純文字貼圖。
+    # 保留明顯間距，讓第二個選項位於右側而不與標籤擠在一起。
+    with st.container(key="v12_style_mode_toggles"):
+        _custom_toggle_col, _text_only_toggle_col = st.columns([1, 1], gap="large")
+        with _custom_toggle_col:
+            _use_custom_style = st.checkbox(
+                t("custom_style_enable"),
+                key="v12_use_custom_style",
+                on_change=_v12_custom_style_toggle_changed,
+            )
+        with _text_only_toggle_col:
+            _use_text_only_style = st.checkbox(
+                "📝 純文字創意貼圖",
+                key="v12_use_text_only_style",
+                on_change=_v12_text_only_style_toggle_changed,
+            )
+    if _use_text_only_style:
+        st.session_state["v12_use_custom_style"] = False
+        st.session_state["v10_style_mode"] = V12_TEXT_ONLY_STYLE
+        style_mode = V12_TEXT_ONLY_STYLE
+    elif _use_custom_style:
         # Keep the canonical mode explicit so prompts and saved projects retain
         # the exact custom-style behavior.
         st.session_state["v10_style_mode"] = V8_STYLE_CUSTOM_OPTION
@@ -12986,10 +13059,10 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
         )
         st.session_state["v12_last_preset_style_mode"] = style_mode
 
-    if style_mode == V12_TEXT_ONLY_STYLE:
+    if _use_text_only_style:
         st.info(
             "📝 已選擇「純文字創意貼圖」：不需上傳人物照片。"
-            "輸入 01～08 的文字後，會以你選擇的字型與外框為核心，"
+            "人物照片與畫風參考已自動移除。輸入 01～08 的文字後，會以你選擇的字型與外框為核心，"
             "每次隨機變化排版、配色、材質與抽象裝飾；不會產生人物、角色或場景。"
         )
 
@@ -13228,6 +13301,7 @@ _v12_update_navigation_safe_creation_draft(
     v10_style_mode=st.session_state.get("v10_style_mode"),
     v12_last_preset_style_mode=st.session_state.get("v12_last_preset_style_mode"),
     v12_use_custom_style=st.session_state.get("v12_use_custom_style"),
+    v12_use_text_only_style=st.session_state.get("v12_use_text_only_style"),
     v12_style_reference_image_bytes=st.session_state.get("v12_style_reference_image_bytes"),
     v12_style_reference_filename=st.session_state.get("v12_style_reference_filename"),
     v12_style_reference_fingerprint=st.session_state.get("v12_style_reference_fingerprint"),
