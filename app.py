@@ -3068,7 +3068,10 @@ def _v12_render_payuni_sandbox_form(checkout):
                     background: #ff5579; color: white; font-size: 1rem; font-weight: 700; cursor: pointer; }}
           button:hover {{ background: #e94069; }}
         </style>
-        <form action="{html.escape(payload['action'])}" method="post" target="_top">
+        <!-- Streamlit Components run inside a sandboxed iframe.  A named new
+             tab is the browser-permitted way to leave that iframe for a
+             third-party hosted payment form. -->
+        <form action="{html.escape(payload['action'])}" method="post" target="_blank">
           {hidden_fields}<button type="submit">{label}</button>
         </form>
         """,
@@ -11722,6 +11725,9 @@ def _v12_render_pricing_page():
         st.warning(f"PAYUNi 測試付款未完成（狀態：{provider_result[:60]}）。")
 
     payment_order = str(st.query_params.get("payment_order", "") or "")
+    if payment_order and not session:
+        st.info("PAYUNi 已將交易結果送回。請關閉此回傳分頁，回到原付款頁重新整理以查看最新會員權益。")
+        return
     if session and payment_order:
         try:
             payment_status = _beta_my_commerce_order_status(session, payment_order)
