@@ -28,10 +28,14 @@ Deno.serve(async (request) => {
     const fields = await requestFields(request);
     const encryptedInfo = fields.EncryptInfo || "";
     const hashInfo = fields.HashInfo || "";
-    if (!encryptedInfo || !hashInfo || (fields.MerID && fields.MerID !== MERCHANT_ID)) return response("INVALID_CALLBACK", 400);
+    if (!encryptedInfo || !hashInfo) return response("INVALID_CALLBACK", 400);
     const expectedHash = await payuniHashInfo(encryptedInfo, HASH_KEY, HASH_IV);
     if (!constantTimeEqual(expectedHash, hashInfo.toUpperCase())) return response("INVALID_SIGNATURE", 400);
     const decoded = payuniResultValues(await decryptPayuniInfo(encryptedInfo, HASH_KEY, HASH_IV));
+    // PAYUNi's outer callback fields are not stable between UPP variants.
+    // Validate the signed, decrypted merchant id instead of rejecting a valid
+    // callback because of an optional outer field.
+    if (decoded.MerID && decoded.MerID !== MERCHANT_ID) return response("INVALID_CALLBACK", 400);
     const reference = decoded.MerTradeNo || decoded.MerchantOrderNo || "";
     const amount = Number.parseInt(decoded.TradeAmt || decoded.Amt || "", 10);
     if (!reference || !Number.isSafeInteger(amount)) return response("INVALID_PAYMENT", 400);
@@ -50,9 +54,14 @@ Deno.serve(async (request) => {
       p_payment_status: decoded.Status || fields.Status || "",
       p_payment_result: safeResult,
     });
-    if (error) return response("ORDER_PROCESSING_FAILED", 400);
+    if (error) {
+      console.error("PAYUNI_FINALIZE_FAILED", error.code || "unknown");
+      return response("ORDER_PROCESSING_FAILED", 400);
+    }
+    console.log("PAYUNI_PAYMENT_FINALIZED", String(decoded.Status || fields.Status || ""), reference.slice(0, 8));
     return response("SUCCESS");
-  } catch {
+  } catch (error) {
+    console.error("PAYUNI_CALLBACK_FAILED", error instanceof Error ? error.message : "unknown");
     return response("INVALID_CALLBACK", 400);
   }
 });
