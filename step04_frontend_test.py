@@ -34,6 +34,7 @@ EDITOR_CSS = r"""
 .s4-source-panel { margin:0 0 22px; padding:14px; border:1px solid rgba(96,169,220,.35); border-radius:10px; background:rgba(21,44,70,.32); }
 .s4-panel-title { color:#e9f7ff; font-size:16px; font-weight:850; margin-bottom:9px; }
 .s4-panel-grid { display:grid; grid-template-columns:1.3fr 1fr; gap:10px; }
+.s4-topic-input { width:100%; margin-top:10px; }
 .s4-small-button { border:1px solid #5aaee2; border-radius:8px; background:#286eaa; color:#fff; padding:8px 11px; font:inherit; font-weight:800; cursor:pointer; }
 .s4-small-button:disabled { cursor:wait; opacity:.78; }
 .s4-ai-progress { flex:1 1 280px; min-width:240px; margin:0; padding:9px 10px; border:1px solid rgba(108,213,255,.54); border-radius:9px; background:rgba(28,91,132,.22); }
@@ -115,10 +116,11 @@ export default function(component) {
     ? initial.randomPools : FALLBACK_RANDOM_POOLS;
   const ALL_RANDOM_POOL = '__all_builtin__';
   const CUSTOM_RANDOM_POOL = '__custom_pool__';
+  const AI_IDEA_MODES = ['💡 一般主題','🎬 經典台詞'];
   const allRandomPhrases = () => Object.values(RANDOM_POOLS).flat().map(value => String(value));
   const AI_TONES = ['😂 搞笑自然','😤 憤憤不平','😈 嘲諷吐槽','☁️ 委屈可愛','👑 霸氣有梗','💬 台灣口語','✨ 溫暖療癒'];
   const defaultState = () => ({
-    mode:'text', sourcePanel:'', aiTopic:'', aiTone:'😂 搞笑自然', aiCandidates:[], aiSelected:[], aiPicked:[], aiTarget:'0', aiLoading:false, aiProgress:0, aiLoadingText:'',
+    mode:'text', sourcePanel:'', aiTopic:'', aiMode:'💡 一般主題', aiTone:'😂 搞笑自然', aiCandidates:[], aiSelected:[], aiPicked:[], aiTarget:'0', aiLoading:false, aiProgress:0, aiLoadingText:'',
     randomPool:ALL_RANDOM_POOL, randomTarget:'0', randomCustomDraft:'', randomCustomPhrases:[], message:'', slots:emptySlots(), version:2
   });
   const normalize = (raw) => {
@@ -128,6 +130,7 @@ export default function(component) {
     base.mode = raw.mode === 'expression' ? 'expression' : 'text';
     base.sourcePanel = raw.sourcePanel === 'ai' || raw.sourcePanel === 'random' ? raw.sourcePanel : '';
     base.aiTopic = String(raw.aiTopic || '');
+    base.aiMode = AI_IDEA_MODES.includes(raw.aiMode) ? raw.aiMode : AI_IDEA_MODES[0];
     base.aiTone = AI_TONES.includes(raw.aiTone) ? raw.aiTone : AI_TONES[0];
     base.aiCandidates = Array.isArray(raw.aiCandidates) ? raw.aiCandidates.map(value => String(value)).slice(0, 16) : [];
     base.aiSelected = Array.isArray(raw.aiSelected) ? [...new Set(raw.aiSelected.map(Number).filter(index => Number.isInteger(index) && index >= 0 && index < base.aiCandidates.length))] : [];
@@ -231,11 +234,15 @@ export default function(component) {
     <section class="s4-source-panel">
       <div class="s4-panel-title">✨ 主題 AI 幫想</div>
       <div class="s4-panel-grid">
-        <input class="s4-input" data-root-field="aiTopic" value="${esc(state.aiTopic)}" placeholder="輸入主題，例如：上班、下雨天、生日">
+        <select class="s4-input" data-root-field="aiMode">
+          ${AI_IDEA_MODES.map(mode => `<option value="${mode}" ${state.aiMode === mode ? 'selected' : ''}>${mode}</option>`).join('')}
+        </select>
         <select class="s4-input" data-root-field="aiTone">
           ${AI_TONES.map(tone => `<option value="${tone}" ${state.aiTone === tone ? 'selected' : ''}>${tone}</option>`).join('')}
         </select>
       </div>
+      <input class="s4-input s4-topic-input" data-root-field="aiTopic" value="${esc(state.aiTopic)}" placeholder="${state.aiMode === '🎬 經典台詞' ? '輸入人物、角色或作品，例如：周星馳、哈利波特' : '輸入主題，例如：上班、下雨天、生日'}">
+      ${state.aiMode === '🎬 經典台詞' ? '<div class="s4-pool-list">會以代表作品的角色氣質與經典情境延伸原創貼圖短句；不逐字重現台詞、歌詞或招牌口號。</div>' : ''}
       <div class="s4-action-row"><button class="s4-small-button" data-action="generate-ai" ${state.aiLoading ? 'disabled' : ''}>${state.aiLoading ? '✨ AI 正在構思中…' : '✨ 產生 16 句貼圖文字'}</button>${state.aiLoading ? `<div class="s4-ai-progress"><div class="s4-ai-progress-label"><span>${esc(state.aiLoadingText || '🧠 正在收集靈感…')}</span><span>${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%</span></div><div class="s4-ai-progress-track"><div class="s4-ai-progress-fill" style="width:${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%"></div></div></div>` : ''}</div>
       ${state.aiCandidates.length ? `
         <div class="s4-caption">可勾選任意數量；本批已勾選 ${state.aiSelected.length} 句，待帶入清單 ${state.aiPicked.length} / 8 句。</div>

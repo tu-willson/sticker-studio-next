@@ -10210,6 +10210,7 @@ st.session_state.setdefault("v12_basket_last_zip_bytes", None)
 st.session_state.setdefault("v12_basket_last_zip_name", "")
 st.session_state.setdefault("v12_ai_copy_candidates", [])
 st.session_state.setdefault("v12_ai_copy_topic", "")
+st.session_state.setdefault("v12_ai_copy_mode", "💡 一般主題")
 st.session_state.setdefault("v12_ai_copy_tone", "😂 搞笑自然")
 st.session_state.setdefault("v12_ai_copy_selected", [])
 
@@ -10639,6 +10640,7 @@ def _v12_clear_active_creation_callback():
     st.session_state["v12_basket_last_zip_name"] = ""
     st.session_state["v12_ai_copy_candidates"] = []
     st.session_state["v12_ai_copy_topic"] = ""
+    st.session_state["v12_ai_copy_mode"] = V12_AI_COPY_STANDARD_MODE
     st.session_state["v12_ai_copy_selected"] = []
     st.session_state["v12_ai_copy_picked"] = []
     st.session_state["v12_ai_copy_topic_used"] = ""
@@ -10716,6 +10718,10 @@ def _v12_step04_frontend_snapshot():
         "expressionSlots": expression_slots,
         "ai": {
             "topic": str(st.session_state.get("v12_ai_copy_topic", "") or ""),
+            "ideaMode": str(
+                st.session_state.get("v12_ai_copy_mode", V12_AI_COPY_STANDARD_MODE)
+                or V12_AI_COPY_STANDARD_MODE
+            ),
             "tone": str(st.session_state.get("v12_ai_copy_tone", "") or ""),
             "candidates": list(st.session_state.get("v12_ai_copy_candidates", []) or []),
             "selected": list(st.session_state.get("v12_ai_copy_selected", []) or []),
@@ -10779,6 +10785,11 @@ def _v12_step04_frontend_component_state():
             st.session_state.get("v12_step04_frontend_source_panel", "") or ""
         ),
         "aiTopic": snapshot["ai"]["topic"],
+        "aiMode": (
+            snapshot["ai"].get("ideaMode")
+            if snapshot["ai"].get("ideaMode") in V12_AI_COPY_MODES
+            else V12_AI_COPY_STANDARD_MODE
+        ),
         "aiTone": tone if tone in V12_AI_COPY_TONES else V12_AI_COPY_TONES[0],
         "aiCandidates": snapshot["ai"]["candidates"],
         "aiSelected": snapshot["ai"]["selected"],
@@ -10831,6 +10842,7 @@ def _v12_apply_step04_frontend_snapshot(payload):
         ]
         payload["ai"] = {
             "topic": payload.get("aiTopic", ""),
+            "ideaMode": payload.get("aiMode", V12_AI_COPY_STANDARD_MODE),
             "tone": payload.get("aiTone", ""),
             "candidates": payload.get("aiCandidates", []),
             "selected": payload.get("aiSelected", []),
@@ -10909,6 +10921,14 @@ def _v12_apply_step04_frontend_snapshot(payload):
     ai = payload.get("ai")
     if isinstance(ai, dict):
         st.session_state["v12_ai_copy_topic"] = str(ai.get("topic", "") or "")[:300]
+        _frontend_idea_mode = str(
+            ai.get("ideaMode", V12_AI_COPY_STANDARD_MODE) or ""
+        )
+        st.session_state["v12_ai_copy_mode"] = (
+            _frontend_idea_mode
+            if _frontend_idea_mode in V12_AI_COPY_MODES
+            else V12_AI_COPY_STANDARD_MODE
+        )
         _frontend_tone_map = {
             "溫暖鼓勵": "✨ 溫暖療癒",
             "自然日常": "💬 台灣口語",
@@ -10970,8 +10990,14 @@ V12_AI_COPY_TONES = [
     "💬 台灣口語",
     "✨ 溫暖療癒",
 ]
+V12_AI_COPY_STANDARD_MODE = "💡 一般主題"
+V12_AI_COPY_CLASSIC_QUOTE_MODE = "🎬 經典台詞"
+V12_AI_COPY_MODES = (
+    V12_AI_COPY_STANDARD_MODE,
+    V12_AI_COPY_CLASSIC_QUOTE_MODE,
+)
 
-def _v12_ai_copy_generate(topic, tone, api_key):
+def _v12_ai_copy_generate(topic, tone, api_key, idea_mode=V12_AI_COPY_STANDARD_MODE):
     """V7.2｜AI 貼圖文字助手。
     核心：優先幫使用者快速找到「真的會用」的貼圖字眼，
     混合超日常、經典用語、主題場景與少量驚喜；不追求每句都想梗。
@@ -10981,6 +11007,11 @@ def _v12_ai_copy_generate(topic, tone, api_key):
     """
     topic = str(topic or "").strip()
     tone = str(tone or "").strip()
+    idea_mode = (
+        idea_mode
+        if idea_mode in V12_AI_COPY_MODES
+        else V12_AI_COPY_STANDARD_MODE
+    )
     if not topic:
         raise ValueError("missing_topic")
 
@@ -11020,6 +11051,17 @@ def _v12_ai_copy_generate(topic, tone, api_key):
     except Exception:
         _pool_samples = []
 
+    _classic_quote_guidance = ""
+    if idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE:
+        _classic_quote_guidance = (
+            "\n\n【經典台詞模式】"
+            "使用者輸入的是知名人物、角色或代表作品名稱。請參考其廣為人知的角色氣質、戲劇張力、"
+            "情境與情緒節奏，創作可用於 LINE 貼圖的『原創致敬式短句』。"
+            "絕對不要逐字重現、拼接、改寫得過於接近任何影視台詞、歌曲歌詞、舞台劇台詞、書籍段落、"
+            "口號或角色招牌句；也不要輸出長篇引文。"
+            "即使主題是具體作品或人物，輸出的每一句都必須是全新、日常可用、脫離原作仍成立的短句。"
+        )
+
     system_prompt = (
         "你是一位非常懂台灣日常聊天與 LINE 貼圖的文字助手。"
         "你的主要工作不是參加文案比賽，也不是每一句都想出新梗；"
@@ -11050,6 +11092,7 @@ def _v12_ai_copy_generate(topic, tone, api_key):
         "貼圖文字要一眼讀完，不必像完整句子，也不要寫成文章、標語或雞湯。\n\n"
         "【語氣】"
         f"主題：{topic}。\n"
+        f"幫想類型：{idea_mode}。\n"
         f"使用者選擇的語氣：{tone}。\n"
         "語氣會影響措辭與反應，但不要因為選了搞笑自然就強迫每一句搞笑。"
         "所有語氣都以真人會說、真的能拿來聊天為前提。\n\n"
@@ -11059,6 +11102,7 @@ def _v12_ai_copy_generate(topic, tone, api_key):
         "不要刻意避開經典用語。不要因為一句很普通就淘汰它。\n\n"
         "【輸出】"
         "只輸出最後 16 句候選文案。不要輸出分析、分類、編號、引號、emoji 或其他說明。"
+        + _classic_quote_guidance
     )
 
     # The studio language controls AI Ideas output only; existing sticker text is
@@ -11086,6 +11130,7 @@ def _v12_ai_copy_generate(topic, tone, api_key):
 
     user_prompt = (
         f"使用者主題：{topic}\n"
+        f"幫想類型：{idea_mode}\n"
         f"希望的文案語氣：{tone}\n\n"
         "請產生 16 句可以直接拿來做 LINE 貼圖的候選文字。"
         "先在內部想像這個主題下真實會發生的生活小情境，再決定人物最自然的第一反應。"
@@ -11134,6 +11179,7 @@ def _v12_render_ai_copy_assistant():
     st.session_state.setdefault("v12_ai_copy_candidates", [])
     st.session_state.setdefault("v12_ai_copy_selected", [])
     st.session_state.setdefault("v12_ai_copy_topic", "")
+    st.session_state.setdefault("v12_ai_copy_mode", V12_AI_COPY_STANDARD_MODE)
     st.session_state.setdefault("v12_ai_copy_topic_used", "")
     st.session_state.setdefault("v12_ai_copy_tone_used", "")
     _theme_feedback = str(st.session_state.pop("v12_ai_theme_feedback", "") or "")
@@ -11148,12 +11194,25 @@ def _v12_render_ai_copy_assistant():
     # ① 主題：這裡只是「創作輸入」，不會因為打字就自動建立主題。
     #    只有 AI 生成後，使用者實際儲存至少一個文案時，才建立主題。
     # ------------------------------------------------------------
+    _idea_mode = st.selectbox(
+        "✨ AI 幫想類型",
+        V12_AI_COPY_MODES,
+        key="v12_ai_copy_mode",
+    )
     _topic_before = str(st.session_state.get("v12_ai_copy_topic", "") or "").strip()
     _topic = st.text_input(
-        t("ai_topic"),
+        "🎬 輸入知名人物、角色或代表作品" if _idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE else t("ai_topic"),
         key="v12_ai_copy_topic",
-        placeholder=t("ai_topic_placeholder"),
+        placeholder=(
+            "例如：周星馳、哈利波特、宮崎駿作品"
+            if _idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE
+            else t("ai_topic_placeholder")
+        ),
     ).strip()
+    if _idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE:
+        st.caption(
+            "會以代表作品的角色氣質與經典情境延伸原創貼圖短句；不逐字重現台詞、歌詞或招牌口號。"
+        )
 
     # 使用者修改尚未建立的創作主題時，清除上一批候選文案，避免拿舊主題的結果誤存到新主題。
     if _topic != _topic_before:
@@ -11240,7 +11299,9 @@ def _v12_render_ai_copy_assistant():
             if _copy_api_key:
                 try:
                     with st.spinner("🤖 AI 正在延伸主題與生活情境……"):
-                        _phrases = _v12_ai_copy_generate(_topic, _tone, _copy_api_key)
+                        _phrases = _v12_ai_copy_generate(
+                            _topic, _tone, _copy_api_key, _idea_mode
+                        )
                 except RuntimeError as _e:
                     if _copy_session and _copy_reservation and _copy_reservation["job_id"]:
                         try:
@@ -14228,6 +14289,14 @@ if _v12_step04_frontend_enabled:
             _v12_ai_tone = str(
                 st.session_state.get("v12_ai_copy_tone", "") or ""
             )
+            _v12_ai_idea_mode = str(
+                st.session_state.get(
+                    "v12_ai_copy_mode", V12_AI_COPY_STANDARD_MODE
+                )
+                or V12_AI_COPY_STANDARD_MODE
+            )
+            if _v12_ai_idea_mode not in V12_AI_COPY_MODES:
+                _v12_ai_idea_mode = V12_AI_COPY_STANDARD_MODE
             _v12_feedback = ""
             if not _v12_ai_topic:
                 _v12_feedback = "請先輸入想要的主題，再請 AI 幫想。"
@@ -14269,7 +14338,10 @@ if _v12_step04_frontend_enabled:
                                 _v12_feedback = "今日 AI 幫想額度已用完，將在台灣時間午夜重置。"
                             else:
                                 _v12_phrases = _v12_ai_copy_generate(
-                                    _v12_ai_topic, _v12_ai_tone, _v12_copy_key
+                                    _v12_ai_topic,
+                                    _v12_ai_tone,
+                                    _v12_copy_key,
+                                    _v12_ai_idea_mode,
                                 )
                                 _beta_finish_copy_generation(
                                     _v12_copy_session,
