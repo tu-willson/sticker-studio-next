@@ -2390,12 +2390,17 @@ html{scroll-behavior:smooth;}
   font-weight:800;
   margin:0 0 .55rem;
 }
-.v12-beta-login-title{
-  margin:.65rem 0 .45rem;
-  text-align:center;
-  font-size:clamp(1.35rem,2.8vw,1.75rem);
-  font-weight:900;
+.v12-create-main-title{
+  margin:.45rem auto .3rem;
 }
+.v12-beta-login-welcome{
+  margin:0 auto .55rem;
+  text-align:center;
+  font-size:clamp(1.08rem,2.4vw,1.28rem);
+  font-weight:700;
+  line-height:1.55;
+}
+.v12-beta-login-welcome strong{font-weight:950;}
 .v12-beta-login-copy{
   margin:.35rem auto .65rem;
   text-align:center;
@@ -6425,8 +6430,10 @@ def _beta_render_account_panel():
         # 失效或未完成的 OAuth state 不可重用；下次畫面直接準備新的單次登入連結。
         st.session_state.pop("beta_pending_login_url", None)
         st.warning(login_error)
-    st.markdown(f'<div class="v12-beta-login-title">{t("login_title")}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="v12-beta-login-copy">{t("login_trial")}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="v12-beta-login-welcome"><strong>{t("login_title")}</strong>　{t("login_trial")}</div>',
+        unsafe_allow_html=True,
+    )
 
     login_url = str(st.session_state.get("beta_pending_login_url", "") or "")
     if not login_url:
@@ -11906,8 +11913,24 @@ def _v12_render_legal_footer(placement="footer"):
     """Show merchant-owned policy links in a compact header or page footer."""
     placement = "header" if placement == "header" else "footer"
     identity_label = "開發者名稱" if placement == "header" else "開發者會員名稱"
+    header_wrap_start = '<div class="v12-legal-header-wrap">' if placement == "header" else ""
+    header_wrap_end = "</div>" if placement == "header" else ""
+    # 政策列也會出現在一般首頁；樣式須隨元件一併輸出，不能只依賴法律頁。
+    st.markdown(
+        """
+        <style>
+        .v12-legal-footer{max-width:980px;margin:28px auto 14px;padding:16px 18px;text-align:center;border-top:1px solid rgba(255,255,255,.24);color:#e9eefc;font-size:.94rem}
+        .v12-legal-header-wrap{display:flex;width:100%;justify-content:flex-end;margin:0 0 .55rem}
+        .v12-legal-footer--header{width:fit-content;max-width:100%;margin:0;padding:8px 14px;text-align:right;border:1px solid rgba(255,197,220,.35);border-radius:999px;background:rgba(36,30,60,.52);font-size:.84rem;box-shadow:0 8px 20px rgba(0,0,0,.12)}
+        .v12-legal-footer a{margin:0 7px;color:#ffd0df;font-weight:800;text-decoration:none}.v12-legal-footer a:hover{text-decoration:underline;color:#fff}.v12-legal-footer b{color:#91a6c9}
+        @media(max-width:640px){.v12-legal-footer--header{border-radius:14px}.v12-legal-footer a{display:inline-block;margin:5px 6px}}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.markdown(
         f"""
+        {header_wrap_start}
         <div class="v12-legal-footer v12-legal-footer--{placement}">
           <span>🎨LINE 貼圖創作室｜{identity_label}：TUWILLSON</span>
           <a href="{_v12_legal_url('terms')}">服務條款</a>
@@ -11918,6 +11941,7 @@ def _v12_render_legal_footer(placement="footer"):
           <b>｜</b>
           <a href="{_v12_legal_url('contact')}">聯絡我們</a>
         </div>
+        {header_wrap_end}
         """,
         unsafe_allow_html=True,
     )
@@ -12940,7 +12964,10 @@ if st.session_state["v12_view"] == "library":
 
 
 st.markdown('<div id="v12-page-top"></div>', unsafe_allow_html=True)
-st.markdown(f'<div class="v10-main-title">{t("main_title")}</div>', unsafe_allow_html=True)
+st.markdown(
+    f'<div class="v10-main-title v12-create-main-title">{t("main_title")}</div>',
+    unsafe_allow_html=True,
+)
 _shared_template_apply_feedback = st.session_state.pop(
     "v12_shared_template_apply_feedback", None
 )
