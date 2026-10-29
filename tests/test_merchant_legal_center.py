@@ -19,7 +19,7 @@ class MerchantLegalCenterTests(unittest.TestCase):
         self.assertIn('信用卡卡號等付款敏感資料由金流服務商依其政策處理', APP)
 
     def test_pricing_page_uses_the_verified_brand_and_email(self):
-        self.assertIn('服務聯絡／PAYUNi |藍新金流 商店驗證信箱', APP)
+        self.assertIn('服務聯絡／金流商店 驗證信箱', APP)
         self.assertIn('<div class="v12-pricing-kicker">🎨LINE 貼圖創作室</div>', APP)
 
 

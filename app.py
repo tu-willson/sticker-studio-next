@@ -12098,7 +12098,7 @@ def _v12_render_pricing_page():
           <div class="v12-pricing-kicker">🎨LINE 貼圖創作室</div>
           <h1>{t('pricing_title')}</h1>
           <p>{t('pricing_intro')}</p>
-          <div class="v12-pricing-contact">📮 服務聯絡／PAYUNi |藍新金流 商店驗證信箱：<strong>TUWILLSON@GMAIL.COM</strong></div>
+          <div class="v12-pricing-contact">📮 服務聯絡／金流商店 驗證信箱：<strong>TUWILLSON@GMAIL.COM</strong></div>
         </div>
         """,
         unsafe_allow_html=True,
