@@ -20,6 +20,12 @@ class ClassicQuoteAiModeTests(unittest.TestCase):
         self.assertIn('絕對不要逐字重現、拼接、改寫得過於接近', APP)
         self.assertIn('不逐字重現台詞、歌詞或招牌口號', EDITOR)
 
+    def test_classic_quote_mode_disables_and_ignores_tone_selection(self):
+        self.assertIn('tone = "依人物／作品氣質自動延伸（不套用語氣模式）"', APP)
+        self.assertIn('disabled=True,', APP)
+        self.assertIn('依人物／作品氣質自動延伸', EDITOR)
+        self.assertIn('語氣模式已停用', EDITOR)
+
     def test_browser_event_carries_mode_to_generation(self):
         self.assertIn('"ideaMode": payload.get("aiMode", V12_AI_COPY_STANDARD_MODE)', APP)
         self.assertIn('_v12_ai_idea_mode', APP)

@@ -11012,6 +11012,10 @@ def _v12_ai_copy_generate(topic, tone, api_key, idea_mode=V12_AI_COPY_STANDARD_M
         if idea_mode in V12_AI_COPY_MODES
         else V12_AI_COPY_STANDARD_MODE
     )
+    if idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE:
+        # 經典台詞模式的靈感必須由人物／作品本身主導；不讓前端留下的
+        # 一般語氣值影響結果，避免只停留在介面層的禁用。
+        tone = "依人物／作品氣質自動延伸（不套用語氣模式）"
     if not topic:
         raise ValueError("missing_topic")
 
@@ -11225,12 +11229,22 @@ def _v12_render_ai_copy_assistant():
     # ------------------------------------------------------------
     # ② 文案語氣
     # ------------------------------------------------------------
-    _tone = st.selectbox(
-        t("ai_tone"),
-        V12_AI_COPY_TONES,
-        key="v12_ai_copy_tone",
-        format_func=lambda value: _v12_localized_option(value, V12_AI_TONE_LABELS),
-    )
+    if _idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE:
+        _tone = "依人物／作品氣質自動延伸（不套用語氣模式）"
+        st.selectbox(
+            t("ai_tone"),
+            [_tone],
+            disabled=True,
+            key="v12_ai_copy_classic_tone_display",
+        )
+        st.caption("經典台詞模式會以人物、角色或作品的氣質延伸，因此不套用一般語氣模式。")
+    else:
+        _tone = st.selectbox(
+            t("ai_tone"),
+            V12_AI_COPY_TONES,
+            key="v12_ai_copy_tone",
+            format_func=lambda value: _v12_localized_option(value, V12_AI_TONE_LABELS),
+        )
 
     # 在點選生成前就先讓會員看見今日剩餘額度。
     # 勾選候選文案時只顯示既有額度，避免每次局部互動都重新驗證登入。
