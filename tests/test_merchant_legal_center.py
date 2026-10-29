@@ -10,6 +10,7 @@ class MerchantLegalCenterTests(unittest.TestCase):
         self.assertIn('V12_PUBLIC_SITE_URL = "https://sticker-studio-next.streamlit.app"', APP)
         self.assertIn('🎨LINE 貼圖創作室', APP)
         self.assertIn('商店會員：<strong>tuwillson</strong>', APP)
+        self.assertIn('開發者會員名稱：TUWILLSON', APP)
         self.assertIn('隱私權保護政策', APP)
 
     def test_policy_centre_covers_privacy_refunds_and_support(self):
@@ -21,6 +22,13 @@ class MerchantLegalCenterTests(unittest.TestCase):
     def test_pricing_page_uses_the_verified_brand_and_email(self):
         self.assertIn('服務聯絡／金流商店 驗證信箱', APP)
         self.assertIn('<div class="v12-pricing-kicker">🎨LINE 貼圖創作室</div>', APP)
+
+    def test_public_membership_labels_do_not_show_beta(self):
+        i18n = (Path(__file__).resolve().parents[1] / "i18n.py").read_text(encoding="utf-8")
+        self.assertNotIn('會員 Beta', i18n)
+        self.assertNotIn('Member Beta', i18n)
+        self.assertNotIn('メンバー Beta', i18n)
+        self.assertIn('_v12_render_legal_footer("header")', APP)
 
 
 if __name__ == "__main__":

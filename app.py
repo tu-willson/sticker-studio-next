@@ -3023,13 +3023,13 @@ def v12_mode_panel_heading(title, accent="#3498db"):
     )
 
 # ============================================================
-# Sticker Studio Next｜獨立預覽版／會員 Beta
+# Sticker Studio Next｜獨立會員服務
 #
 # 這個專案不讀取、不呼叫舊版 LINE Sticker Web 的 Supabase 或網站
 # OpenAI Key。本專案只使用新的 Supabase、Google 登入與點數帳本，
 # 由站方 API 服務已登入的會員。
 # ============================================================
-BETA_API_MODE = "✨ 會員 Beta（登入享 2 次）"
+BETA_API_MODE = "✨ 會員登入（登入享 2 次）"
 BETA_SITE_URL = "https://sticker-studio-next.streamlit.app"
 
 
@@ -6227,7 +6227,7 @@ def _beta_render_admin_console(session):
         )
         note = st.text_input(
             "調整原因（會寫入管理紀錄）",
-            value="Beta 測試補次",
+            value="測試補次",
             max_chars=160,
             key="beta_admin_adjustment_note",
         )
@@ -11902,12 +11902,13 @@ def _v12_open_legal_section_callback(section):
     st.query_params["legal"] = section
 
 
-def _v12_render_legal_footer():
-    """Show the merchant-owned policy links on public conversion pages."""
+def _v12_render_legal_footer(placement="footer"):
+    """Show merchant-owned policy links in a compact header or page footer."""
+    placement = "header" if placement == "header" else "footer"
     st.markdown(
         f"""
-        <div class="v12-legal-footer">
-          <span>🎨LINE 貼圖創作室｜會員名稱：tuwillson</span>
+        <div class="v12-legal-footer v12-legal-footer--{placement}">
+          <span>🎨LINE 貼圖創作室｜開發者會員名稱：TUWILLSON</span>
           <a href="{_v12_legal_url('terms')}">服務條款</a>
           <b>｜</b>
           <a href="{_v12_legal_url('privacy')}">隱私權保護政策</a>
@@ -11934,8 +11935,8 @@ def _v12_render_legal_center():
         .v12-legal-hero{max-width:980px;margin:24px auto 14px;padding:28px 30px;border:1px solid rgba(255,193,214,.52);border-radius:18px;background:linear-gradient(125deg,rgba(75,32,80,.92),rgba(35,46,88,.9));box-shadow:0 14px 35px rgba(0,0,0,.22)}
         .v12-legal-hero h1{margin:0 0 8px;color:#fff;font-size:2rem}.v12-legal-hero p{margin:5px 0;color:#f6eaf2;font-size:1.02rem}.v12-legal-hero strong{color:#ffd2e3}
         .v12-legal-card{max-width:980px;margin:0 auto;padding:24px 28px;border:1px solid rgba(157,196,255,.38);border-radius:16px;background:rgba(13,27,52,.72);color:#f8fbff}.v12-legal-card h2,.v12-legal-card h3{color:#fff0b7}.v12-legal-card p,.v12-legal-card li{line-height:1.85;color:#f4f7ff}.v12-legal-card a{color:#9ed8ff}
-        .v12-legal-footer{max-width:980px;margin:28px auto 14px;padding:16px 18px;text-align:center;border-top:1px solid rgba(255,255,255,.24);color:#e9eefc;font-size:.94rem}.v12-legal-footer a{margin:0 7px;color:#ffd0df;font-weight:800;text-decoration:none}.v12-legal-footer a:hover{text-decoration:underline;color:#fff}.v12-legal-footer b{color:#91a6c9}
-        @media(max-width:640px){.v12-legal-hero{padding:20px 18px}.v12-legal-hero h1{font-size:1.5rem}.v12-legal-card{padding:18px}.v12-legal-footer a{display:inline-block;margin:5px 6px}}
+        .v12-legal-footer{max-width:980px;margin:28px auto 14px;padding:16px 18px;text-align:center;border-top:1px solid rgba(255,255,255,.24);color:#e9eefc;font-size:.94rem}.v12-legal-footer--header{margin:0 auto 1rem;padding:8px 14px;border:1px solid rgba(255,197,220,.35);border-radius:999px;background:rgba(36,30,60,.52);font-size:.84rem;box-shadow:0 8px 20px rgba(0,0,0,.12)}.v12-legal-footer a{margin:0 7px;color:#ffd0df;font-weight:800;text-decoration:none}.v12-legal-footer a:hover{text-decoration:underline;color:#fff}.v12-legal-footer b{color:#91a6c9}
+        @media(max-width:640px){.v12-legal-hero{padding:20px 18px}.v12-legal-hero h1{font-size:1.5rem}.v12-legal-card{padding:18px}.v12-legal-footer--header{border-radius:14px}.v12-legal-footer a{display:inline-block;margin:5px 6px}}
         </style>
         <div class="v12-legal-hero">
           <h1>🎨LINE 貼圖創作室｜服務與權益中心</h1>
@@ -12405,6 +12406,15 @@ if _v12_nav_is_admin:
             on_click=_v12_navigate_callback,
             kwargs={"view": "admin"},
         )
+
+# 首頁上方以低調、置中的政策列揭示營運主體與可直接查閱的條款；
+# 付款頁與創作頁底部仍保留完整置中的同一列。
+if (
+    st.session_state.get("v12_view", "create") == "create"
+    and str(st.query_params.get("legal", "") or "").strip().lower()
+    not in V12_LEGAL_SECTIONS
+):
+    _v12_render_legal_footer("header")
 
 # This is a real Streamlit button, visually placed in the expanded floating
 # menu so it follows the exact same in-page navigation as "My Works" above.
@@ -14783,10 +14793,10 @@ if _generate_clicked:
 
     _click_beta_session = _beta_current_user()
     if not _click_beta_session:
-        st.error("❌ 請先使用 Google 登入會員 Beta。")
+        st.error("❌ 請先使用 Google 登入會員。")
         st.stop()
     if not _beta_site_openai_key():
-        st.error("❌ 會員 Beta 的站方生成服務尚未完成設定，請稍後再試。")
+        st.error("❌ 會員生成服務尚未完成設定，請稍後再試。")
         st.stop()
     try:
         _reservation = _beta_reserve_generation(_click_beta_session)
