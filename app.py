@@ -4065,6 +4065,7 @@ def _beta_library_metadata(record):
         "font_name", "text_style", "generation_method", "transparent_background",
         "style_mode", "custom_style_snapshot", "character_features",
         "custom_character", "custom_character_enabled",
+        "text_only_style", "text_person_style",
         "sticker_mode", "expression_specs",
         "sticker_texts", "sticker_action_prompts", "sticker_color_segments", "schema_version", "identity",
         "timestamps", "creative_settings", "package_settings", "main_no", "tab_no",
@@ -7398,6 +7399,8 @@ def _v12_template_transfer_contract(snapshot):
     style_mode = str(snapshot.get("style_mode", "") or "")
     return {
         "style_mode": style_mode,
+        "text_only_style": bool(snapshot.get("text_only_style", False)),
+        "text_person_style": bool(snapshot.get("text_person_style", False)),
         "character_features": copy.deepcopy(
             snapshot.get("character_features", []) or []
         ),
@@ -7450,6 +7453,8 @@ def _v12_new_project_metadata():
         "style_reference_custom_elements": "",
         "style_mode": "",
         "custom_style_snapshot": {},
+        "text_only_style": False,
+        "text_person_style": False,
         "character_features": [],
         "custom_character": "",
         "custom_character_enabled": False,
@@ -7476,6 +7481,8 @@ def _v12_new_project_metadata():
         },
         "creative_settings": {
             "style": {"name": "", "mode": "", "custom_snapshot": {}},
+            "text_only_style": False,
+            "text_person_style": False,
             "font": {"name": ""},
             "text_style": "",
             "generation_method": "",
@@ -7548,6 +7555,27 @@ def _v12_normalize_project_metadata(metadata):
     if _v12_has_custom_style_snapshot(custom_style_snapshot):
         style_mode = V8_STYLE_CUSTOM_OPTION
         custom_style_snapshot["mode"] = V8_STYLE_CUSTOM_OPTION
+    _text_only_raw = data.get(
+        "text_only_style",
+        creative.get("text_only_style", style_mode == V12_TEXT_ONLY_STYLE),
+    )
+    text_only_style = (
+        _text_only_raw
+        if isinstance(_text_only_raw, bool)
+        else str(_text_only_raw or "").strip().lower() in {"1", "true", "yes", "on"}
+    )
+    _text_person_raw = data.get(
+        "text_person_style", creative.get("text_person_style", False)
+    )
+    text_person_style = (
+        _text_person_raw
+        if isinstance(_text_person_raw, bool)
+        else str(_text_person_raw or "").strip().lower() in {"1", "true", "yes", "on"}
+    )
+    if text_only_style:
+        # 純文字與文字搭人物互斥；舊快照只有 style_mode 時也可推回正確模式。
+        text_person_style = False
+        style_mode = V12_TEXT_ONLY_STYLE
     # An explicit empty list means the creator deliberately selected no
     # feature.  Do not use ``or`` here: it would resurrect an obsolete nested
     # value from ``creative_settings`` (for example 五官比例保留) after a
@@ -7647,6 +7675,8 @@ def _v12_normalize_project_metadata(metadata):
         "style_reference_custom_elements": style_reference_custom_elements,
         "style_mode": style_mode,
         "custom_style_snapshot": custom_style_snapshot,
+        "text_only_style": text_only_style,
+        "text_person_style": text_person_style,
         "character_features": character_features,
         "custom_character": custom_character,
         "custom_character_enabled": custom_character_enabled,
@@ -7672,6 +7702,8 @@ def _v12_normalize_project_metadata(metadata):
             "mode": normalized["style_mode"],
             "custom_snapshot": dict(normalized["custom_style_snapshot"]),
         },
+        "text_only_style": normalized["text_only_style"],
+        "text_person_style": normalized["text_person_style"],
         "font": {"name": normalized["font_name"]},
         "text_style": normalized["text_style"],
         "generation_method": normalized["generation_method"],
@@ -8388,8 +8420,25 @@ def _v12_load_history_record(record):
         st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
     if loaded_style_mode:
         st.session_state["v10_style_mode"] = loaded_style_mode
+    st.session_state["v12_use_text_only_style"] = bool(
+        metadata.get(
+            "text_only_style", loaded_style_mode == V12_TEXT_ONLY_STYLE
+        )
+    )
+    st.session_state["v12_use_text_person_style"] = bool(
+        metadata.get("text_person_style", False)
+    )
+    if st.session_state["v12_use_text_only_style"]:
+        st.session_state["v12_use_text_person_style"] = False
+        st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
+        st.session_state["v12_sticker_content_mode"] = V12_STICKER_TEXT_MODE
+        st.session_state["uploaded_image_bytes"] = None
+        st.session_state["v12_style_reference_image_bytes"] = None
+        st.session_state["v12_style_reference_filename"] = ""
+        st.session_state["v12_style_reference_fingerprint"] = ""
     st.session_state["v12_use_custom_style"] = (
         loaded_style_mode == V8_STYLE_CUSTOM_OPTION
+        and not st.session_state["v12_use_text_only_style"]
     )
     if (
         loaded_style_mode == V8_STYLE_CUSTOM_OPTION
@@ -8681,6 +8730,12 @@ def _v12_project_snapshot():
     project["custom_character_enabled"] = bool(project["custom_character"])
     project["custom_style_snapshot"] = _v12_current_custom_style_snapshot()
     project["style_mode"] = project["custom_style_snapshot"].get("mode", "")
+    project["text_only_style"] = bool(
+        st.session_state.get("v12_use_text_only_style", False)
+    )
+    project["text_person_style"] = bool(
+        st.session_state.get("v12_use_text_person_style", False)
+    ) and not project["text_only_style"]
     # V12｜STEP 01A③ FIX：
     # 若使用「⭐ 自定義風格」，作品庫不要只顯示泛稱，
     # 而是記錄使用者實際選取的「已儲存風格名稱」。
@@ -9553,6 +9608,8 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         # fallback for fields that the old top-level snapshot truly lacks.
         for field in (
             "style_mode",
+            "text_only_style",
+            "text_person_style",
             "character_features",
             "custom_character",
             "text_style",
