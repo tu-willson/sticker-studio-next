@@ -11656,6 +11656,8 @@ def _v12_navigate_callback(
         _save_v10_presets()
     if view is not None:
         st.session_state["v12_view"] = view
+        if view != "legal" and "legal" in st.query_params:
+            del st.query_params["legal"]
         # 從製作頁／市集切回作品集時，明確回到作品集頂端。Streamlit 的 rerun
         # 預設會保留捲動位置，長頁面切到較短的作品集時便會看起來落在最下方。
         if view == "library":
@@ -11878,6 +11880,135 @@ def _v12_retry_creator_reel_callback():
         }
 
 
+V12_PUBLIC_SITE_URL = "https://sticker-studio-next.streamlit.app"
+V12_LEGAL_SECTIONS = ("terms", "privacy", "refund", "contact")
+
+
+def _v12_legal_url(section):
+    """Return a review-friendly, public same-site URL for a legal section."""
+    section = str(section or "privacy").strip().lower()
+    if section not in V12_LEGAL_SECTIONS:
+        section = "privacy"
+    return f"{V12_PUBLIC_SITE_URL}/?legal={urllib.parse.quote(section, safe='')}"
+
+
+def _v12_open_legal_section_callback(section):
+    """Switch legal tabs while keeping a copyable URL for payment review."""
+    section = str(section or "privacy").strip().lower()
+    if section not in V12_LEGAL_SECTIONS:
+        section = "privacy"
+    st.session_state["v12_view"] = "legal"
+    st.session_state["v12_legal_section"] = section
+    st.query_params["legal"] = section
+
+
+def _v12_render_legal_footer():
+    """Show the merchant-owned policy links on public conversion pages."""
+    st.markdown(
+        f"""
+        <div class="v12-legal-footer">
+          <span>🎨LINE 貼圖創作室｜會員名稱：tuwillson</span>
+          <a href="{_v12_legal_url('terms')}">服務條款</a>
+          <b>｜</b>
+          <a href="{_v12_legal_url('privacy')}">隱私權保護政策</a>
+          <b>｜</b>
+          <a href="{_v12_legal_url('refund')}">退款與取消政策</a>
+          <b>｜</b>
+          <a href="{_v12_legal_url('contact')}">聯絡我們</a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _v12_render_legal_center():
+    """Public, merchant-owned policy centre for members and payment review."""
+    section = str(st.session_state.get("v12_legal_section", "privacy") or "privacy")
+    if section not in V12_LEGAL_SECTIONS:
+        section = "privacy"
+        st.session_state["v12_legal_section"] = section
+
+    st.markdown(
+        """
+        <style>
+        .v12-legal-hero{max-width:980px;margin:24px auto 14px;padding:28px 30px;border:1px solid rgba(255,193,214,.52);border-radius:18px;background:linear-gradient(125deg,rgba(75,32,80,.92),rgba(35,46,88,.9));box-shadow:0 14px 35px rgba(0,0,0,.22)}
+        .v12-legal-hero h1{margin:0 0 8px;color:#fff;font-size:2rem}.v12-legal-hero p{margin:5px 0;color:#f6eaf2;font-size:1.02rem}.v12-legal-hero strong{color:#ffd2e3}
+        .v12-legal-card{max-width:980px;margin:0 auto;padding:24px 28px;border:1px solid rgba(157,196,255,.38);border-radius:16px;background:rgba(13,27,52,.72);color:#f8fbff}.v12-legal-card h2,.v12-legal-card h3{color:#fff0b7}.v12-legal-card p,.v12-legal-card li{line-height:1.85;color:#f4f7ff}.v12-legal-card a{color:#9ed8ff}
+        .v12-legal-footer{max-width:980px;margin:28px auto 14px;padding:16px 18px;text-align:center;border-top:1px solid rgba(255,255,255,.24);color:#e9eefc;font-size:.94rem}.v12-legal-footer a{margin:0 7px;color:#ffd0df;font-weight:800;text-decoration:none}.v12-legal-footer a:hover{text-decoration:underline;color:#fff}.v12-legal-footer b{color:#91a6c9}
+        @media(max-width:640px){.v12-legal-hero{padding:20px 18px}.v12-legal-hero h1{font-size:1.5rem}.v12-legal-card{padding:18px}.v12-legal-footer a{display:inline-block;margin:5px 6px}}
+        </style>
+        <div class="v12-legal-hero">
+          <h1>🎨LINE 貼圖創作室｜服務與權益中心</h1>
+          <p>前台品牌：<strong>🎨LINE 貼圖創作室</strong>｜營運者／商店會員：<strong>tuwillson</strong></p>
+          <p>本頁為本服務自行制定之公開政策，適用於本站會員、購買方案與雲端創作服務。</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    labels = {
+        "terms": "📜 服務條款",
+        "privacy": "🔒 隱私權保護政策",
+        "refund": "💳 退款與取消政策",
+        "contact": "💬 聯絡我們",
+    }
+    legal_cols = st.columns(4, gap="small")
+    for col, key in zip(legal_cols, V12_LEGAL_SECTIONS):
+        with col:
+            st.button(
+                ("✓ " if key == section else "") + labels[key],
+                key=f"v12_legal_section_{key}",
+                use_container_width=True,
+                type="primary" if key == section else "secondary",
+                on_click=_v12_open_legal_section_callback,
+                args=(key,),
+            )
+
+    with st.container(key="v12_legal_content"):
+        if section == "privacy":
+            st.markdown("""<div class="v12-legal-card">
+            <h2>🔒 隱私權保護政策</h2>
+            <p><strong>生效日：</strong>2026 年 10 月 29 日｜<strong>最後更新日：</strong>2026 年 10 月 29 日</p>
+            <h3>一、營運者與適用範圍</h3>
+            <p>「🎨LINE 貼圖創作室」（以下稱本服務）由商店會員 <strong>tuwillson</strong> 營運。本政策說明使用者使用本站登入、AI 貼圖創作、雲端保存、膠卷／市集及付款方案時的個人資料處理方式。</p>
+            <h3>二、蒐集的資料與目的</h3>
+            <ul><li>帳號與聯絡資料：Google 登入所提供的基本帳號資訊及電子郵件，用於登入驗證、帳號管理與客服聯繫。</li><li>創作資料：使用者上傳的人物照片、畫風參考、文字、設定、生成結果與已保存作品，用於提供 AI 創作、雲端保存及使用者主動選擇的市集功能。</li><li>交易資料：方案、訂單編號、金額、付款狀態與權益發放紀錄，用於付款驗證、發放額度、帳務查核與處理爭議。</li><li>系統資料：必要的安全、錯誤與操作紀錄，用於防止濫用、資安維護與改善服務穩定性。</li></ul>
+            <h3>三、第三方服務與資料處理</h3>
+            <p>本服務依功能需要使用 Google 登入、Supabase（帳號、資料庫與儲存）、OpenAI（AI 生成），以及使用者付款時頁面所揭示的第三方金流服務商，例如藍新金流或統一金流。信用卡卡號等付款敏感資料由金流服務商依其政策處理，本服務不保存完整卡號。第三方金流的隱私政策僅適用於該金流服務，不取代本政策。</p>
+            <h3>四、保存、安全與使用者權利</h3>
+            <p>帳號與創作資料會於提供服務所需期間保存；使用者可自行刪除可刪除的作品，或來信申請帳號／資料處理協助。依法須保存的交易或稅務資料，將於法定保存期間內保留。本服務採取合理的存取控管與技術措施保護資料；使用者亦應妥善保管登入帳號。</p>
+            <p>使用者可透過下列客服信箱，就查詢、閱覽、補充、更正、停止蒐集／處理／利用或刪除個人資料提出申請；若依法或為完成交易仍需保留部分資料，將說明原因。</p>
+            <h3>五、政策更新</h3><p>本政策如有重大調整，將於本站更新最後更新日期並公告；繼續使用服務前，請先查閱最新內容。</p>
+            </div>""", unsafe_allow_html=True)
+        elif section == "terms":
+            st.markdown("""<div class="v12-legal-card">
+            <h2>📜 服務條款</h2><p><strong>生效日：</strong>2026 年 10 月 29 日</p>
+            <h3>一、服務內容</h3><p>🎨LINE 貼圖創作室提供 AI 輔助貼圖創作、圖片生成額度、雲端作品保存、膠卷與市集相關功能。各方案的價格、生成額度、有效期間、作品庫與市集權益，以購買方案頁與付款前頁面所揭示內容為準。</p>
+            <h3>二、帳號與創作責任</h3><p>使用者應以合法方式使用服務，並確認上傳照片、畫風參考、文字及其他素材具有使用權，不侵害他人肖像權、著作權、商標權、隱私權或其他權利。不得利用本服務製作、散布違法、色情、詐欺、仇恨、侵權或其他不當內容。</p>
+            <h3>三、市集與內容管理</h3><p>公開膠卷可能受其他使用者檢舉及管理者審核。若內容違反規範，本服務得依公開規則採取遮蔽、下架、限制市集功能、停權或其他必要措施；已購入者的既有使用權益將依當時規則與適用法令處理。</p>
+            <h3>四、服務可用性</h3><p>本服務仰賴網路、AI 模型、雲端與金流等第三方系統，可能因維護、資安、供應商異常或不可抗力而暫時中斷。若圖片生成未成功，系統會依公開額度規則處理，不將未成功生成視為已完成服務。</p>
+            <h3>五、條款變更</h3><p>如本服務功能、方案或法令有調整，將於本站公告更新內容與日期；重大影響會員權益的變更會以適當方式揭露。</p>
+            </div>""", unsafe_allow_html=True)
+        elif section == "refund":
+            st.markdown("""<div class="v12-legal-card">
+            <h2>💳 退款與取消政策</h2><p><strong>生效日：</strong>2026 年 10 月 29 日</p>
+            <h3>一、付款與立即提供的數位服務</h3><p>本服務販售的是付款成功後可立即使用的數位生成額度、訂閱權益與雲端功能。付款前會揭示方案內容、價格、期間與適用規則；使用者於付款前應先閱讀本頁及服務條款。</p>
+            <h3>二、數位內容與解除權</h3><p>使用者於付款前同意立即提供數位服務後，已發放或已使用的生成額度、訂閱權益及數位內容，可能屬非以有形媒介提供之數位內容或一經提供即完成的線上服務；其解除權將依適用法令及付款前取得的同意內容辦理。</p>
+            <h3>三、取消訂閱</h3><p>訂閱方案以付款成功日起算 30 天。欲停止下一期續訂，請以客服信箱提出申請；取消後，當期已取得的權益可使用至當期結束。除法令另有規定或服務未依約提供外，已開始的當期費用原則上不按比例退還。</p>
+            <h3>四、可申請協助的情況</h3><p>如發生重複扣款、付款成功但系統未發放對應權益，或其他依法應處理的情況，請提供帳號 Email、訂單時間與訂單編號聯絡客服。本服務將依交易紀錄查核並處理。</p>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown("""<div class="v12-legal-card">
+            <h2>💬 聯絡我們</h2>
+            <p><strong>前台品牌：</strong>🎨LINE 貼圖創作室</p><p><strong>商店會員／營運者：</strong>tuwillson</p>
+            <p><strong>客服信箱：</strong><a href="mailto:TUWILLSON@GMAIL.COM">TUWILLSON@GMAIL.COM</a></p>
+            <p><strong>Threads：</strong><a href="https://www.threads.com/@tuwillson" target="_blank" rel="noopener noreferrer">@tuwillson</a></p>
+            <p>如需帳號、付款、退款／取消、個人資料或市集內容協助，請以 Email 或 Threads 提供問題說明、帳號 Email 與相關訂單資訊；請勿於公開留言提供付款卡號或其他敏感個資。</p>
+            </div>""", unsafe_allow_html=True)
+
+    _v12_render_legal_footer()
+
+
 def _v12_render_pricing_page():
     """Render plan selection and the opt-in PAYUNi sandbox checkout."""
     products = [
@@ -11964,10 +12095,10 @@ def _v12_render_pricing_page():
     st.markdown(
         f"""
         <div class="v12-pricing-hero">
-          <div class="v12-pricing-kicker">STICKER STUDIO NEXT</div>
+          <div class="v12-pricing-kicker">🎨LINE 貼圖創作室</div>
           <h1>{t('pricing_title')}</h1>
           <p>{t('pricing_intro')}</p>
-          <div class="v12-pricing-contact">📮 {t('pricing_contact_label')}：<strong>AGUZN@MSN.COM</strong></div>
+          <div class="v12-pricing-contact">📮 服務聯絡／PAYUNi |藍新金流 商店驗證信箱：<strong>TUWILLSON@GMAIL.COM</strong></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -12117,6 +12248,7 @@ def _v12_render_pricing_page():
         with st.expander("🔄 方案升級／續訂／降級說明", expanded=False):
             st.markdown(_v12_plan_change_policy_markdown())
         st.caption(t("pricing_footer"))
+        _v12_render_legal_footer()
 
 
 # ------------------------------------------------------------
@@ -12305,6 +12437,10 @@ if st.session_state.get("v12_view") != "create":
     )
 
 st.session_state.setdefault("v12_view", "create")
+_v12_legal_query_section = str(st.query_params.get("legal", "") or "").strip().lower()
+if _v12_legal_query_section in V12_LEGAL_SECTIONS:
+    st.session_state["v12_view"] = "legal"
+    st.session_state["v12_legal_section"] = _v12_legal_query_section
 
 
 def _v12_render_pending_page_top_scroll():
@@ -12378,6 +12514,10 @@ _v12_render_pending_page_top_scroll()
 
 if st.session_state["v12_view"] == "pricing":
     _v12_render_pricing_page()
+    st.stop()
+
+if st.session_state["v12_view"] == "legal":
+    _v12_render_legal_center()
     st.stop()
 
 if st.session_state["v12_view"] == "marketplace":
@@ -15622,6 +15762,8 @@ with _link_col:
                 "https://www.threads.com/share/EB_9jnZTz/",
                 use_container_width=True,
             )
+
+_v12_render_legal_footer()
 
 
 # ============================================================
