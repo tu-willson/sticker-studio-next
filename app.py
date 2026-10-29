@@ -660,6 +660,7 @@ def _v12_text_only_style_toggle_changed():
     enabled = bool(st.session_state.get("v12_use_text_only_style", False))
     if enabled:
         st.session_state["v12_use_custom_style"] = False
+        st.session_state["v12_use_text_person_style"] = False
         st.session_state["v10_style_mode"] = V12_TEXT_ONLY_STYLE
         st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
         st.session_state["v12_sticker_content_mode"] = V12_STICKER_TEXT_MODE
@@ -681,6 +682,23 @@ def _v12_text_only_style_toggle_changed():
         if last_preset not in V8_STYLES:
             last_preset = "↓ 請選擇風格"
         st.session_state["v10_style_mode"] = last_preset
+
+
+def _v12_text_person_style_toggle_changed():
+    """Let text-led person stickers retain the selected visual style and photo."""
+    if bool(st.session_state.get("v12_use_text_person_style", False)):
+        # This mode still uses the uploaded person image, but cannot coexist
+        # with the explicitly person-free text-only mode.
+        st.session_state["v12_use_text_only_style"] = False
+        if str(st.session_state.get("v10_style_mode", "") or "") == V12_TEXT_ONLY_STYLE:
+            last_preset = str(
+                st.session_state.get("v12_last_preset_style_mode", "↓ 請選擇風格")
+                or "↓ 請選擇風格"
+            )
+            st.session_state["v10_style_mode"] = (
+                last_preset if last_preset in V8_STYLES else "↓ 請選擇風格"
+            )
+        st.session_state["v12_sticker_content_mode"] = V12_STICKER_TEXT_MODE
 
 
 def _v12_sync_saved_style_choice_to_editor(choice):
@@ -1145,6 +1163,40 @@ st.markdown("""
   background:#7d52c7 !important;
   border-color:#ddcaff !important;
   box-shadow:0 0 0 2px rgba(202,171,255,.26) !important;
+}
+.st-key-v12_use_text_person_style [data-testid="stCheckbox"] label p,
+.st-key-v12_use_text_only_style [data-testid="stCheckbox"] label p,
+.st-key-v12_use_custom_style [data-testid="stCheckbox"] label p{
+  color:#f8fbff !important;
+  text-shadow:0 1px 3px rgba(0,0,0,.64);
+}
+.st-key-v12_use_text_person_style [data-testid="stCheckbox"] label p{
+  font-size:20px !important;
+  font-weight:850 !important;
+}
+.st-key-v12_use_text_person_style [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div{
+  width:23px !important;
+  height:23px !important;
+  background:rgba(151, 70, 42, .72) !important;
+  border:2px solid #ffb08a !important;
+  box-shadow:0 0 0 2px rgba(255,176,138,.14) !important;
+}
+.st-key-v12_use_text_person_style [data-testid="stCheckbox"] [data-baseweb="checkbox"]:has(input:checked) > div{
+  background:#db7046 !important;
+  border-color:#ffe0cf !important;
+  box-shadow:0 0 0 2px rgba(255,192,160,.3) !important;
+}
+.v12-text-led-style-note{
+  max-width:920px;
+  margin:.45rem auto .75rem;
+  padding:.68rem .85rem;
+  border:1px solid rgba(207,224,255,.36);
+  border-radius:10px;
+  background:rgba(15,29,52,.76);
+  color:#f8fbff;
+  font-size:.94rem;
+  font-weight:760;
+  line-height:1.65;
 }
 /* 「存入作品｜市集」是獨立於 ZIP 打包的雲端保存動作。 */
 .st-key-v12_basket_save_to_library button{
@@ -6715,6 +6767,7 @@ V12_STYLE_PRESET_MODE = "貼圖風格快選"
 V12_STYLE_REFERENCE_MODE = "畫風參考上傳"
 V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
 V12_TEXT_ONLY_STYLE = "📝 純文字創意貼圖"
+V12_TEXT_PERSON_STYLE_LABEL = "👤 文字搭人物（字大人小）"
 V12_STYLE_REFERENCE_STRENGTHS = ("柔和融入", "強烈融入")
 V12_TEXT_ONLY_VARIATION_DIRECTIONS = (
     "以大膽不對稱字距、傾斜角度與高低錯落排版，搭配少量活潑的抽象線條點綴",
@@ -10139,6 +10192,7 @@ st.session_state.setdefault("v12_style_reference_filename", "")
 st.session_state.setdefault("v12_style_reference_fingerprint", "")
 st.session_state.setdefault("v12_style_source_mode", V12_STYLE_PRESET_MODE)
 st.session_state.setdefault("v12_use_text_only_style", False)
+st.session_state.setdefault("v12_use_text_person_style", False)
 st.session_state.setdefault("v12_expression_used_recipe_ids", [])
 st.session_state.setdefault("v12_expression_used_visual_pack_ids", [])
 st.session_state.setdefault("v12_expression_last_recipe_labels", [])
@@ -10170,6 +10224,7 @@ _V12_CREATION_DRAFT_KEYS = (
     "v12_last_preset_style_mode",
     "v12_use_custom_style",
     "v12_use_text_only_style",
+    "v12_use_text_person_style",
     "v12_style_reference_image_bytes",
     "v12_style_reference_filename",
     "v12_style_reference_fingerprint",
@@ -10537,6 +10592,7 @@ def _v12_clear_active_creation_callback():
     st.session_state["v12_last_preset_style_mode"] = "↓ 請選擇風格"
     st.session_state["v12_use_custom_style"] = False
     st.session_state["v12_use_text_only_style"] = False
+    st.session_state["v12_use_text_person_style"] = False
     st.session_state["v12_saved_custom_style_choice"] = "↓ 請選擇已儲存風格"
     st.session_state["v12_style_reference_image_bytes"] = None
     st.session_state["v12_style_reference_filename"] = ""
@@ -11455,7 +11511,7 @@ def _v12_render_ai_copy_assistant():
 def build_prompt(style, custom_style, selected_character, custom_character,
                  texts, transparent, color_segments=None, ai_copy_topic="", ai_copy_tone="", ai_copy_topics=None,
                  sticker_mode="text", expression_specs=None, action_prompts=None,
-                 text_only=False):
+                 text_only=False, text_person=False):
     _layout_instruction = "人物與特效請置中安排，四周保留自然空間，方便後續以裁切線微調。"
     _safety_margin_instruction = "每格左右與上下都要保留至少約 12% 的乾淨透明／背景安全邊距，作為裁切走廊。"
     if text_only:
@@ -11473,6 +11529,21 @@ def build_prompt(style, custom_style, selected_character, custom_character,
             "禁止加入格號、序號、位置標籤或數字標記。",
             "每次生成可重新設計字體的排版、配色、材質、層次與抽象裝飾；但必須優先保留使用者選擇的字型與文字外框特徵。",
             "本次隨機創意方向：" + random.choice(V12_TEXT_ONLY_VARIATION_DIRECTIONS) + "。",
+        ]
+    elif text_person:
+        p = [
+            "本次為「文字搭人物（字大人小）」模式；第一張人物照片是唯一的人物身份參考。",
+            "請一次生成一張清楚的4×2八格LINE貼圖總圖。",
+            "第一排四格、第二排四格；依使用者輸入順序由左至右、由上至下對應。",
+            "每一格均以指定文字為絕對主角：文字需占畫面約 60%～75%，使用大型、立體、清楚可讀的字型筆畫、材質、外框、厚實陰影與光感。",
+            "人物只能是迷你陪襯，約占畫面 15%～30%，不可搶走文字焦點、遮住文字或使文字難以閱讀。",
+            "迷你人物必須直接與文字互動：依文字語意自然做出倚靠、推拉、擁抱、探頭、攀爬、舉起、指向或回應文字的動作；每格互動構圖需明顯不同。",
+            "保留人物身份辨識特徵，但人物要以可愛、精緻的小比例重新繪製；不要裁切人物頭部、臉部或肢體。",
+            "相鄰貼圖之間必須保留一整條連續、乾淨的背景色或透明空間作為裁切走廊；不要畫格線、框線或分隔線。",
+            "【排版硬性規則】將 8 格視為 8 張完全獨立、不可跨越的畫板。每一格的文字、人物、陰影、道具與特效都必須完整留在該格內，絕對不得延伸、重疊或漏進左右／上下相鄰格。",
+            _safety_margin_instruction + "內容較多時必須一起縮小，不可把多出的文字、人物或裝飾放到隔壁格。",
+            "文字必須完全正確、清楚可讀；不可錯字、漏字、改字、加入額外文字、編號、英數符號或水印。",
+            "非常重要：圖片中禁止出現01、02、03、04、05、06、07、08等編號，也禁止加入格號、序號或位置標籤。",
         ]
     else:
         p = [
@@ -11506,6 +11577,11 @@ def build_prompt(style, custom_style, selected_character, custom_character,
     else:
         if text_only:
             p.append("只有使用者指定的貼圖文字可以出現在圖片中；不可用任何具象圖案取代文字。")
+        elif text_person:
+            p.extend([
+                "只有使用者指定的貼圖文字可以出現在圖片中；文字必須比人物明顯更大、更立體且優先可讀。",
+                "人物只能為文字服務，請讓每格的小人物明確與文字互動，而非單獨站在旁邊。",
+            ])
         else:
             p.extend([
                 "每格人物完整呈現，不要裁切頭部、臉部、身體或四肢。",
@@ -13126,6 +13202,7 @@ def _v12_set_style_source_mode(mode):
         st.session_state["v10_style_mode"] = "↓ 請選擇風格"
         st.session_state["v12_use_custom_style"] = False
         st.session_state["v12_use_text_only_style"] = False
+        st.session_state["v12_use_text_person_style"] = False
         st.session_state.pop("v12_loaded_project_custom_style", None)
 
 
@@ -13195,26 +13272,43 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
     st.session_state.setdefault(
         "v12_use_text_only_style", style_mode == V12_TEXT_ONLY_STYLE
     )
-    # 元件建立前先處理跨版本草稿可能留下的兩者同時勾選狀態。
+    st.session_state.setdefault("v12_use_text_person_style", False)
+    # 元件建立前先處理跨版本草稿可能留下的互斥狀態。
     # 建立 checkbox 後不可直接寫回同一個 widget key，否則 Streamlit 會報錯。
     if bool(st.session_state.get("v12_use_text_only_style", False)):
         st.session_state["v12_use_custom_style"] = False
-    # 兩個特殊模式並列在預設風格下拉欄上方：自定義風格與純文字貼圖。
-    # 保留明顯間距，讓第二個選項位於右側而不與標籤擠在一起。
+        st.session_state["v12_use_text_person_style"] = False
+    # 三種文字／風格選項並列在預設風格下拉欄上方。純文字與文字搭人物
+    # 都由文字主導；自定義風格可單獨使用，也可搭配文字搭人物。
     with st.container(key="v12_style_mode_toggles"):
-        _custom_toggle_col, _text_only_toggle_col = st.columns([1, 1], gap="large")
+        _text_only_toggle_col, _custom_toggle_col, _text_person_toggle_col = st.columns(
+            [1, 1, 1], gap="medium"
+        )
+        with _text_only_toggle_col:
+            _use_text_only_style = st.checkbox(
+                "📝 純文字設計（無人物）",
+                key="v12_use_text_only_style",
+                on_change=_v12_text_only_style_toggle_changed,
+            )
         with _custom_toggle_col:
             _use_custom_style = st.checkbox(
                 t("custom_style_enable"),
                 key="v12_use_custom_style",
                 on_change=_v12_custom_style_toggle_changed,
             )
-        with _text_only_toggle_col:
-            _use_text_only_style = st.checkbox(
-                "📝 純文字創意貼圖",
-                key="v12_use_text_only_style",
-                on_change=_v12_text_only_style_toggle_changed,
+        with _text_person_toggle_col:
+            _use_text_person_style = st.checkbox(
+                V12_TEXT_PERSON_STYLE_LABEL,
+                key="v12_use_text_person_style",
+                on_change=_v12_text_person_style_toggle_changed,
             )
+    st.markdown(
+        '<div class="v12-text-led-style-note">'
+        '📝 純文字設計與 👤 文字搭人物都以文字為主，可依需求選取；初次使用也可先不勾選。'
+        '⭐ 使用自定義風格可建立、保存並套用自己的風格 Prompt。'
+        '</div>',
+        unsafe_allow_html=True,
+    )
     if _use_text_only_style:
         st.session_state["v10_style_mode"] = V12_TEXT_ONLY_STYLE
         style_mode = V12_TEXT_ONLY_STYLE
@@ -13242,9 +13336,14 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
 
     if _use_text_only_style:
         st.info(
-            "📝 已選擇「純文字創意貼圖」：不需上傳人物照片。"
+            "📝 已選擇「純文字設計（無人物）」：不需上傳人物照片。"
             "人物照片與畫風參考已自動移除。輸入 01～08 的文字後，會以你選擇的字型與外框為核心，"
             "每次隨機變化排版、配色、材質與抽象裝飾；不會產生人物、角色或場景。"
+        )
+    elif _use_text_person_style:
+        st.info(
+            "👤 已選擇「文字搭人物（字大人小）」：大型立體文字會是主角；"
+            "人物會依上傳照片與所選風格，以迷你比例和文字產生互動。"
         )
 
     if style_mode == "⭐ 自定義風格":
@@ -13483,6 +13582,7 @@ _v12_update_navigation_safe_creation_draft(
     v12_last_preset_style_mode=st.session_state.get("v12_last_preset_style_mode"),
     v12_use_custom_style=st.session_state.get("v12_use_custom_style"),
     v12_use_text_only_style=st.session_state.get("v12_use_text_only_style"),
+    v12_use_text_person_style=st.session_state.get("v12_use_text_person_style"),
     v12_style_reference_image_bytes=st.session_state.get("v12_style_reference_image_bytes"),
     v12_style_reference_filename=st.session_state.get("v12_style_reference_filename"),
     v12_style_reference_fingerprint=st.session_state.get("v12_style_reference_fingerprint"),
@@ -14493,6 +14593,7 @@ if _v12_prompt_settings_admin:
     v10_subsection(t("settings_review"), "#ff9f43")
 style_mode = st.session_state.get("v10_style_mode", "↓ 請選擇風格")
 _text_only_generation = style_mode == V12_TEXT_ONLY_STYLE
+_text_person_generation = bool(st.session_state.get("v12_use_text_person_style", False))
 
 _prompt_color_segments = _v12_valid_color_segments(texts)
 _prompt_sticker_action_prompts = _v12_get_sticker_action_prompts()
@@ -14512,6 +14613,7 @@ prompt = build_prompt(
     expression_specs=_prompt_expression_specs,
     action_prompts=_prompt_sticker_action_prompts,
     text_only=_text_only_generation,
+    text_person=_text_person_generation,
 )
 
 if _style_reference_active:
@@ -14553,6 +14655,13 @@ elif not _text_only_generation:
     prompt += (
         f"\n【V10 風格模式】目前使用預設風格：「{style_mode}」。"
         "不要把未選取的自定義風格加入生成。"
+    )
+
+if _text_person_generation:
+    prompt += (
+        "\n【文字主導構圖】本次選擇「文字搭人物（字大人小）」。"
+        "每格先完成最大、最醒目且可讀的立體文字，再安排迷你人物和文字產生明確互動。"
+        "人物是輔助角色，絕不可變成與文字同等大小的主角。"
     )
 
 _selected_font_for_prompt = st.session_state.get("v8_selected_font")

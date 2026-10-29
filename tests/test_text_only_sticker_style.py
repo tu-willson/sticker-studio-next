@@ -27,6 +27,15 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('st.session_state["v12_style_reference_image_bytes"] = None', APP)
         self.assertIn('人物照片已強制移除，此模式不接受人物照片。', APP)
 
+    def test_text_person_mode_keeps_photo_and_makes_text_the_main_subject(self):
+        self.assertIn('V12_TEXT_PERSON_STYLE_LABEL = "👤 文字搭人物（字大人小）"', APP)
+        self.assertIn('key="v12_use_text_person_style"', APP)
+        self.assertIn('text_person=False', APP)
+        self.assertIn('文字需占畫面約 60%～75%', APP)
+        self.assertIn('人物只能是迷你陪襯，約占畫面 15%～30%', APP)
+        self.assertIn('迷你人物必須直接與文字互動', APP)
+        self.assertIn('st.session_state["v12_use_text_only_style"] = False', APP)
+
 
 if __name__ == "__main__":
     unittest.main()
