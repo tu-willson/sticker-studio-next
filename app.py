@@ -13436,8 +13436,8 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
             )
     st.markdown(
         '<div class="v12-text-led-style-note">'
-        '📝 純文字設計與 👤 文字搭人物都以文字為主，可依需求選取；初次使用也可先不勾選。'
-        '⭐ 使用自定義風格可建立、保存並套用自己的風格 Prompt。'
+        '<div>📝 純文字設計與 👤 文字搭人物都以文字為主，可依需求選取~若為初次使用平台也可先不勾選。</div>'
+        '<div>⭐ 使用自定義風格可建立、保存並套用自己的風格 Prompt。</div>'
         '</div>',
         unsafe_allow_html=True,
     )
