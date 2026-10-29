@@ -1039,7 +1039,7 @@ def _v11_user_error_message(exc: Exception) -> str:
 # ============================================================
 
 st.set_page_config(
-    page_title="LINE 貼圖創作工作室｜V12",
+    page_title="LINE 貼圖創作室",
     page_icon="🎨",
     layout="wide",
 )
