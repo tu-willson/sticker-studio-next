@@ -10,7 +10,10 @@ class MerchantLegalCenterTests(unittest.TestCase):
         self.assertIn('V12_PUBLIC_SITE_URL = "https://sticker-studio-next.streamlit.app"', APP)
         self.assertIn('🎨LINE 貼圖創作室', APP)
         self.assertIn('商店會員：<strong>tuwillson</strong>', APP)
-        self.assertIn('開發者會員名稱：TUWILLSON', APP)
+        self.assertIn(
+            'identity_label = "開發者名稱" if placement == "header" else "開發者會員名稱"',
+            APP,
+        )
         self.assertIn('隱私權保護政策', APP)
 
     def test_policy_centre_covers_privacy_refunds_and_support(self):

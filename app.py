@@ -11905,10 +11905,11 @@ def _v12_open_legal_section_callback(section):
 def _v12_render_legal_footer(placement="footer"):
     """Show merchant-owned policy links in a compact header or page footer."""
     placement = "header" if placement == "header" else "footer"
+    identity_label = "開發者名稱" if placement == "header" else "開發者會員名稱"
     st.markdown(
         f"""
         <div class="v12-legal-footer v12-legal-footer--{placement}">
-          <span>🎨LINE 貼圖創作室｜開發者會員名稱：TUWILLSON</span>
+          <span>🎨LINE 貼圖創作室｜{identity_label}：TUWILLSON</span>
           <a href="{_v12_legal_url('terms')}">服務條款</a>
           <b>｜</b>
           <a href="{_v12_legal_url('privacy')}">隱私權保護政策</a>
@@ -11935,7 +11936,7 @@ def _v12_render_legal_center():
         .v12-legal-hero{max-width:980px;margin:24px auto 14px;padding:28px 30px;border:1px solid rgba(255,193,214,.52);border-radius:18px;background:linear-gradient(125deg,rgba(75,32,80,.92),rgba(35,46,88,.9));box-shadow:0 14px 35px rgba(0,0,0,.22)}
         .v12-legal-hero h1{margin:0 0 8px;color:#fff;font-size:2rem}.v12-legal-hero p{margin:5px 0;color:#f6eaf2;font-size:1.02rem}.v12-legal-hero strong{color:#ffd2e3}
         .v12-legal-card{max-width:980px;margin:0 auto;padding:24px 28px;border:1px solid rgba(157,196,255,.38);border-radius:16px;background:rgba(13,27,52,.72);color:#f8fbff}.v12-legal-card h2,.v12-legal-card h3{color:#fff0b7}.v12-legal-card p,.v12-legal-card li{line-height:1.85;color:#f4f7ff}.v12-legal-card a{color:#9ed8ff}
-        .v12-legal-footer{max-width:980px;margin:28px auto 14px;padding:16px 18px;text-align:center;border-top:1px solid rgba(255,255,255,.24);color:#e9eefc;font-size:.94rem}.v12-legal-footer--header{margin:0 auto 1rem;padding:8px 14px;border:1px solid rgba(255,197,220,.35);border-radius:999px;background:rgba(36,30,60,.52);font-size:.84rem;box-shadow:0 8px 20px rgba(0,0,0,.12)}.v12-legal-footer a{margin:0 7px;color:#ffd0df;font-weight:800;text-decoration:none}.v12-legal-footer a:hover{text-decoration:underline;color:#fff}.v12-legal-footer b{color:#91a6c9}
+        .v12-legal-footer{max-width:980px;margin:28px auto 14px;padding:16px 18px;text-align:center;border-top:1px solid rgba(255,255,255,.24);color:#e9eefc;font-size:.94rem}.v12-legal-footer--header{width:fit-content;max-width:100%;margin:0 0 1rem auto;padding:8px 14px;text-align:right;border:1px solid rgba(255,197,220,.35);border-radius:999px;background:rgba(36,30,60,.52);font-size:.84rem;box-shadow:0 8px 20px rgba(0,0,0,.12)}.v12-legal-footer a{margin:0 7px;color:#ffd0df;font-weight:800;text-decoration:none}.v12-legal-footer a:hover{text-decoration:underline;color:#fff}.v12-legal-footer b{color:#91a6c9}
         @media(max-width:640px){.v12-legal-hero{padding:20px 18px}.v12-legal-hero h1{font-size:1.5rem}.v12-legal-card{padding:18px}.v12-legal-footer--header{border-radius:14px}.v12-legal-footer a{display:inline-block;margin:5px 6px}}
         </style>
         <div class="v12-legal-hero">
@@ -12297,6 +12298,15 @@ with _locale_picker:
         label_visibility="collapsed",
     )
 
+# 首頁條款列緊接在語言切換器下方、靠右，保有清楚的商店主體揭示，
+# 同時不干擾主要導覽；付款頁與創作頁底部仍保留完整置中的版本。
+if (
+    st.session_state.get("v12_view", "create") == "create"
+    and str(st.query_params.get("legal", "") or "").strip().lower()
+    not in V12_LEGAL_SECTIONS
+):
+    _v12_render_legal_footer("header")
+
 st.markdown(
     """
     <style>
@@ -12406,15 +12416,6 @@ if _v12_nav_is_admin:
             on_click=_v12_navigate_callback,
             kwargs={"view": "admin"},
         )
-
-# 首頁上方以低調、置中的政策列揭示營運主體與可直接查閱的條款；
-# 付款頁與創作頁底部仍保留完整置中的同一列。
-if (
-    st.session_state.get("v12_view", "create") == "create"
-    and str(st.query_params.get("legal", "") or "").strip().lower()
-    not in V12_LEGAL_SECTIONS
-):
-    _v12_render_legal_footer("header")
 
 # This is a real Streamlit button, visually placed in the expanded floating
 # menu so it follows the exact same in-page navigation as "My Works" above.
