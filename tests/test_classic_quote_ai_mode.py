@@ -20,10 +20,17 @@ class ClassicQuoteAiModeTests(unittest.TestCase):
         self.assertIn('絕對不要逐字重現、拼接、改寫得過於接近', APP)
         self.assertIn('不逐字重現台詞、歌詞或招牌口號', EDITOR)
 
+    def test_public_figures_can_inspire_topical_language_without_claiming_facts(self):
+        self.assertIn('【公共人物／時事語境】', APP)
+        self.assertIn('16 句中約 4～6 句', APP)
+        self.assertIn('不得宣稱未經確認的近期事件', APP)
+        self.assertIn('不得捏造人物原話', APP)
+        self.assertIn('公開討論語境', EDITOR)
+
     def test_classic_quote_mode_disables_and_ignores_tone_selection(self):
-        self.assertIn('tone = "依人物／作品氣質自動延伸（不套用語氣模式）"', APP)
+        self.assertIn('tone = "依人物／作品與時事語境自動延伸（不套用語氣模式）"', APP)
         self.assertIn('disabled=True,', APP)
-        self.assertIn('依人物／作品氣質自動延伸', EDITOR)
+        self.assertIn('依人物／作品與時事語境自動延伸', EDITOR)
         self.assertIn('語氣模式已停用', EDITOR)
 
     def test_browser_event_carries_mode_to_generation(self):

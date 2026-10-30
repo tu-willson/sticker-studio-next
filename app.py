@@ -11404,7 +11404,7 @@ def _v12_ai_copy_generate(topic, tone, api_key, idea_mode=V12_AI_COPY_STANDARD_M
     if idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE:
         # 經典台詞模式的靈感必須由人物／作品本身主導；不讓前端留下的
         # 一般語氣值影響結果，避免只停留在介面層的禁用。
-        tone = "依人物／作品氣質自動延伸（不套用語氣模式）"
+        tone = "依人物／作品與時事語境自動延伸（不套用語氣模式）"
     if not topic:
         raise ValueError("missing_topic")
 
@@ -11448,11 +11448,15 @@ def _v12_ai_copy_generate(topic, tone, api_key, idea_mode=V12_AI_COPY_STANDARD_M
     if idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE:
         _classic_quote_guidance = (
             "\n\n【經典台詞模式】"
-            "使用者輸入的是知名人物、角色或代表作品名稱。請參考其廣為人知的角色氣質、戲劇張力、"
-            "情境與情緒節奏，創作可用於 LINE 貼圖的『原創致敬式短句』。"
+            "使用者輸入的是知名人物、角色、代表作品或公共人物名稱。請參考其廣為人知的角色氣質、戲劇張力、"
+            "公開討論語境、情境與情緒節奏，創作可用於 LINE 貼圖的『原創致敬式短句』。"
             "絕對不要逐字重現、拼接、改寫得過於接近任何影視台詞、歌曲歌詞、舞台劇台詞、書籍段落、"
             "口號或角色招牌句；也不要輸出長篇引文。"
             "即使主題是具體作品或人物，輸出的每一句都必須是全新、日常可用、脫離原作仍成立的短句。"
+            "\n【公共人物／時事語境】若輸入的是政治人物、公共人物或公共議題，可融合公開討論中常見的"
+            "生活化時事語感與議題反應；16 句中約 4～6 句可帶有這類語境，其餘仍保留日常可用短句，"
+            "確保使用者能挑到完整 8 句。不得宣稱未經確認的近期事件、日期、數字、指控或立場；"
+            "不得捏造人物原話、暗示本人背書、拉票、動員或攻擊任何群體。"
         )
 
     system_prompt = (
@@ -11594,17 +11598,18 @@ def _v12_render_ai_copy_assistant():
     )
     _topic_before = str(st.session_state.get("v12_ai_copy_topic", "") or "").strip()
     _topic = st.text_input(
-        "🎬 輸入知名人物、角色或代表作品" if _idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE else t("ai_topic"),
+        "🎬 輸入知名人物、角色、作品或公共人物" if _idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE else t("ai_topic"),
         key="v12_ai_copy_topic",
         placeholder=(
-            "例如：周星馳、哈利波特、宮崎駿作品"
+            "例如：周星馳、哈利波特、宮崎駿作品、沈伯洋"
             if _idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE
             else t("ai_topic_placeholder")
         ),
     ).strip()
     if _idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE:
         st.caption(
-            "會以代表作品的角色氣質與經典情境延伸原創貼圖短句；不逐字重現台詞、歌詞或招牌口號。"
+            "會融合人物／作品的代表氣質與公開討論語境，延伸原創貼圖短句；"
+            "時事只作語感靈感，不會捏造人物原話、未確認事件或立場。"
         )
 
     # 使用者修改尚未建立的創作主題時，清除上一批候選文案，避免拿舊主題的結果誤存到新主題。
@@ -11619,14 +11624,14 @@ def _v12_render_ai_copy_assistant():
     # ② 文案語氣
     # ------------------------------------------------------------
     if _idea_mode == V12_AI_COPY_CLASSIC_QUOTE_MODE:
-        _tone = "依人物／作品氣質自動延伸（不套用語氣模式）"
+        _tone = "依人物／作品與時事語境自動延伸（不套用語氣模式）"
         st.selectbox(
             t("ai_tone"),
             [_tone],
             disabled=True,
             key="v12_ai_copy_classic_tone_display",
         )
-        st.caption("經典台詞模式會以人物、角色或作品的氣質延伸，因此不套用一般語氣模式。")
+        st.caption("經典台詞模式會融合人物、角色、作品或公共人物的語境延伸，因此不套用一般語氣模式。")
     else:
         _tone = st.selectbox(
             t("ai_tone"),

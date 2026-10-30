@@ -238,13 +238,13 @@ export default function(component) {
           ${AI_IDEA_MODES.map(mode => `<option value="${mode}" ${state.aiMode === mode ? 'selected' : ''}>${mode}</option>`).join('')}
         </select>
         ${state.aiMode === '🎬 經典台詞'
-          ? '<select class="s4-input" disabled><option>🎬 依人物／作品氣質自動延伸</option></select>'
+          ? '<select class="s4-input" disabled><option>🎬 依人物／作品與時事語境自動延伸</option></select>'
           : `<select class="s4-input" data-root-field="aiTone">
               ${AI_TONES.map(tone => `<option value="${tone}" ${state.aiTone === tone ? 'selected' : ''}>${tone}</option>`).join('')}
             </select>`}
       </div>
-      <input class="s4-input s4-topic-input" data-root-field="aiTopic" value="${esc(state.aiTopic)}" placeholder="${state.aiMode === '🎬 經典台詞' ? '輸入人物、角色或作品，例如：周星馳、哈利波特' : '輸入主題，例如：上班、下雨天、生日'}">
-      ${state.aiMode === '🎬 經典台詞' ? '<div class="s4-pool-list">會以代表作品的角色氣質與經典情境延伸原創貼圖短句；語氣模式已停用，不逐字重現台詞、歌詞或招牌口號。</div>' : ''}
+      <input class="s4-input s4-topic-input" data-root-field="aiTopic" value="${esc(state.aiTopic)}" placeholder="${state.aiMode === '🎬 經典台詞' ? '輸入人物、角色、作品或公共人物，例如：周星馳、沈伯洋' : '輸入主題，例如：上班、下雨天、生日'}">
+      ${state.aiMode === '🎬 經典台詞' ? '<div class="s4-pool-list">會融合人物／作品的代表氣質與公開討論語境，延伸原創貼圖短句；時事只作語感靈感，不會捏造人物原話、未確認事件或立場，也不逐字重現台詞、歌詞或招牌口號。語氣模式已停用。</div>' : ''}
       <div class="s4-action-row"><button class="s4-small-button" data-action="generate-ai" ${state.aiLoading ? 'disabled' : ''}>${state.aiLoading ? '✨ AI 正在構思中…' : '✨ 產生 16 句貼圖文字'}</button>${state.aiLoading ? `<div class="s4-ai-progress"><div class="s4-ai-progress-label"><span>${esc(state.aiLoadingText || '🧠 正在收集靈感…')}</span><span>${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%</span></div><div class="s4-ai-progress-track"><div class="s4-ai-progress-fill" style="width:${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%"></div></div></div>` : ''}</div>
       ${state.aiCandidates.length ? `
         <div class="s4-caption">可勾選任意數量；本批已勾選 ${state.aiSelected.length} 句，待帶入清單 ${state.aiPicked.length} / 8 句。</div>
