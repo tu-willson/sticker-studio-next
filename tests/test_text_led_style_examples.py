@@ -21,7 +21,9 @@ class TextLedStyleExamplesTests(unittest.TestCase):
         self.assertIn('text-person-large-text-small-person.png', APP)
         self.assertIn("V12_TEXT_ONLY_STYLE_CHECKBOX_LABEL", APP)
         self.assertIn("V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL", APP)
-        self.assertIn('height:51px !important;', APP)
+        self.assertIn('height:77px !important;', APP)
+        self.assertIn('[1, 1], gap="large"', APP)
+        self.assertIn('[1, 1.3, 1]', APP)
         self.assertNotIn('st.image("static/style_examples/text-only.png", width=94)', APP)
 
 

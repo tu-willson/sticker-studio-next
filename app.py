@@ -1145,7 +1145,7 @@ st.markdown("""
 }
 /* 與「貼圖風格」下拉欄左緣對齊，讓兩個模式切換並列在上方。 */
 .st-key-v12_style_mode_toggles{
-  max-width:920px;
+  max-width:1040px;
   margin:4px auto 0 !important;
 }
 .st-key-v12_use_text_only_style [data-testid="stCheckbox"] label p{
@@ -1200,12 +1200,23 @@ st.markdown("""
 }
 .st-key-v12_use_text_only_style [data-testid="stCheckbox"] label p img,
 .st-key-v12_use_text_person_style [data-testid="stCheckbox"] label p img{
-  width:51px !important;
-  height:51px !important;
-  max-height:51px !important;
+  width:77px !important;
+  height:77px !important;
+  max-height:77px !important;
   margin-right:.32rem !important;
   object-fit:contain;
   vertical-align:middle;
+}
+.st-key-v12_use_text_only_style [data-testid="stCheckbox"] label,
+.st-key-v12_use_text_person_style [data-testid="stCheckbox"] label{
+  align-items:center !important;
+}
+.st-key-v12_use_text_only_style [data-testid="stCheckbox"] label p,
+.st-key-v12_use_text_person_style [data-testid="stCheckbox"] label p{
+  white-space:nowrap !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  min-width:max-content !important;
 }
 /* 「存入作品｜市集」是獨立於 ZIP 打包的雲端保存動作。 */
 .st-key-v12_basket_save_to_library button{
@@ -13429,11 +13440,11 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
     if bool(st.session_state.get("v12_use_text_only_style", False)):
         st.session_state["v12_use_custom_style"] = False
         st.session_state["v12_use_text_person_style"] = False
-    # 三種文字／風格選項並列在預設風格下拉欄上方。純文字與文字搭人物
-    # 都由文字主導；自定義風格可單獨使用，也可搭配文字搭人物。
+    # 文字主導的兩種模式左右並列，讓大尺寸預覽和完整選項名稱都能清楚閱讀；
+    # 自定義風格獨立置於下一行，也可搭配文字搭人物。
     with st.container(key="v12_style_mode_toggles"):
-        _text_only_toggle_col, _custom_toggle_col, _text_person_toggle_col = st.columns(
-            [1.05, 0.75, 1.6], gap="small"
+        _text_only_toggle_col, _text_person_toggle_col = st.columns(
+            [1, 1], gap="large"
         )
         with _text_only_toggle_col:
             _use_text_only_style = st.checkbox(
@@ -13441,17 +13452,20 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 key="v12_use_text_only_style",
                 on_change=_v12_text_only_style_toggle_changed,
             )
-        with _custom_toggle_col:
-            _use_custom_style = st.checkbox(
-                t("custom_style_enable"),
-                key="v12_use_custom_style",
-                on_change=_v12_custom_style_toggle_changed,
-            )
         with _text_person_toggle_col:
             _use_text_person_style = st.checkbox(
                 V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL,
                 key="v12_use_text_person_style",
                 on_change=_v12_text_person_style_toggle_changed,
+            )
+        _custom_left_col, _custom_toggle_col, _custom_right_col = st.columns(
+            [1, 1.3, 1]
+        )
+        with _custom_toggle_col:
+            _use_custom_style = st.checkbox(
+                t("custom_style_enable"),
+                key="v12_use_custom_style",
+                on_change=_v12_custom_style_toggle_changed,
             )
     st.markdown(
         '<div class="v12-text-led-style-note">'
