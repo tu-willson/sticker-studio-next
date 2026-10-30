@@ -2680,6 +2680,7 @@ html{scroll-behavior:smooth;}
 }
 .v12-outline-none-card{
   aspect-ratio:1.15 / 1;
+  margin-bottom:1rem;
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -15127,9 +15128,7 @@ if _sticker_mode == "text":
             st.session_state["v8_selected_font"] = _quick_font_no
             st.session_state["v10_font_gallery_open"] = False
         _selected_font = _quick_font_no
-    if _selected_font:
-        st.success(t("font_selected", number=_selected_font, name=_v12_font_display_name(_selected_font)))
-    else:
+    if not _selected_font:
         st.info(t("font_none"))
 
 # 選字型圖卡後回到快速選單與目前選擇提示的位置。
