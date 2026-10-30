@@ -2633,6 +2633,37 @@ html{scroll-behavior:smooth;}
   aspect-ratio:1.15 / 1;
   object-fit:contain;
 }
+/* 貼圖風格／字型總覽入口：沿用各區塊主色，滑過時提高明度。 */
+.st-key-v12_style_gallery_toggle button{
+  background:rgba(245,180,52,.50) !important;
+  border:1px solid rgba(255,220,126,.92) !important;
+  color:#fff9e7 !important;
+  font-weight:820 !important;
+  box-shadow:0 5px 16px rgba(151,101,14,.22) !important;
+  transition:background .18s ease,border-color .18s ease,transform .18s ease,box-shadow .18s ease !important;
+}
+.st-key-v12_style_gallery_toggle button:hover{
+  background:rgba(255,193,47,.82) !important;
+  border-color:#fff1b8 !important;
+  color:#fff !important;
+  transform:translateY(-1px);
+  box-shadow:0 8px 20px rgba(177,119,10,.38) !important;
+}
+.st-key-v10_font_gallery_toggle button{
+  background:rgba(141,103,216,.46) !important;
+  border:1px solid rgba(205,182,255,.82) !important;
+  color:#fbf8ff !important;
+  font-weight:820 !important;
+  box-shadow:0 5px 16px rgba(80,47,153,.23) !important;
+  transition:background .18s ease,border-color .18s ease,transform .18s ease,box-shadow .18s ease !important;
+}
+.st-key-v10_font_gallery_toggle button:hover{
+  background:rgba(158,113,230,.78) !important;
+  border-color:#eee4ff !important;
+  color:#fff !important;
+  transform:translateY(-1px);
+  box-shadow:0 8px 20px rgba(91,51,172,.40) !important;
+}
 .st-key-v12_style_card_grid button{
   min-height:42px !important;
   padding:.34rem .42rem !important;

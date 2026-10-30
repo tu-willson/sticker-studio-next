@@ -58,6 +58,12 @@ class StyleCatalogCurationTests(unittest.TestCase):
         self.assertIn("快速瀏覽 35 種貼圖風格", SOURCE)
         self.assertIn('background:transparent !important;', SOURCE)
 
+    def test_style_and_font_gallery_controls_have_distinct_hover_colors(self):
+        self.assertIn(".st-key-v12_style_gallery_toggle button", SOURCE)
+        self.assertIn("rgba(245,180,52,.50)", SOURCE)
+        self.assertIn(".st-key-v10_font_gallery_toggle button", SOURCE)
+        self.assertIn("rgba(141,103,216,.46)", SOURCE)
+
 
 if __name__ == "__main__":
     unittest.main()
