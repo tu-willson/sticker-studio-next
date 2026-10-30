@@ -19,7 +19,7 @@ class ClassicQuoteAiModeTests(unittest.TestCase):
         self.assertIn('原創致敬式短句', APP)
         self.assertIn('不超過 8 個中文字的短語', APP)
         self.assertIn('可在 16 句中保留 1～3 句', APP)
-        self.assertIn('有把握時才保留少量極短知名口頭禪', EDITOR)
+        self.assertIn('s4-classic-tone-note', EDITOR)
 
     def test_public_figures_can_inspire_topical_language_without_claiming_facts(self):
         self.assertIn('【公共人物／時事語境】', APP)
@@ -27,13 +27,15 @@ class ClassicQuoteAiModeTests(unittest.TestCase):
         self.assertIn('不要產生任何政治人物都會說的制式政治話術', APP)
         self.assertIn('不得宣稱未經確認的近期事件', APP)
         self.assertIn('不得捏造人物原話', APP)
-        self.assertIn('不使用制式政治話術', EDITOR)
+        self.assertIn('語氣模式已停用', EDITOR)
 
     def test_classic_quote_mode_disables_and_ignores_tone_selection(self):
         self.assertIn('tone = "依人物／作品與時事語境自動延伸（不套用語氣模式）"', APP)
         self.assertIn('disabled=True,', APP)
         self.assertIn('依人物／作品與時事語境自動延伸', EDITOR)
         self.assertIn('語氣模式已停用', EDITOR)
+        self.assertIn('s4-classic-tone-note', EDITOR)
+        self.assertIn('v12-classic-tone-note', APP)
 
     def test_browser_event_carries_mode_to_generation(self):
         self.assertIn('"ideaMode": payload.get("aiMode", V12_AI_COPY_STANDARD_MODE)', APP)

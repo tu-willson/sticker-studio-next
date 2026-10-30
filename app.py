@@ -1976,6 +1976,16 @@ div[data-testid="stCheckbox"] label{
   white-space:pre-line;
   text-shadow:0 1px 8px rgba(2,8,22,.48);
 }
+.v12-classic-tone-note{
+  width:min(900px,100%);
+  margin:.42rem auto .8rem;
+  color:#f7f9ff;
+  font-size:.98rem;
+  font-weight:760;
+  letter-spacing:.015em;
+  text-shadow:0 1px 8px rgba(2,8,22,.56);
+  text-align:left;
+}
 .v12-mode-panel-heading{
   width:min(900px,100%);
   margin:1rem auto .5rem;
@@ -11632,7 +11642,10 @@ def _v12_render_ai_copy_assistant():
             disabled=True,
             key="v12_ai_copy_classic_tone_display",
         )
-        st.caption("經典台詞模式會融合人物、角色、作品或公共人物的語境延伸，因此不套用一般語氣模式。")
+        st.markdown(
+            '<div class="v12-classic-tone-note">語氣模式已停用</div>',
+            unsafe_allow_html=True,
+        )
     else:
         _tone = st.selectbox(
             t("ai_tone"),

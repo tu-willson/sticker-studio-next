@@ -55,6 +55,7 @@ EDITOR_CSS = r"""
 .s4-picked-remove:hover { background:#ff5878; transform:scale(1.04); }
 .s4-message { margin-top:9px; color:#ffd4dc; font-size:13px; font-weight:700; }
 .s4-pool-list { margin:8px 0 0; color:#b8cbe0; font-size:13px; line-height:1.55; }
+.s4-classic-tone-note { margin:8px 0 0; color:#f7f9ff; font-size:14px; font-weight:800; line-height:1.55; text-shadow:0 1px 7px rgba(2,8,22,.58); }
 .s4-color-row { display:grid; grid-template-columns:minmax(0,1fr) 105px 28px; gap:6px; margin:7px 0; align-items:center; }
 .s4-remove-color { border:0; border-radius:7px; min-height:32px; background:rgba(255,91,120,.28); color:#fff; font-size:20px; cursor:pointer; }
 .s4-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); column-gap:16px; row-gap:12px; }
@@ -244,7 +245,7 @@ export default function(component) {
             </select>`}
       </div>
       <input class="s4-input s4-topic-input" data-root-field="aiTopic" value="${esc(state.aiTopic)}" placeholder="${state.aiMode === '🎬 經典台詞' ? '例如：周星馳、哈利波特' : '輸入主題，例如：上班、下雨天、生日'}">
-      ${state.aiMode === '🎬 經典台詞' ? '<div class="s4-pool-list">會以原創短句為主；有把握時才保留少量極短知名口頭禪。公共人物只採可辨識的公開語境，不模仿本人發言、不使用制式政治話術，也不捏造人物原話、未確認事件或立場。語氣模式已停用。</div>' : ''}
+      ${state.aiMode === '🎬 經典台詞' ? '<div class="s4-classic-tone-note">語氣模式已停用</div>' : ''}
       <div class="s4-action-row"><button class="s4-small-button" data-action="generate-ai" ${state.aiLoading ? 'disabled' : ''}>${state.aiLoading ? '✨ AI 正在構思中…' : '✨ 產生 16 句貼圖文字'}</button>${state.aiLoading ? `<div class="s4-ai-progress"><div class="s4-ai-progress-label"><span>${esc(state.aiLoadingText || '🧠 正在收集靈感…')}</span><span>${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%</span></div><div class="s4-ai-progress-track"><div class="s4-ai-progress-fill" style="width:${Math.max(0, Math.min(99, Number(state.aiProgress) || 0))}%"></div></div></div>` : ''}</div>
       ${state.aiCandidates.length ? `
         <div class="s4-caption">可勾選任意數量；本批已勾選 ${state.aiSelected.length} 句，待帶入清單 ${state.aiPicked.length} / 8 句。</div>
