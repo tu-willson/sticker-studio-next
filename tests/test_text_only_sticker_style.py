@@ -19,7 +19,9 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
 
     def test_text_only_generation_uses_prompt_only_image_api(self):
         self.assertIn('if not _text_only_generation and not st.session_state.uploaded_image_bytes:', APP)
-        self.assertIn('_generation_client.with_options(timeout=180).images.generate', APP)
+        self.assertIn('_generation_client.with_options(timeout=240).images.generate', APP)
+        self.assertIn('_generation_client.with_options(timeout=240).images.edit', APP)
+        self.assertIn('_elapsed >= 240', APP)
         self.assertIn('每次生成可重新設計字體的排版、配色、材質、層次與抽象裝飾', APP)
 
     def test_enabling_text_only_mode_removes_person_inputs(self):

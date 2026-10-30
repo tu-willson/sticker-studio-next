@@ -13763,7 +13763,6 @@ custom_style = ""
 _style_reference_active = False
 
 if _style_source_mode == V12_STYLE_PRESET_MODE:
-    st.caption(t("style_preset_caption"))
     if style_mode == V12_TEXT_ONLY_STYLE:
         st.session_state["v12_use_text_only_style"] = True
     st.session_state.setdefault(
@@ -15657,7 +15656,7 @@ if st.session_state.get("v11_generation_pending", False):
                 else None
             )
             # 這是使用者可理解的製作階段提示，不假裝是 AI 的精準完成百分比。
-            # 180 秒後逾時；不自動 retry，沿用原本的例外／退款路徑。
+            # 240 秒後逾時；不自動 retry，沿用原本的例外／退款路徑。
             _showtime = st.empty()
             _status = st.empty()
             _started_at = time.monotonic()
@@ -15700,7 +15699,7 @@ if st.session_state.get("v11_generation_pending", False):
                 )
 
             try:
-                # OpenAI SDK timeout：最長等待 180 秒。
+                # OpenAI SDK timeout：最長等待 240 秒。
                 # V12｜透明背景連動測試版
                 # 只有使用者勾選「使用透明背景 PNG」時，才送出 transparent 參數
                 # 與透明 Alpha 強制提示；未勾選時完全不傳 background。
@@ -15715,11 +15714,11 @@ if st.session_state.get("v11_generation_pending", False):
                 if _text_only_generation:
                     # 純文字模式不帶任何人物圖片，改走 images.generate；這樣人物
                     # 照片既不是必填素材，也不可能意外滲入文字貼圖結果。
-                    _image_request = _generation_client.with_options(timeout=180).images.generate
+                    _image_request = _generation_client.with_options(timeout=240).images.generate
                     _stage_two_title = "📝 美術組正在設計這次的文字版式"
                     _stage_two_note = "字型是主角；配色、材質與抽象裝飾會為這次創作隨機發揮。"
                 else:
-                    _image_request = _generation_client.with_options(timeout=180).images.edit
+                    _image_request = _generation_client.with_options(timeout=240).images.edit
                     _image_request_kwargs["image"] = ("person.png", ib, "image/png")
                     _stage_two_title = "🎨 美術組正在調配這次的貼圖畫風"
                     _stage_two_note = "畫面已送進 AI 畫室，正在準備貼圖構圖。"
@@ -15829,20 +15828,20 @@ if st.session_state.get("v11_generation_pending", False):
             except Exception as _gen_exc:
                 _elapsed = time.monotonic() - _started_at
 
-                # 診斷修正版：只有真正等待達 180 秒以上，才顯示逾時。
+                # 診斷修正版：只有真正等待達 240 秒以上，才顯示逾時。
                 # 其他 OpenAI / SDK / 參數 / 權限 / 網路錯誤保留原始例外，
                 # 避免所有錯誤都被誤包裝成 TimeoutError。
-                if _elapsed >= 180:
+                if _elapsed >= 240:
                     _v11_clear_generation_state()
                     raise TimeoutError(
-                        "AI 生成逾時（超過 3 分鐘），請重新操作。"
+                        "AI 生成逾時（超過 4 分鐘），請重新操作。"
                     ) from _gen_exc
 
                 # 在 Streamlit 畫面顯示診斷資訊，方便定位真正原因。
                 st.error(
                     f"❌ AI 生成失敗｜{type(_gen_exc).__name__}: {_gen_exc}"
                 )
-                st.caption(f"診斷資訊：失敗發生於 {_elapsed:.1f} 秒；這不是 3 分鐘逾時。")
+                st.caption(f"診斷資訊：失敗發生於 {_elapsed:.1f} 秒；這不是 4 分鐘逾時。")
                 raise
             st.session_state.generated_4x2_bytes = base64.b64decode(
                 result.data[0].b64_json
