@@ -1963,6 +1963,18 @@ div[data-testid="stCheckbox"] label{
   font-weight:800;
   text-align:left;
 }
+.v12-font-caption{
+  width:min(900px,100%);
+  margin:-.38rem auto .72rem;
+  padding:0 .18rem;
+  color:rgba(250,252,255,.96);
+  font-size:1rem;
+  line-height:1.65;
+  font-weight:680;
+  letter-spacing:.01em;
+  text-align:left;
+  text-shadow:0 1px 8px rgba(2,8,22,.48);
+}
 .v12-mode-panel-heading{
   width:min(900px,100%);
   margin:1rem auto .5rem;
@@ -3164,6 +3176,14 @@ def v10_section(title, accent="#7c4dff"):
 def v10_subsection(title, accent="#4f8cff"):
     st.markdown(
         f'<div class="v10-subsection" style="--accent:{accent}">{title}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def v12_font_caption(text):
+    """Keep font guidance aligned to its matching subsection heading."""
+    st.markdown(
+        f'<div class="v12-font-caption">{html.escape(str(text))}</div>',
         unsafe_allow_html=True,
     )
 
@@ -14911,7 +14931,7 @@ if _sticker_mode == "text":
     st.divider()
     v10_section(t("font_section"), "#8e67d8")
     v10_subsection(t("font_outline"), "#8e67d8")
-    st.caption(t("font_outline_caption"))
+    v12_font_caption(t("font_outline_caption"))
     _saved_text_style = str(st.session_state.get("v8_text_style", "") or "")
     if _saved_text_style not in V8_TEXT_STYLE_OPTIONS:
         st.session_state["v8_text_style"] = V8_TEXT_STYLE_LEGACY_MAP.get(
@@ -14944,7 +14964,7 @@ if "v12_font_quick_pick" not in st.session_state:
 
 _quick_font_choice = "— 快速選擇字型｜可直接輸入數字 —"
 if _sticker_mode == "text":
-    st.caption(t("font_pick_caption"))
+    v12_font_caption(t("font_pick_caption"))
     st.markdown('<div id="v10-font-result-anchor" style="scroll-margin-top: 72px;"></div>', unsafe_allow_html=True)
     _quick_font_choice = st.selectbox(
         t("font_quick_pick"),

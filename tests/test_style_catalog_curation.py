@@ -64,6 +64,11 @@ class StyleCatalogCurationTests(unittest.TestCase):
         self.assertIn(".st-key-v10_font_gallery_toggle button", SOURCE)
         self.assertIn("rgba(141,103,216,.46)", SOURCE)
 
+    def test_font_guidance_is_aligned_to_each_font_subsection(self):
+        self.assertIn(".v12-font-caption", SOURCE)
+        self.assertIn('v12_font_caption(t("font_outline_caption"))', SOURCE)
+        self.assertIn('v12_font_caption(t("font_pick_caption"))', SOURCE)
+
 
 if __name__ == "__main__":
     unittest.main()
