@@ -1198,18 +1198,14 @@ st.markdown("""
   font-weight:760;
   line-height:1.65;
 }
-.st-key-v12_style_mode_toggles [data-testid="stImage"]{
-  display:flex;
-  justify-content:center;
-  margin:.18rem auto 0 !important;
-}
-.st-key-v12_style_mode_toggles [data-testid="stImage"] img{
-  width:94px !important;
-  max-width:94px !important;
-  border:0 !important;
-  border-radius:0 !important;
-  background:transparent !important;
-  box-shadow:none !important;
+.st-key-v12_use_text_only_style [data-testid="stCheckbox"] label p img,
+.st-key-v12_use_text_person_style [data-testid="stCheckbox"] label p img{
+  width:34px !important;
+  height:34px !important;
+  max-height:34px !important;
+  margin-right:.32rem !important;
+  object-fit:contain;
+  vertical-align:middle;
 }
 /* 「存入作品｜市集」是獨立於 ZIP 打包的雲端保存動作。 */
 .st-key-v12_basket_save_to_library button{
@@ -6782,6 +6778,16 @@ V12_STYLE_REFERENCE_MODE = "畫風參考上傳"
 V8_STYLE_CUSTOM_OPTION = "⭐ 自定義風格"
 V12_TEXT_ONLY_STYLE = "📝 純文字創意貼圖"
 V12_TEXT_PERSON_STYLE_LABEL = "👤 文字搭人物（字大人小）"
+V12_TEXT_ONLY_STYLE_CHECKBOX_LABEL = (
+    "![純文字設計範例](https://raw.githubusercontent.com/tu-willson/"
+    "sticker-studio-next/main/static/style_examples/text-only.png) "
+    "純文字設計（無人物）"
+)
+V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL = (
+    "![文字搭人物範例](https://raw.githubusercontent.com/tu-willson/"
+    "sticker-studio-next/main/static/style_examples/"
+    "text-person-large-text-small-person.png) 文字搭人物（字大人小）"
+)
 V12_STYLE_REFERENCE_STRENGTHS = ("柔和融入", "強烈融入")
 V12_TEXT_ONLY_VARIATION_DIRECTIONS = (
     "以大膽不對稱字距、傾斜角度與高低錯落排版，搭配少量活潑的抽象線條點綴",
@@ -13431,11 +13437,10 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
         )
         with _text_only_toggle_col:
             _use_text_only_style = st.checkbox(
-                "📝 純文字設計（無人物）",
+                V12_TEXT_ONLY_STYLE_CHECKBOX_LABEL,
                 key="v12_use_text_only_style",
                 on_change=_v12_text_only_style_toggle_changed,
             )
-            st.image("static/style_examples/text-only.png", width=94)
         with _custom_toggle_col:
             _use_custom_style = st.checkbox(
                 t("custom_style_enable"),
@@ -13444,13 +13449,9 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
             )
         with _text_person_toggle_col:
             _use_text_person_style = st.checkbox(
-                V12_TEXT_PERSON_STYLE_LABEL,
+                V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL,
                 key="v12_use_text_person_style",
                 on_change=_v12_text_person_style_toggle_changed,
-            )
-            st.image(
-                "static/style_examples/text-person-large-text-small-person.png",
-                width=94,
             )
     st.markdown(
         '<div class="v12-text-led-style-note">'

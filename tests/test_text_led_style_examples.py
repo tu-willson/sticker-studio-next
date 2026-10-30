@@ -17,12 +17,12 @@ class TextLedStyleExamplesTests(unittest.TestCase):
 
     def test_creation_page_displays_both_examples(self):
         self.assertIn('static/style_examples/text-only.png', APP)
-        self.assertIn(
-            'static/style_examples/text-person-large-text-small-person.png', APP
-        )
-        self.assertIn('st.image("static/style_examples/text-only.png", width=94)', APP)
-        self.assertIn('width=94,', APP)
-        self.assertIn('background:transparent !important;', APP)
+        self.assertIn('static/style_examples/', APP)
+        self.assertIn('text-person-large-text-small-person.png', APP)
+        self.assertIn("V12_TEXT_ONLY_STYLE_CHECKBOX_LABEL", APP)
+        self.assertIn("V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL", APP)
+        self.assertIn('height:34px !important;', APP)
+        self.assertNotIn('st.image("static/style_examples/text-only.png", width=94)', APP)
 
 
 if __name__ == "__main__":
