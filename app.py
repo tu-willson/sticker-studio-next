@@ -2611,6 +2611,49 @@ html{scroll-behavior:smooth;}
     font-size:.78rem;
   }
 }
+
+/* V12｜貼圖風格縮圖快速瀏覽：桌機五欄、手機雙欄，使用原生按鈕確保可點選。 */
+.v12-style-gallery-note{
+  margin:.55rem 0 .7rem;
+  padding:.55rem .75rem;
+  border:1px solid rgba(139,203,255,.36);
+  border-radius:10px;
+  background:rgba(25,62,104,.48);
+  color:#edf7ff;
+  font-size:.9rem;
+  font-weight:720;
+}
+.st-key-v12_style_card_grid [data-testid="stImage"]{
+  border:1px solid rgba(155,190,234,.35);
+  border-radius:11px;
+  overflow:hidden;
+  background:rgba(255,255,255,.94);
+}
+.st-key-v12_style_card_grid [data-testid="stImage"] img{
+  aspect-ratio:1.15 / 1;
+  object-fit:contain;
+}
+.st-key-v12_style_card_grid button{
+  min-height:42px !important;
+  padding:.34rem .42rem !important;
+  white-space:normal !important;
+  line-height:1.25 !important;
+  font-size:.83rem !important;
+  font-weight:800 !important;
+}
+@media (max-width:640px){
+  .st-key-v12_style_card_grid [data-testid="stHorizontalBlock"]{
+    flex-direction:row !important;
+    flex-wrap:wrap !important;
+    gap:9px !important;
+    align-items:flex-start !important;
+  }
+  .st-key-v12_style_card_grid [data-testid="stColumn"]{
+    flex:0 0 calc(50% - 4.5px) !important;
+    width:calc(50% - 4.5px) !important;
+    min-width:0 !important;
+  }
+}
 @media (max-width:800px){
   /* 手機瀏覽器底部工具列較高，快捷鍵往上避開系統導覽列。 */
   .v12-quick-nav{
@@ -6718,6 +6761,10 @@ V12_RETIRED_STYLE_FALLBACKS = {
 # 內建風格除名稱外，另提供可辨識的視覺硬規則。這些規則放在通用的
 # 4×2 貼圖結構指令之後，避免風格名稱被 AI 自行收斂成相同的可愛 3D 白底。
 V12_STYLE_PROMPT_GUIDES = {
+    'Q版收藏公仔': (
+        '製作精緻 Q 版收藏公仔：頭大身小、乾淨比例、樹脂或乙烯公仔的均勻上色、展示底座與收藏品質感；'
+        '輪廓清楚、表面微亮但不玻璃化。不要使用毛絨纖維、手捏黏土痕、包裝盒或電影寫實光影。'
+    ),
     '軟陶公仔': (
         '使用手工聚合軟陶公仔質感：圓潤厚實、低反光霧面表面、可見極細微的手捏痕與壓塑接縫；'
         '配色克制溫暖。不要做成亮面樹脂、盲盒乙烯公仔、毛絨玩偶或紙纖維材質。'
@@ -6729,6 +6776,34 @@ V12_STYLE_PROMPT_GUIDES = {
     '黏土定格動畫風': (
         '呈現定格動畫電影畫面：手工黏土角色、實體微型場景、可見逐格動畫的手作紋理與戲劇化側逆光；'
         '每格像獨立停格鏡頭，有簡約實體道具與景深。不要做成單純白底公仔商品照。'
+    ),
+    '木雕玩具': (
+        '使用溫暖木雕玩具質感：清楚可見木紋、切削刀痕、圓角榫接與原木棕色層次；'
+        '造型像手工雕刻的實體木製玩具。禁止塑膠亮面、毛絨、紙纖維或玻璃透明材質。'
+    ),
+    '微縮場景': (
+        '把角色放入可愛的微縮模型場景：小比例實體建築、迷你家具或道具、盆景般的精緻配置、淺景深；'
+        '每格都像收藏級立體沙盤。不要變成單一角色白底肖像或玩具包裝。'
+    ),
+    '療癒系Cute風': (
+        '採柔軟療癒的 Cute 視覺：圓潤比例、雲朵般柔光、粉彩奶油色、溫和腮紅與愛心／星點小特效；'
+        '畫面乾淨溫暖、情緒安撫。不要做成硬邊漫畫、極簡細線或強烈街頭配色。'
+    ),
+    '手繪水彩': (
+        '採真正手繪水彩：半透明顏料暈染、紙張纖維、濕邊、顏色自然滲開與不規則筆觸；'
+        '輪廓柔和但人物與文字仍需清楚。禁止塑膠 3D 高光、平滑向量色塊或像素邊緣。'
+    ),
+    '色鉛筆手繪': (
+        '採色鉛筆手繪：可見細密方向性筆觸、疊色顆粒、紙紋、柔和交叉排線與略帶手稿感的輪廓；'
+        '禁止水彩暈染、蠟筆塊狀筆觸、光滑 3D 或純平面向量風。'
+    ),
+    '粉彩蠟筆': (
+        '採粉彩蠟筆插畫：厚實粉霧顆粒、蠟筆摩擦紋、色塊疊壓、童趣粗筆觸與柔和不均勻邊緣；'
+        '禁止細緻色鉛筆線條、透明水彩效果或亮面材質。'
+    ),
+    '扁平插畫': (
+        '採現代扁平插畫：清楚幾何造型、純淨色塊、極少漸層、簡化陰影與一致粗細輪廓；'
+        '以 2D 圖形設計為主。禁止立體公仔、手作材質、紙張筆觸與寫實光影。'
     ),
     '日系可愛插畫': (
         '採日系手帳插畫語言：柔和粉彩、細緻鉛筆或代針筆輪廓、手繪小紋理、溫暖留白與小型手帳裝飾；'
@@ -6742,10 +6817,90 @@ V12_STYLE_PROMPT_GUIDES = {
         '做成明確的刀模貼紙插畫：角色與文字外圍必有連續厚白邊、深色外輪廓、飽和配色與貼紙裁切感；'
         '每格像可單獨剝離的貼紙。不要採極簡細線、日系手帳紙感或 3D 公仔渲染。'
     ),
+    '復古漫畫': (
+        '採復古印刷漫畫：米黃色舊紙、半色調網點、褪色墨色、粗黑輪廓與老式對話框；'
+        '畫面像中期印刷漫畫頁的一格。禁止現代霓虹、亮面 3D、細緻日系手帳風。'
+    ),
+    '美式漫畫': (
+        '採經典美式超級英雄漫畫：粗黑外框、飽和原色、放射速度線、爆炸形狀與高張力動態姿勢；'
+        '色彩對比鮮明。禁止柔和水彩、日系細線、復古褪色紙張或立體玩具渲染。'
+    ),
+    '日系漫畫': (
+        '採日系漫畫視覺：乾淨墨線、網點陰影、誇張表情、情緒速度線與留白節奏；'
+        '以黑白漫畫語言為主，可少量點綴單一亮色。禁止美式英雄配色、復古黃紙或 3D 材質。'
+    ),
+    '像素藝術': (
+        '採純像素藝術：每個輪廓由明顯方格像素構成、有限色票、硬邊陰影與小型精靈圖語言；'
+        '禁止抗鋸齒、柔焦、平滑曲線、3D 體積光或寫實筆觸。'
+    ),
+    '羊毛氈手作': (
+        '採羊毛氈手作：短絨纖維、蓬鬆毛邊、針氈壓實的層次與柔暖手感；'
+        '各部位可見纖維方向與立體堆疊。禁止光滑塑膠、軟陶、紙黏土或真實長毛動物攝影感。'
+    ),
+    '紙雕立體': (
+        '採多層紙雕：明確紙張切割邊、前後景分層、壓紙浮雕深度、色紙材質與柔和投影；'
+        '每格像立體紙藝卡片。禁止黏土、木雕、毛絨或平面手繪筆觸。'
+    ),
     '復古電動遊戲風': (
         '採 8-bit 與 16-bit 復古街機／平台遊戲視覺：清楚可見的方格像素、鋸齒邊緣、有限而高對比的色票、'
         '大型精靈角色、像素化平台與街機 HUD 裝飾；可少量加入 CRT 掃描線與磷光暈。'
         '所有元素必須是像素繪製，禁止平滑 3D、寫實攝影、柔焦水彩或現代向量插畫。'
+    ),
+    '玻璃質感3D': (
+        '採半透明玻璃 3D 雕塑：明顯折射、透光邊緣、彩色玻璃高光與乾淨晶瑩的厚度；'
+        '人物與文字仍需清楚辨識。禁止霧面軟陶、毛絨、木紋或不透明塑膠公仔。'
+    ),
+    '玩具盒收藏風': (
+        '呈現正式玩具盒收藏展示：透明展示窗、包裝盒彩繪、內襯、配件格與零售收藏品陳列感；'
+        '角色是盒中主角。不要做成盲抽底座、單純白底公仔或寫實電影劇照。'
+    ),
+    '盲盒公仔風': (
+        '採盲盒收藏公仔：圓潤簡化比例、驚喜拆盒感、色彩底座、可愛小配件與玩具設計語言；'
+        '重點是單一可收藏角色而非完整包裝盒。禁止玩具盒展示窗或手工黏土紋理。'
+    ),
+    '電影級3D': (
+        '採電影級 3D 視覺：細緻材質、明確主光與輪廓光、戲劇化景深、鏡頭感構圖與高品質光影；'
+        '保留貼圖清楚可讀性。禁止白底商品照、Q 版玩具比例或扁平插畫。'
+    ),
+    '低多邊形Low Poly': (
+        '採 Low Poly 幾何模型：可見大型平面多邊形、稜角切面、分面光影與簡化幾何輪廓；'
+        '禁止平滑曲面、毛絨細節、手繪筆觸或真實照片質感。'
+    ),
+    'Dreamy夢幻療癒': (
+        '採夢幻療癒氣氛：雲朵、月光、星點、柔焦光暈、粉藍粉紫漸層與漂浮感；'
+        '畫面安靜輕盈且有睡前童話感。禁止街頭高飽和、硬邊漫畫或寫實電影光。'
+    ),
+    '童話繪本風': (
+        '採童話繪本插畫：故事書般構圖、自然花草與小道具、溫暖手繪筆觸、柔和邊框與敘事感；'
+        '每格像繪本中的獨立插圖。禁止極簡留白、像素化或 3D 商品渲染。'
+    ),
+    '森林療癒風': (
+        '採森林療癒場景：苔蘚、樹葉、木質、野花、柔和綠色自然光與靜謐環抱感；'
+        '背景元素只能輕量襯托人物與文字。禁止童話城堡、雲端夢境或都市潮流元素。'
+    ),
+    '極簡精品風': (
+        '採極簡精品視覺：留白充足、低飽和中性色、精準細線、克制金屬小點綴與乾淨高級的陳列感；'
+        '構圖稀疏而有秩序。禁止可愛雜訊、過多愛心星星、粗黑漫畫線或大量道具。'
+    ),
+    '復古80年代': (
+        '採 1980 年代復古流行：桃紅與電藍霓虹、合成器風漸層、網格地平線、幾何閃電與螢光運動裝；'
+        '畫面有鮮明的 synthwave 能量。禁止 90 年代童趣玩具、像素街機或褪色漫畫紙感。'
+    ),
+    '復古90年代': (
+        '採 1990 年代流行文化：亮色幾何圖形、牛仔與運動休閒元素、CD、掌上遊戲機、貼紙塗鴉與俏皮構圖；'
+        '禁止 80 年代霓虹網格、現代極簡或 8-bit 像素畫面。'
+    ),
+    '街頭潮流插畫': (
+        '採街頭潮流插畫：噴漆筆觸、塗鴉字、粗黑輪廓、鮮明撞色、滑板／嘻哈節奏與不規則貼紙層次；'
+        '保留俐落的當代潮流感。禁止療癒粉彩、精品留白或傳統漫畫網點。'
+    ),
+    'Emoji表情貼風': (
+        '採 Emoji 表情貼圖：大頭近景、眼睛嘴型與臉頰情緒特別明顯、表情一眼可讀、少量符號特效；'
+        '讓每格情緒差異強烈。禁止複雜場景、小比例全身人物或訊息泡泡介面。'
+    ),
+    'LINE訊息貼圖風': (
+        '採即時訊息貼圖語言：簡潔可愛角色、清楚大字、乾淨白底或透明感留白、對話回應般的直接動作；'
+        '每格要能在聊天視窗縮小後仍一眼看懂。禁止複雜背景、電影光影與介面截圖。'
     ),
 }
 V8_DEFAULT_CONTENT = ['早安', '晚安', '謝謝', '收到', 'OK', '加油', '辛苦了', '太棒了']
@@ -6785,6 +6940,48 @@ V8_TEXT_STYLE_LEGACY_MAP = {
 }
 V8_TEXT_EFFECT_VALUES = [f"{i:03d}｜{V8_TEXT_EFFECT_CATALOG[i]}" for i in range(1,126)]
 V8_FONT_PREVIEW_DIR = Path(__file__).with_name("font_reference") / "previews"
+V12_STYLE_PREVIEW_DIR = Path(__file__).with_name("static") / "style_previews"
+V12_STYLE_PREVIEW_CATALOG = {
+    'Q版收藏公仔': ('🎎 3D／公仔', 'style_01.png'),
+    '軟陶公仔': ('🎎 3D／公仔', 'style_02.png'),
+    '木雕玩具': ('🧶 手作材質', 'style_03.png'),
+    '微縮場景': ('🎎 3D／公仔', 'style_04.png'),
+    '療癒系Cute風': ('🌿 療癒／情境', 'style_05.png'),
+    '日系可愛插畫': ('🎨 插畫／漫畫', 'style_06.png'),
+    '韓系簡約插畫': ('🎨 插畫／漫畫', 'style_07.png'),
+    '手繪水彩': ('🎨 插畫／漫畫', 'style_08.png'),
+    '色鉛筆手繪': ('🎨 插畫／漫畫', 'style_09.png'),
+    '粉彩蠟筆': ('🎨 插畫／漫畫', 'style_10.png'),
+    '扁平插畫': ('🎨 插畫／漫畫', 'style_11.png'),
+    '貼紙插畫風': ('🎨 插畫／漫畫', 'style_12.png'),
+    '復古漫畫': ('🎨 插畫／漫畫', 'style_13.png'),
+    '美式漫畫': ('🎨 插畫／漫畫', 'style_14.png'),
+    '日系漫畫': ('🎨 插畫／漫畫', 'style_15.png'),
+    '像素藝術': ('🕹️ 復古／遊戲', 'style_16.png'),
+    '羊毛氈手作': ('🧶 手作材質', 'style_17.png'),
+    '紙雕立體': ('🧶 手作材質', 'style_18.png'),
+    '紙黏土手作': ('🧶 手作材質', 'style_19.png'),
+    '玻璃質感3D': ('🎎 3D／公仔', 'style_20.png'),
+    '玩具盒收藏風': ('🎎 3D／公仔', 'style_21.png'),
+    '盲盒公仔風': ('🎎 3D／公仔', 'style_22.png'),
+    '電影級3D': ('🎎 3D／公仔', 'style_23.png'),
+    '黏土定格動畫風': ('🧶 手作材質', 'style_24.png'),
+    '低多邊形Low Poly': ('🎎 3D／公仔', 'style_25.png'),
+    'Dreamy夢幻療癒': ('🌿 療癒／情境', 'style_26.png'),
+    '童話繪本風': ('🌿 療癒／情境', 'style_27.png'),
+    '森林療癒風': ('🌿 療癒／情境', 'style_28.png'),
+    '極簡精品風': ('🌿 療癒／情境', 'style_29.png'),
+    '復古80年代': ('🕹️ 復古／遊戲', 'style_30.png'),
+    '復古90年代': ('🕹️ 復古／遊戲', 'style_31.png'),
+    '復古電動遊戲風': ('🕹️ 復古／遊戲', 'style_32.png'),
+    '街頭潮流插畫': ('🎨 插畫／漫畫', 'style_33.png'),
+    'Emoji表情貼風': ('💬 貼圖／訊息', 'style_34.png'),
+    'LINE訊息貼圖風': ('💬 貼圖／訊息', 'style_35.png'),
+}
+V12_STYLE_PREVIEW_CATEGORIES = (
+    '全部', '🎎 3D／公仔', '🧶 手作材質', '🎨 插畫／漫畫',
+    '🕹️ 復古／遊戲', '🌿 療癒／情境', '💬 貼圖／訊息',
+)
 
 POPULAR_STYLES = [
     "↓ 請選擇風格","Q版收藏公仔","軟陶公仔","復古電動遊戲風",
@@ -13555,6 +13752,119 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
             key="v10_style_mode",
         )
         st.session_state["v12_last_preset_style_mode"] = style_mode
+
+        # 縮圖總覽與字型圖卡採相同模式：平常保持精簡，需要時再展開瀏覽。
+        st.session_state.setdefault("v12_style_gallery_open", False)
+        st.session_state.setdefault("v12_style_gallery_category", "全部")
+        st.session_state.setdefault("v12_style_gallery_page", 1)
+        st.button(
+            "🖼️ 快速瀏覽 35 種貼圖風格"
+            if not st.session_state["v12_style_gallery_open"]
+            else "收起貼圖風格縮圖總覽",
+            key="v12_style_gallery_toggle",
+            use_container_width=True,
+            on_click=_v12_set_session_state_callback,
+            args=("v12_style_gallery_open", not st.session_state["v12_style_gallery_open"]),
+        )
+        if st.session_state["v12_style_gallery_open"]:
+            st.markdown(
+                '<div class="v12-style-gallery-note">'
+                '點選縮圖下方的風格名稱即可套用。縮圖為範例效果；實際生成仍會依人物照片、文字與動作重新創作。'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            _style_gallery_category = st.selectbox(
+                "篩選風格類型",
+                V12_STYLE_PREVIEW_CATEGORIES,
+                key="v12_style_gallery_category",
+            )
+            if st.session_state.get("v12_style_gallery_last_category") != _style_gallery_category:
+                st.session_state["v12_style_gallery_last_category"] = _style_gallery_category
+                st.session_state["v12_style_gallery_page"] = 1
+            _gallery_styles = [
+                _style_name for _style_name in _v8_style_items
+                if _style_name in V12_STYLE_PREVIEW_CATALOG
+                and (
+                    _style_gallery_category == "全部"
+                    or V12_STYLE_PREVIEW_CATALOG[_style_name][0] == _style_gallery_category
+                )
+            ]
+            _gallery_per_page = 10
+            _gallery_total_pages = max(
+                1, (_gallery_styles.__len__() + _gallery_per_page - 1) // _gallery_per_page
+            )
+            _gallery_page = max(
+                1,
+                min(int(st.session_state.get("v12_style_gallery_page", 1)), _gallery_total_pages),
+            )
+            st.session_state["v12_style_gallery_page"] = _gallery_page
+            _gallery_start = (_gallery_page - 1) * _gallery_per_page
+            _gallery_current_styles = _gallery_styles[
+                _gallery_start:_gallery_start + _gallery_per_page
+            ]
+            st.caption(
+                f"{_style_gallery_category}｜顯示 {_gallery_start + 1}～"
+                f"{_gallery_start + len(_gallery_current_styles)} ／ {len(_gallery_styles)} 種"
+            )
+
+            def _v12_pick_style_from_card(style_name):
+                st.session_state["v10_style_mode"] = style_name
+                st.session_state["v12_last_preset_style_mode"] = style_name
+                st.session_state["v12_style_gallery_open"] = False
+
+            with st.container(key="v12_style_card_grid"):
+                _style_card_cols = st.columns(5)
+                for _style_card_index, _style_card_name in enumerate(_gallery_current_styles):
+                    _style_card_category, _style_card_asset = V12_STYLE_PREVIEW_CATALOG[
+                        _style_card_name
+                    ]
+                    _style_card_path = V12_STYLE_PREVIEW_DIR / _style_card_asset
+                    with _style_card_cols[_style_card_index % 5]:
+                        if _style_card_path.exists():
+                            st.image(str(_style_card_path), use_container_width=True)
+                        else:
+                            st.info("縮圖準備中")
+                        st.button(
+                            ("✅ " if style_mode == _style_card_name else "")
+                            + _style_card_name,
+                            key=f"v12_style_card_pick_{_style_card_name}",
+                            use_container_width=True,
+                            type="primary" if style_mode == _style_card_name else "secondary",
+                            on_click=_v12_pick_style_from_card,
+                            args=(_style_card_name,),
+                        )
+
+            def _v12_change_style_gallery_page(delta):
+                current = int(st.session_state.get("v12_style_gallery_page", 1))
+                st.session_state["v12_style_gallery_page"] = max(
+                    1, min(_gallery_total_pages, current + delta)
+                )
+
+            _style_prev_col, _style_page_col, _style_next_col = st.columns([1, 1.2, 1])
+            with _style_prev_col:
+                st.button(
+                    "⬅️ 上一頁",
+                    key="v12_style_gallery_prev",
+                    use_container_width=True,
+                    disabled=_gallery_page <= 1,
+                    on_click=_v12_change_style_gallery_page,
+                    args=(-1,),
+                )
+            with _style_page_col:
+                st.markdown(
+                    f'<div style="text-align:center;padding:.55rem 0;font-weight:800;">'
+                    f'第 {_gallery_page} / {_gallery_total_pages} 頁</div>',
+                    unsafe_allow_html=True,
+                )
+            with _style_next_col:
+                st.button(
+                    "下一頁 ➡️",
+                    key="v12_style_gallery_next",
+                    use_container_width=True,
+                    disabled=_gallery_page >= _gallery_total_pages,
+                    on_click=_v12_change_style_gallery_page,
+                    args=(1,),
+                )
 
     if _use_text_only_style:
         st.info(

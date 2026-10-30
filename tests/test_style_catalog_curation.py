@@ -38,13 +38,24 @@ class StyleCatalogCurationTests(unittest.TestCase):
 
     def test_close_style_groups_and_retro_game_have_prompt_guides(self):
         guides = _literal_assignment("V12_STYLE_PROMPT_GUIDES")
-        expected = {
-            "軟陶公仔", "紙黏土手作", "黏土定格動畫風",
-            "日系可愛插畫", "韓系簡約插畫", "貼紙插畫風",
-            "復古電動遊戲風",
+        selectable = {
+            style for style in _literal_assignment("V8_STYLES")
+            if not style.startswith("⭐")
         }
-        self.assertTrue(expected.issubset(guides))
+        self.assertEqual(set(guides), selectable)
         self.assertIn("【此風格強化規則】", SOURCE)
+
+    def test_every_selectable_style_has_a_preview_asset_and_category(self):
+        styles = {
+            style for style in _literal_assignment("V8_STYLES")
+            if not style.startswith("⭐")
+        }
+        catalog = _literal_assignment("V12_STYLE_PREVIEW_CATALOG")
+        self.assertEqual(set(catalog), styles)
+        preview_dir = ROOT / "static" / "style_previews"
+        for _category, asset in catalog.values():
+            self.assertTrue((preview_dir / asset).is_file(), asset)
+        self.assertIn("快速瀏覽 35 種貼圖風格", SOURCE)
 
 
 if __name__ == "__main__":
