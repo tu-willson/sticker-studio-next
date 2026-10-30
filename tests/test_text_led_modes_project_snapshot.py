@@ -22,6 +22,14 @@ class TextLedModesProjectSnapshotTests(unittest.TestCase):
         self.assertIn('"text_only_style": bool(snapshot.get("text_only_style", False))', APP)
         self.assertIn('"text_person_style": bool(snapshot.get("text_person_style", False))', APP)
 
+    def test_project_name_inputs_are_mirrored_across_fragment_reruns(self):
+        self.assertIn('def _v12_project_name_top_on_change()', APP)
+        self.assertIn('st.session_state["v12_project_name_input"] = value', APP)
+        self.assertIn('st.session_state["v12_project_name_top_input"] = value', APP)
+        self.assertIn('const findInputs = () =>', APP)
+        self.assertIn('const mirror = (source, value) =>', APP)
+        self.assertIn('input.addEventListener(\'input\', saveAndMirror)', APP)
+
 
 if __name__ == "__main__":
     unittest.main()

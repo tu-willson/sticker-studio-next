@@ -9038,13 +9038,13 @@ def _v12_preserve_project_name_before_basket_choice():
 
 
 def _v12_render_project_name_browser_safety_net():
-    """Keep an in-progress title through a nearby fragment widget interaction.
+    """Keep both visible project-name fields mirrored through fragment reruns.
 
     Streamlit only sends a text input to Python when that widget change has
-    been committed.  A quick click on MAIN/TAB can otherwise replace the
-    browser DOM before its pending value reaches Session State.  This tiny
-    first-party bridge stores each keystroke per project in browser storage and
-    restores it to the native Streamlit input after the fragment redraws.
+    been committed. A quick click on MAIN/TAB can otherwise replace the browser
+    DOM before its pending value reaches Session State. This small first-party
+    bridge keeps both native inputs visually in sync on every keystroke, while
+    Python callbacks still persist the shared value when the edit is committed.
     """
     project_id = str(_v12_current_project().get("project_id", "") or "new")
     storage_key = f"v12-project-title-draft:{project_id}"
@@ -9057,28 +9057,44 @@ def _v12_render_project_name_browser_safety_net():
           const label = {json.dumps(label)};
           const parentDocument = window.parent && window.parent.document;
           if (!parentDocument) return;
-          const findInput = () => Array.from(parentDocument.querySelectorAll('input'))
-            .filter((element) => element.getAttribute('aria-label') === label)
-            .at(-1);
-          const writeNativeValue = (element, value) => {{
+          const findInputs = () => Array.from(parentDocument.querySelectorAll('input'))
+            .filter((element) => element.getAttribute('aria-label') === label);
+          const writeNativeValue = (element, value, notify = false) => {{
             const setter = Object.getOwnPropertyDescriptor(
               window.parent.HTMLInputElement.prototype, 'value'
             )?.set;
             if (!setter) return;
             setter.call(element, value);
-            element.dispatchEvent(new window.parent.Event('input', {{ bubbles: true }}));
-            element.dispatchEvent(new window.parent.Event('change', {{ bubbles: true }}));
+            if (notify) {{
+              element.dispatchEvent(new window.parent.Event('input', {{ bubbles: true }}));
+              element.dispatchEvent(new window.parent.Event('change', {{ bubbles: true }}));
+            }}
+          }};
+          const mirror = (source, value) => {{
+            findInputs().forEach((input) => {{
+              if (input !== source && input.value !== value) writeNativeValue(input, value);
+            }});
           }};
           const connect = () => {{
-            const input = findInput();
-            if (!input || input.dataset.v12ProjectTitleBridge === storageKey) return;
-            input.dataset.v12ProjectTitleBridge = storageKey;
+            const inputs = findInputs();
+            if (!inputs.length) return;
             const stored = window.parent.localStorage.getItem(storageKey);
-            if (stored && !input.value) writeNativeValue(input, stored);
-            const save = () => window.parent.localStorage.setItem(storageKey, input.value || '');
-            input.addEventListener('input', save);
-            input.addEventListener('change', save);
-            input.addEventListener('blur', save);
+            inputs.forEach((input) => {{
+              if (input.dataset.v12ProjectTitleBridge === storageKey) return;
+              input.dataset.v12ProjectTitleBridge = storageKey;
+              if (stored && !input.value) {{
+                writeNativeValue(input, stored, true);
+                mirror(input, stored);
+              }}
+              const saveAndMirror = () => {{
+                const value = input.value || '';
+                window.parent.localStorage.setItem(storageKey, value);
+                mirror(input, value);
+              }};
+              input.addEventListener('input', saveAndMirror);
+              input.addEventListener('change', saveAndMirror);
+              input.addEventListener('blur', saveAndMirror);
+            }});
           }};
           connect();
           [80, 260, 700].forEach((delay) => window.setTimeout(connect, delay));
