@@ -1200,9 +1200,9 @@ st.markdown("""
 }
 .st-key-v12_use_text_only_style [data-testid="stCheckbox"] label p img,
 .st-key-v12_use_text_person_style [data-testid="stCheckbox"] label p img{
-  width:34px !important;
-  height:34px !important;
-  max-height:34px !important;
+  width:51px !important;
+  height:51px !important;
+  max-height:51px !important;
   margin-right:.32rem !important;
   object-fit:contain;
   vertical-align:middle;
@@ -13433,7 +13433,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
     # 都由文字主導；自定義風格可單獨使用，也可搭配文字搭人物。
     with st.container(key="v12_style_mode_toggles"):
         _text_only_toggle_col, _custom_toggle_col, _text_person_toggle_col = st.columns(
-            [1, 1, 1], gap="medium"
+            [1.05, 0.75, 1.6], gap="small"
         )
         with _text_only_toggle_col:
             _use_text_only_style = st.checkbox(
