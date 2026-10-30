@@ -70,6 +70,16 @@ class StyleCatalogCurationTests(unittest.TestCase):
         self.assertIn('v12_font_caption(t("font_outline_caption"))', SOURCE)
         self.assertIn('v12_font_caption(t("font_pick_caption"))', SOURCE)
 
+    def test_main_step_guidance_is_aligned_to_its_section_title(self):
+        self.assertIn(".v12-section-caption", SOURCE)
+        for translation_key in (
+            "photo_intro",
+            "style_intro",
+            "features_intro",
+            "content_intro",
+        ):
+            self.assertIn(f'v12_section_caption(t("{translation_key}"))', SOURCE)
+
 
 if __name__ == "__main__":
     unittest.main()

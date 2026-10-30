@@ -1963,6 +1963,18 @@ div[data-testid="stCheckbox"] label{
   font-weight:800;
   text-align:left;
 }
+.v12-section-caption{
+  width:min(1050px,100%);
+  margin:-.35rem auto .95rem;
+  padding:0 .18rem;
+  color:rgba(250,252,255,.96);
+  font-size:1rem;
+  line-height:1.65;
+  font-weight:680;
+  letter-spacing:.01em;
+  text-align:left;
+  text-shadow:0 1px 8px rgba(2,8,22,.48);
+}
 .v12-font-caption{
   width:min(900px,100%);
   margin:-.38rem auto .72rem;
@@ -3187,6 +3199,14 @@ def v10_section(title, accent="#7c4dff"):
 def v10_subsection(title, accent="#4f8cff"):
     st.markdown(
         f'<div class="v10-subsection" style="--accent:{accent}">{title}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def v12_section_caption(text):
+    """Keep main-step guidance aligned with the matching wide section title."""
+    st.markdown(
+        f'<div class="v12-section-caption">{html.escape(str(text))}</div>',
         unsafe_allow_html=True,
     )
 
@@ -13618,7 +13638,7 @@ st.markdown(f'<div class="v11-section-tip">{t("journey_tip")}</div>', unsafe_all
 st.divider()
 
 v10_section(t("section_person"), "#ff5c7a")
-st.caption(t("photo_intro"))
+v12_section_caption(t("photo_intro"))
 _photo_hint_col, _clear_creation_col = st.columns([6, 1.45], vertical_alignment="center")
 with _clear_creation_col:
     st.button(
@@ -13678,7 +13698,7 @@ _v12_update_navigation_safe_creation_draft(
 st.divider()
 
 v10_section(t("section_style"), "#ff9f43")
-st.caption(t("style_intro"))
+v12_section_caption(t("style_intro"))
 st.session_state.setdefault("v12_style_source_mode", V12_STYLE_PRESET_MODE)
 
 def _v12_set_style_source_mode(mode):
@@ -14203,7 +14223,7 @@ _v12_update_navigation_safe_creation_draft(
 )
 
 v10_section(t("section_features"), "#2ecc71")
-st.caption(t("features_intro"))
+v12_section_caption(t("features_intro"))
 # Clean up selections retired from the feature menu so an older session can
 # reopen this form without retaining hidden style choices.
 _v12_restore_durable_character_settings()
@@ -14258,7 +14278,7 @@ else:
     st.session_state.setdefault("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
 st.session_state.setdefault("v12_step04_frontend_revision", 1)
 v10_section(t("section_content"), "#3498db")
-st.caption(t("content_intro"))
+v12_section_caption(t("content_intro"))
 
 # STEP 04｜正式採用瀏覽器端互動。一般輸入不觸發 Streamlit rerun；
 # 只有需要後端的動作（例如 AI 幫想或生成總圖）才會同步一次。
@@ -15192,6 +15212,8 @@ if "v12_project_name_top_input" not in st.session_state:
     st.session_state["v12_project_name_top_input"] = _v12_project_name_initial
 st.markdown("### 🏷️ 作品名稱")
 st.caption("此名稱會同時用於「作品｜市集」內的所有紀錄。")
+if not str(st.session_state.get("v12_project_name_top_input", "") or "").strip():
+    st.caption("未填寫時，會自動使用：未命名作品 替代。")
 st.text_input(
     "為這組作品命名",
     key="v12_project_name_top_input",
@@ -15199,8 +15221,6 @@ st.text_input(
     max_chars=80,
     on_change=_v12_project_name_top_on_change,
 )
-if not str(st.session_state.get("v12_project_name_top_input", "") or "").strip():
-    st.caption("未填寫時，會自動使用：未命名作品 替代。")
 
 _v12_prompt_settings_admin = bool(st.session_state.get("v12_is_beta_admin", False))
 if _v12_prompt_settings_admin:
