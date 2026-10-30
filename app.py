@@ -1198,31 +1198,18 @@ st.markdown("""
   font-weight:760;
   line-height:1.65;
 }
-.st-key-v12_text_led_style_examples{
-  max-width:760px;
-  margin:.35rem auto .55rem !important;
+.st-key-v12_style_mode_toggles [data-testid="stImage"]{
+  display:flex;
+  justify-content:center;
+  margin:.18rem auto 0 !important;
 }
-.st-key-v12_text_led_style_examples [data-testid="stImage"] img{
-  border:2px solid rgba(231,219,255,.62);
-  border-radius:16px;
-  background:#fff;
-  box-shadow:0 8px 19px rgba(5,12,30,.34);
-}
-.v12-text-led-example-title{
-  margin:.35rem 0 .08rem;
-  color:#fbfdff;
-  font-size:1.04rem;
-  font-weight:850;
-  line-height:1.35;
-  text-align:center;
-}
-.v12-text-led-example-note{
-  margin:0 auto .1rem;
-  color:#dbe7ff;
-  font-size:.9rem;
-  font-weight:650;
-  line-height:1.45;
-  text-align:center;
+.st-key-v12_style_mode_toggles [data-testid="stImage"] img{
+  width:94px !important;
+  max-width:94px !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
 }
 /* 「存入作品｜市集」是獨立於 ZIP 打包的雲端保存動作。 */
 .st-key-v12_basket_save_to_library button{
@@ -13448,6 +13435,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 key="v12_use_text_only_style",
                 on_change=_v12_text_only_style_toggle_changed,
             )
+            st.image("static/style_examples/text-only.png", width=94)
         with _custom_toggle_col:
             _use_custom_style = st.checkbox(
                 t("custom_style_enable"),
@@ -13460,30 +13448,9 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 key="v12_use_text_person_style",
                 on_change=_v12_text_person_style_toggle_changed,
             )
-    # Let first-time creators compare the two text-led output modes before
-    # selecting either checkbox.  These are static examples only; the actual
-    # sticker still follows the creator's entered text and selected style.
-    with st.container(key="v12_text_led_style_examples"):
-        _text_only_example_col, _text_person_example_col = st.columns(2, gap="large")
-        with _text_only_example_col:
-            st.image(
-                "static/style_examples/text-only.png",
-                use_container_width=True,
-            )
-            st.markdown(
-                '<div class="v12-text-led-example-title">📝 純文字設計（無人物）</div>'
-                '<div class="v12-text-led-example-note">只有大字與立體字效，人物不會出現在貼圖中。</div>',
-                unsafe_allow_html=True,
-            )
-        with _text_person_example_col:
             st.image(
                 "static/style_examples/text-person-large-text-small-person.png",
-                use_container_width=True,
-            )
-            st.markdown(
-                '<div class="v12-text-led-example-title">👤 文字搭人物（字大人小）</div>'
-                '<div class="v12-text-led-example-note">文字是主角，人物依上傳照片變成迷你互動角色。</div>',
-                unsafe_allow_html=True,
+                width=94,
             )
     st.markdown(
         '<div class="v12-text-led-style-note">'

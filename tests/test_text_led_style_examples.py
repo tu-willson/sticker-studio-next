@@ -16,13 +16,13 @@ class TextLedStyleExamplesTests(unittest.TestCase):
         )
 
     def test_creation_page_displays_both_examples(self):
-        self.assertIn('key="v12_text_led_style_examples"', APP)
         self.assertIn('static/style_examples/text-only.png', APP)
         self.assertIn(
             'static/style_examples/text-person-large-text-small-person.png', APP
         )
-        self.assertIn("只有大字與立體字效", APP)
-        self.assertIn("文字是主角", APP)
+        self.assertIn('st.image("static/style_examples/text-only.png", width=94)', APP)
+        self.assertIn('width=94,', APP)
+        self.assertIn('background:transparent !important;', APP)
 
 
 if __name__ == "__main__":
