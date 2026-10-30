@@ -23,7 +23,7 @@ class TextLedStyleExamplesTests(unittest.TestCase):
         self.assertIn("V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL", APP)
         self.assertIn('height:77px !important;', APP)
         self.assertIn('[1, 1], gap="large"', APP)
-        self.assertIn('[1, 1.3, 1]', APP)
+        self.assertIn('自定義風格緊鄰「🌈 貼圖風格」選單上方', APP)
         self.assertNotIn('st.image("static/style_examples/text-only.png", width=94)', APP)
 
 

@@ -13440,8 +13440,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
     if bool(st.session_state.get("v12_use_text_only_style", False)):
         st.session_state["v12_use_custom_style"] = False
         st.session_state["v12_use_text_person_style"] = False
-    # 文字主導的兩種模式左右並列，讓大尺寸預覽和完整選項名稱都能清楚閱讀；
-    # 自定義風格獨立置於下一行，也可搭配文字搭人物。
+    # 文字主導的兩種模式左右並列，讓大尺寸預覽和完整選項名稱都能清楚閱讀。
     with st.container(key="v12_style_mode_toggles"):
         _text_only_toggle_col, _text_person_toggle_col = st.columns(
             [1, 1], gap="large"
@@ -13458,15 +13457,6 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 key="v12_use_text_person_style",
                 on_change=_v12_text_person_style_toggle_changed,
             )
-        _custom_left_col, _custom_toggle_col, _custom_right_col = st.columns(
-            [1, 1.3, 1]
-        )
-        with _custom_toggle_col:
-            _use_custom_style = st.checkbox(
-                t("custom_style_enable"),
-                key="v12_use_custom_style",
-                on_change=_v12_custom_style_toggle_changed,
-            )
     st.markdown(
         '<div class="v12-text-led-style-note">'
         '<div>📝 純文字設計與 👤 文字搭人物都以文字為主，可依需求選取~若為初次使用平台也可先不勾選。</div>'
@@ -13474,6 +13464,14 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
         '</div>',
         unsafe_allow_html=True,
     )
+    # 自定義風格緊鄰「🌈 貼圖風格」選單上方，讓它作為風格來源的獨立切換。
+    _custom_left_col, _custom_toggle_col, _custom_right_col = st.columns([1, 1.3, 1])
+    with _custom_toggle_col:
+        _use_custom_style = st.checkbox(
+            t("custom_style_enable"),
+            key="v12_use_custom_style",
+            on_change=_v12_custom_style_toggle_changed,
+        )
     if _use_text_only_style:
         st.session_state["v10_style_mode"] = V12_TEXT_ONLY_STYLE
         style_mode = V12_TEXT_ONLY_STYLE
