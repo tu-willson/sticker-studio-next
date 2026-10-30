@@ -2627,7 +2627,7 @@ html{scroll-behavior:smooth;}
   border:1px solid rgba(155,190,234,.35);
   border-radius:11px;
   overflow:hidden;
-  background:rgba(255,255,255,.94);
+  background:transparent !important;
 }
 .st-key-v12_style_card_grid [data-testid="stImage"] img{
   aspect-ratio:1.15 / 1;

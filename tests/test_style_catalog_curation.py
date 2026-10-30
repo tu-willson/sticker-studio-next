@@ -56,6 +56,7 @@ class StyleCatalogCurationTests(unittest.TestCase):
         for _category, asset in catalog.values():
             self.assertTrue((preview_dir / asset).is_file(), asset)
         self.assertIn("快速瀏覽 35 種貼圖風格", SOURCE)
+        self.assertIn('background:transparent !important;', SOURCE)
 
 
 if __name__ == "__main__":
