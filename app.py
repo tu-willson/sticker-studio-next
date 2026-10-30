@@ -94,18 +94,17 @@ V12_AI_TONE_LABELS = {
 
 V12_TEXT_OUTLINE_LABELS = {
     "不使用外框": {"en": "No outline", "ja": "外枠なし"},
-    "厚白貼紙描邊": {"en": "Thick white sticker outline", "ja": "太い白ステッカー縁"},
-    "雙層撞色描邊": {"en": "Two-tone double outline", "ja": "ツートン二重縁"},
-    "漫畫爆炸對話框": {"en": "Comic burst speech bubble", "ja": "漫画の爆発吹き出し"},
-    "雲朵對話泡泡框": {"en": "Cloud speech bubble", "ja": "雲の吹き出し"},
-    "圓角膠囊標籤框": {"en": "Rounded capsule label", "ja": "角丸カプセルラベル"},
-    "鋸齒票券外框": {"en": "Perforated ticket frame", "ja": "ギザギザチケット枠"},
-    "火焰爆裂外框": {"en": "Flame burst outline", "ja": "炎の爆裂枠"},
-    "愛心泡泡外框": {"en": "Heart bubble outline", "ja": "ハート泡枠"},
-    "速度線聚焦外框": {"en": "Speed-line focus outline", "ja": "集中線フォーカス枠"},
-    "金屬徽章外框": {"en": "Metal badge outline", "ja": "メタルバッジ枠"},
-    "彩虹波浪外框": {"en": "Rainbow wave outline", "ja": "虹の波形枠"},
     "塗鴉手繪外框": {"en": "Hand-drawn doodle outline", "ja": "手描き落書き枠"},
+    "雲朵對話泡泡框": {"en": "Cloud speech bubble", "ja": "雲の吹き出し"},
+    "漫畫爆炸對話框": {"en": "Comic burst speech bubble", "ja": "漫画の爆発吹き出し"},
+    "雙層撞色描邊": {"en": "Two-tone double outline", "ja": "ツートン二重縁"},
+    "愛心泡泡外框": {"en": "Heart bubble outline", "ja": "ハート泡枠"},
+    "彩虹波浪外框": {"en": "Rainbow wave outline", "ja": "虹の波形枠"},
+    "金屬徽章外框": {"en": "Metal badge outline", "ja": "メタルバッジ枠"},
+    "鋸齒票券外框": {"en": "Perforated ticket frame", "ja": "ギザギザチケット枠"},
+    "速度線聚焦外框": {"en": "Speed-line focus outline", "ja": "集中線フォーカス枠"},
+    "圓角膠囊標籤框": {"en": "Rounded capsule label", "ja": "角丸カプセルラベル"},
+    "火焰爆裂外框": {"en": "Flame burst outline", "ja": "炎の爆裂枠"},
 }
 
 V12_RANDOM_POOL_LABELS = {
@@ -2668,6 +2667,32 @@ html{scroll-behavior:smooth;}
   aspect-ratio:1.15 / 1;
   object-fit:contain;
 }
+/* 文字外框縮圖：保留 PNG 的 Alpha 背景，方便直接比較外框效果。 */
+.st-key-v12_outline_card_grid [data-testid="stImage"]{
+  border:1px solid rgba(194,166,245,.42);
+  border-radius:11px;
+  overflow:hidden;
+  background:transparent !important;
+}
+.st-key-v12_outline_card_grid [data-testid="stImage"] img{
+  aspect-ratio:1.15 / 1;
+  object-fit:contain;
+}
+.v12-outline-none-card{
+  aspect-ratio:1.15 / 1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:.38rem;
+  border:1px dashed rgba(213,196,245,.62);
+  border-radius:11px;
+  background:rgba(141,103,216,.08);
+  color:#f7f1ff;
+  font-weight:760;
+}
+.v12-outline-none-card span{font-size:2.15rem;line-height:1;}
+.v12-outline-none-card small{font-size:.79rem;}
 /* 貼圖風格／字型總覽入口：沿用各區塊主色，滑過時提高明度。 */
 .st-key-v12_style_gallery_toggle button{
   background:rgba(245,180,52,.34) !important;
@@ -2699,7 +2724,23 @@ html{scroll-behavior:smooth;}
   transform:translateY(-1px);
   box-shadow:0 8px 20px rgba(91,51,172,.40) !important;
 }
-.st-key-v12_style_card_grid button{
+.st-key-v12_outline_gallery_toggle button{
+  background:rgba(141,103,216,.22) !important;
+  border:1px solid rgba(205,182,255,.72) !important;
+  color:#fbf8ff !important;
+  font-weight:820 !important;
+  box-shadow:0 5px 16px rgba(80,47,153,.18) !important;
+  transition:background .18s ease,border-color .18s ease,transform .18s ease,box-shadow .18s ease !important;
+}
+.st-key-v12_outline_gallery_toggle button:hover{
+  background:rgba(158,113,230,.66) !important;
+  border-color:#eee4ff !important;
+  color:#fff !important;
+  transform:translateY(-1px);
+  box-shadow:0 8px 20px rgba(91,51,172,.34) !important;
+}
+.st-key-v12_style_card_grid button,
+.st-key-v12_outline_card_grid button{
   min-height:42px !important;
   padding:.34rem .42rem !important;
   white-space:normal !important;
@@ -2708,13 +2749,15 @@ html{scroll-behavior:smooth;}
   font-weight:800 !important;
 }
 @media (max-width:640px){
-  .st-key-v12_style_card_grid [data-testid="stHorizontalBlock"]{
+  .st-key-v12_style_card_grid [data-testid="stHorizontalBlock"],
+  .st-key-v12_outline_card_grid [data-testid="stHorizontalBlock"]{
     flex-direction:row !important;
     flex-wrap:wrap !important;
     gap:9px !important;
     align-items:flex-start !important;
   }
-  .st-key-v12_style_card_grid [data-testid="stColumn"]{
+  .st-key-v12_style_card_grid [data-testid="stColumn"],
+  .st-key-v12_outline_card_grid [data-testid="stColumn"]{
     flex:0 0 calc(50% - 4.5px) !important;
     width:calc(50% - 4.5px) !important;
     min-width:0 !important;
@@ -6990,30 +7033,30 @@ V8_RANDOM_POOLS = {'日常對話': ['你好', '哈囉', 'Hello', 'Hi', '安安',
 V8_TEXT_EFFECT_CATALOG = {1: '胖胖貼紙字', 2: '棉花糖圓字', 3: '果凍QQ字', 4: '奶油餅乾字', 5: '糖霜甜點字', 6: '蠟筆童趣字', 7: '軟萌手寫字', 8: '日系手帳圓字', 9: '韓系軟萌字', 10: '漫畫衝擊字', 11: '對話泡泡字', 12: '貼紙白邊字', 13: '泡棉玩具字', 14: '橡膠軟墊字', 15: '樹脂亮面字', 16: '壓克力透明字', 17: '珐瑯徽章字', 18: '刺繡布章字', 19: '羊毛氈字', 20: '皮革壓印字', 21: '紙雕層疊字', 22: '摺紙立體字', 23: '陶瓷裂釉字', 24: '玉石浮雕字', 25: '大理石雕字', 26: '銀鋼浮雕字', 27: '黃金立體字', 28: '青銅復古字', 29: '冰晶透明字', 30: '水晶玻璃字', 31: '霓虹發光字', 32: '香港霓虹字', 33: '燈泡招牌字', 34: '木雕質感字', 35: '石刻厚重字', 36: '毛筆書法字', 37: '印章篆刻字', 38: '剪紙藝術字', 39: '復古海報字', 40: '打字機復古字', 41: '塗鴉潮流字', 42: '街頭塗鴉字', 43: '漫畫爆炸字', 44: '熱血漫畫字', 45: '手繪塗鴉字', 46: '極簡手寫字', 47: '浪漫手寫字', 48: '粉筆黑板字', 49: '神聖光輝字', 50: '暗黑哥德字', 51: '黏土手作字', 52: '拼布縫線字', 53: '珍珠貝殼字', 54: '羽毛飄逸字', 55: '竹編工藝字', 56: '稻草編織字', 57: '苔蘚森林字', 58: '藤蔓花園字', 59: '花瓣拼貼字', 60: '水彩暈染字', 61: '墨彩渲染字', 62: '彩鉛塗層字', 63: '蠟染布紋字', 64: '馬賽克磚字', 65: '植絨絨面字', 66: '蒸汽齒輪字', 67: '像素電玩字', 68: '八位元方塊字', 69: '故障數位字', 70: '全息雷射字', 71: '雲朵蓬鬆字', 72: '海鹽砂粒字', 73: '珊瑚海洋字', 74: '星砂夢幻字', 75: '宇宙星雲字', 76: '巧克力糖漿字', 77: '爆米花零食字', 78: '棉麻編織字', 79: '牛仔布貼字', 80: '蕾絲花邊字', 81: '鈕扣拼貼字', 82: '鉤針編織字', 83: '彩窗教堂字', 84: '鐵鐵鉚釘字', 85: '鐵鏽工業字', 86: '電路晶片字', 87: '液晶螢幕字', 88: '雷達掃描字', 89: '橡皮印刷字', 90: '油畫筆觸字', 91: '膠卷電影字', 92: '報紙剪貼字', 93: '牛皮紙包裝字', 94: '露珠葉脈字', 95: '螢火森林字', 96: '星座占卜字', 97: '草本藥鋪字', 98: '珍奶Q彈字', 99: '壽司食玩字', 100: '甜甜圈糖針字', 101: '水墨毛筆字', 102: '行書連筆字', 103: '潑墨寫意字', 104: '篆刻印章字', 105: '鋼筆流線字', 106: '打字機復古字', 107: '粉筆手繪字', 108: '彩虹手繪字', 109: '塗鴉手繪字', 110: '立體貼紙字', 111: '氣球立體字', 112: '布料拼貼字', 113: '草地綠植字', 114: '沙灘沙粒字', 115: '雲朵棉花字', 116: '寒霜冰裂字', 117: '熔岩裂石字', 118: '鏽蝕金屬字', 119: '乾裂泥土字', 120: '鑽石切割字', 121: '雷射幻彩字', 122: '液態金屬字', 123: '霓虹燈管字', 124: '復古燈泡字', 125: '像素點陣字'}
 V8_TEXT_STYLE_OPTIONS = [
     "不使用外框",
-    "厚白貼紙描邊",
-    "雙層撞色描邊",
-    "漫畫爆炸對話框",
-    "雲朵對話泡泡框",
-    "圓角膠囊標籤框",
-    "鋸齒票券外框",
-    "火焰爆裂外框",
-    "愛心泡泡外框",
-    "速度線聚焦外框",
-    "金屬徽章外框",
-    "彩虹波浪外框",
     "塗鴉手繪外框",
+    "雲朵對話泡泡框",
+    "漫畫爆炸對話框",
+    "雙層撞色描邊",
+    "愛心泡泡外框",
+    "彩虹波浪外框",
+    "金屬徽章外框",
+    "鋸齒票券外框",
+    "速度線聚焦外框",
+    "圓角膠囊標籤框",
+    "火焰爆裂外框",
 ]
 V8_TEXT_STYLE_LEGACY_MAP = {
     "不使用效果": "不使用外框",
+    "厚白貼紙描邊": "塗鴉手繪外框",
     "高級立體金字": "金屬徽章外框",
     "彩色漫畫爆炸": "漫畫爆炸對話框",
     "柔和立體氣泡": "雲朵對話泡泡框",
     "霓虹發光字": "速度線聚焦外框",
-    "手寫貼紙字": "厚白貼紙描邊",
+    "手寫貼紙字": "塗鴉手繪外框",
     "清爽白底字": "圓角膠囊標籤框",
     "雙層粗描邊字": "雙層撞色描邊",
     "鋸齒漫畫框字": "鋸齒票券外框",
-    "虛線貼紙框字": "厚白貼紙描邊",
+    "虛線貼紙框字": "塗鴉手繪外框",
     "彩虹漸層描邊字": "彩虹波浪外框",
     "金屬鉚釘外框字": "金屬徽章外框",
     "水波透明外框字": "愛心泡泡外框",
@@ -7022,6 +7065,20 @@ V8_TEXT_STYLE_LEGACY_MAP = {
 }
 V8_TEXT_EFFECT_VALUES = [f"{i:03d}｜{V8_TEXT_EFFECT_CATALOG[i]}" for i in range(1,126)]
 V8_FONT_PREVIEW_DIR = Path(__file__).with_name("font_reference") / "previews"
+V12_TEXT_OUTLINE_PREVIEW_DIR = Path(__file__).with_name("static") / "text_outline_previews"
+V12_TEXT_OUTLINE_PREVIEW_CATALOG = {
+    "塗鴉手繪外框": "outline_01.png",
+    "雲朵對話泡泡框": "outline_02.png",
+    "漫畫爆炸對話框": "outline_03.png",
+    "雙層撞色描邊": "outline_04.png",
+    "愛心泡泡外框": "outline_05.png",
+    "彩虹波浪外框": "outline_06.png",
+    "金屬徽章外框": "outline_07.png",
+    "鋸齒票券外框": "outline_08.png",
+    "速度線聚焦外框": "outline_09.png",
+    "圓角膠囊標籤框": "outline_10.png",
+    "火焰爆裂外框": "outline_11.png",
+}
 V12_STYLE_PREVIEW_DIR = Path(__file__).with_name("static") / "style_previews"
 V12_STYLE_PREVIEW_CATALOG = {
     'Q版收藏公仔': ('🎎 3D／公仔', 'style_01.png'),
@@ -14983,6 +15040,59 @@ if _sticker_mode == "text":
         key="v8_text_style",
         format_func=lambda value: _v12_localized_option(value, V12_TEXT_OUTLINE_LABELS),
     )
+
+    # 外框縮圖與貼圖風格縮圖採相同操作：平常維持選單精簡，
+    # 需要比較效果時再展開，點擊圖卡名稱即可套用。
+    st.session_state.setdefault("v12_outline_gallery_open", False)
+    st.button(
+        "🧩 快速瀏覽 11 種文字外框效果"
+        if not st.session_state["v12_outline_gallery_open"]
+        else "收起文字外框縮圖總覽",
+        key="v12_outline_gallery_toggle",
+        use_container_width=True,
+        on_click=_v12_set_session_state_callback,
+        args=("v12_outline_gallery_open", not st.session_state["v12_outline_gallery_open"]),
+    )
+    if st.session_state["v12_outline_gallery_open"]:
+        st.markdown(
+            '<div class="v12-style-gallery-note">'
+            '點選縮圖下方的外框名稱即可套用。縮圖保留透明背景，僅用來比較文字周圍的描邊、框形與裝飾效果。'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        def _v12_pick_text_outline_from_card(outline_name):
+            st.session_state["v8_text_style"] = outline_name
+            st.session_state["v12_outline_gallery_open"] = False
+
+        with st.container(key="v12_outline_card_grid"):
+            _outline_card_cols = st.columns(4)
+            for _outline_card_index, _outline_card_name in enumerate(V8_TEXT_STYLE_OPTIONS):
+                with _outline_card_cols[_outline_card_index % 4]:
+                    if _outline_card_name == "不使用外框":
+                        st.markdown(
+                            '<div class="v12-outline-none-card"><span>⊘</span>'
+                            '<small>不加描邊／框形</small></div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        _outline_card_path = (
+                            V12_TEXT_OUTLINE_PREVIEW_DIR
+                            / V12_TEXT_OUTLINE_PREVIEW_CATALOG[_outline_card_name]
+                        )
+                        if _outline_card_path.exists():
+                            st.image(str(_outline_card_path), use_container_width=True)
+                        else:
+                            st.info("縮圖準備中")
+                    st.button(
+                        ("✅ " if text_style == _outline_card_name else "")
+                        + _v12_localized_option(_outline_card_name, V12_TEXT_OUTLINE_LABELS),
+                        key=f"v12_outline_card_pick_{_outline_card_name}",
+                        use_container_width=True,
+                        type="primary" if text_style == _outline_card_name else "secondary",
+                        on_click=_v12_pick_text_outline_from_card,
+                        args=(_outline_card_name,),
+                    )
 else:
     text_style = ""
 

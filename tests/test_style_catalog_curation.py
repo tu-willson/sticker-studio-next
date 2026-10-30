@@ -70,6 +70,36 @@ class StyleCatalogCurationTests(unittest.TestCase):
         self.assertIn('v12_font_caption(t("font_outline_caption"))', SOURCE)
         self.assertIn('v12_font_caption(t("font_pick_caption"))', SOURCE)
 
+    def test_text_outline_catalog_has_previews_in_requested_order(self):
+        expected = [
+            "不使用外框",
+            "塗鴉手繪外框",
+            "雲朵對話泡泡框",
+            "漫畫爆炸對話框",
+            "雙層撞色描邊",
+            "愛心泡泡外框",
+            "彩虹波浪外框",
+            "金屬徽章外框",
+            "鋸齒票券外框",
+            "速度線聚焦外框",
+            "圓角膠囊標籤框",
+            "火焰爆裂外框",
+        ]
+        options = _literal_assignment("V8_TEXT_STYLE_OPTIONS")
+        labels = _literal_assignment("V12_TEXT_OUTLINE_LABELS")
+        previews = _literal_assignment("V12_TEXT_OUTLINE_PREVIEW_CATALOG")
+        preview_dir = ROOT / "static" / "text_outline_previews"
+
+        self.assertEqual(options, expected)
+        self.assertNotIn("厚白貼紙描邊", options)
+        self.assertNotIn("厚白貼紙描邊", labels)
+        self.assertEqual(list(previews), expected[1:])
+        for asset in previews.values():
+            self.assertTrue((preview_dir / asset).is_file(), asset)
+        self.assertIn('key="v12_outline_gallery_toggle"', SOURCE)
+        self.assertIn('key="v12_outline_card_grid"', SOURCE)
+        self.assertIn('background:transparent !important;', SOURCE)
+
     def test_main_step_guidance_is_aligned_to_its_section_title(self):
         self.assertIn(".v12-section-caption", SOURCE)
         for translation_key in (
