@@ -60,12 +60,13 @@ class StyleCatalogCurationTests(unittest.TestCase):
 
     def test_style_and_font_gallery_controls_have_distinct_hover_colors(self):
         self.assertIn(".st-key-v12_style_gallery_toggle button", SOURCE)
-        self.assertIn("rgba(245,180,52,.50)", SOURCE)
+        self.assertIn("rgba(245,180,52,.34)", SOURCE)
         self.assertIn(".st-key-v10_font_gallery_toggle button", SOURCE)
-        self.assertIn("rgba(141,103,216,.46)", SOURCE)
+        self.assertIn("rgba(141,103,216,.30)", SOURCE)
 
     def test_font_guidance_is_aligned_to_each_font_subsection(self):
         self.assertIn(".v12-font-caption", SOURCE)
+        self.assertIn("white-space:pre-line", SOURCE)
         self.assertIn('v12_font_caption(t("font_outline_caption"))', SOURCE)
         self.assertIn('v12_font_caption(t("font_pick_caption"))', SOURCE)
 

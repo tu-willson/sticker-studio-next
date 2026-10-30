@@ -1973,6 +1973,7 @@ div[data-testid="stCheckbox"] label{
   font-weight:680;
   letter-spacing:.01em;
   text-align:left;
+  white-space:pre-line;
   text-shadow:0 1px 8px rgba(2,8,22,.48);
 }
 .v12-mode-panel-heading{
@@ -2647,7 +2648,7 @@ html{scroll-behavior:smooth;}
 }
 /* 貼圖風格／字型總覽入口：沿用各區塊主色，滑過時提高明度。 */
 .st-key-v12_style_gallery_toggle button{
-  background:rgba(245,180,52,.50) !important;
+  background:rgba(245,180,52,.34) !important;
   border:1px solid rgba(255,220,126,.92) !important;
   color:#fff9e7 !important;
   font-weight:820 !important;
@@ -2662,7 +2663,7 @@ html{scroll-behavior:smooth;}
   box-shadow:0 8px 20px rgba(177,119,10,.38) !important;
 }
 .st-key-v10_font_gallery_toggle button{
-  background:rgba(141,103,216,.46) !important;
+  background:rgba(141,103,216,.30) !important;
   border:1px solid rgba(205,182,255,.82) !important;
   color:#fbf8ff !important;
   font-weight:820 !important;
