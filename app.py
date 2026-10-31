@@ -1378,7 +1378,9 @@ div[class*="st-key-v12_basket_download_"] button{
   border-color:#e53e57 !important;
 }
 /* 素材準備區的一鍵清空：維持低干擾的透明粉紅，滑過才提高警示感。 */
-.st-key-v12_clear_all_creation button{
+.st-key-v12_clear_all_creation button,
+.st-key-v12_clear_basket_images button,
+.st-key-v12_clear_basket_images_confirm button{
   min-height:34px !important;
   padding:.3rem .72rem !important;
   border:1px solid rgba(255,126,150,.68) !important;
@@ -1390,7 +1392,9 @@ div[class*="st-key-v12_basket_download_"] button{
   white-space:nowrap !important;
   box-shadow:none !important;
 }
-.st-key-v12_clear_all_creation button:hover{
+.st-key-v12_clear_all_creation button:hover,
+.st-key-v12_clear_basket_images button:hover,
+.st-key-v12_clear_basket_images_confirm button:hover{
   background:rgba(255,79,103,.56) !important;
   border-color:#ff9aac !important;
   color:#fff !important;
@@ -8395,6 +8399,22 @@ def _v12_remove_sticker_basket_item(item_id):
     st.session_state.pop(f"v12_basket_select_{item_id}", None)
 
 
+def _v12_clear_sticker_basket_callback():
+    """Require a second deliberate click before clearing only workspace images."""
+    if not bool(st.session_state.get("v12_basket_clear_confirmation_pending", False)):
+        st.session_state["v12_basket_clear_confirmation_pending"] = True
+        return
+
+    for item in _v12_get_sticker_basket():
+        st.session_state.pop(f"v12_basket_select_{item['id']}", None)
+    st.session_state["v12_sticker_basket"] = []
+    st.session_state["v12_sticker_basket_batch_number"] = 0
+    st.session_state.pop("v12_basket_main_choice", None)
+    st.session_state.pop("v12_basket_tab_choice", None)
+    st.session_state["v12_basket_clear_confirmation_pending"] = False
+    st.session_state["v12_basket_clear_feedback"] = True
+
+
 def _v12_selected_sticker_basket_items():
     return [
         item for item in _v12_get_sticker_basket()
@@ -8475,6 +8495,8 @@ def _v12_save_selected_stickers_to_history(selected, options, main_label, tab_la
 @st.fragment
 def _v12_render_sticker_basket_workspace():
     """Allow an unlimited session basket, then make one final limited-size project ZIP."""
+    if st.session_state.pop("v12_basket_clear_feedback", False):
+        st.success(t("basket_clear_success"))
     basket = _v12_get_sticker_basket()
     if not basket:
         st.info(t("basket_empty"))
@@ -8624,13 +8646,40 @@ def _v12_render_sticker_basket_workspace():
         disabled=not bool(cloud_session) or not has_creation_materials,
     )
     if has_creation_materials:
-        _materials_private_note = html.escape(str(t("materials_private"))).replace(
-            "\n", "<br>"
+        _materials_private_lines = str(t("materials_private")).split("\n\n", 1)
+        _materials_private_first = html.escape(_materials_private_lines[0])
+        _materials_private_second = html.escape(
+            _materials_private_lines[1] if len(_materials_private_lines) > 1 else ""
         )
-        st.markdown(
-            f'<div class="v12-cloud-save-note">{_materials_private_note}</div>',
-            unsafe_allow_html=True,
+        _materials_note_col, _clear_basket_col = st.columns(
+            [5.8, 1.7], vertical_alignment="center"
         )
+        with _materials_note_col:
+            st.markdown(
+                f'<div class="v12-cloud-save-note">{_materials_private_first}</div>',
+                unsafe_allow_html=True,
+            )
+        with _clear_basket_col:
+            _basket_clear_pending = bool(
+                st.session_state.get("v12_basket_clear_confirmation_pending", False)
+            )
+            st.button(
+                t("basket_clear_confirm") if _basket_clear_pending else t("basket_clear"),
+                key=(
+                    "v12_clear_basket_images_confirm"
+                    if _basket_clear_pending
+                    else "v12_clear_basket_images"
+                ),
+                help=t("basket_clear_help"),
+                on_click=_v12_clear_sticker_basket_callback,
+                disabled=not bool(_v12_get_sticker_basket()),
+                use_container_width=True,
+            )
+        if _materials_private_second:
+            st.markdown(
+                f'<div class="v12-cloud-save-note">{_materials_private_second}</div>',
+                unsafe_allow_html=True,
+            )
 
     _loaded_cloud_project_id = str(
         st.session_state.get("v12_loaded_cloud_project_id", "") or ""
