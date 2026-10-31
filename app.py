@@ -1035,6 +1035,27 @@ def _v11_clear_generation_state() -> None:
 
 
 
+def _v12_recover_generation_ui_callback() -> None:
+    """Recover the local STEP 06 button if validation stopped a browser submit.
+
+    This never cancels a server-side generation or removes any creation input.
+    Its purpose is to remount the browser-side submit control after an early
+    validation stop (for example, missing photo or all text slots empty).
+    """
+    _v11_clear_generation_state()
+    for _key in (
+        "v11_generation_started_at",
+        "v11_generation_release_feedback",
+        "v12_generation_creator_reel_project_snapshot",
+        "v12_generation_creator_reel_prompt",
+    ):
+        st.session_state.pop(_key, None)
+    st.session_state["v12_frontend_generate_reset_revision"] = (
+        int(st.session_state.get("v12_frontend_generate_reset_revision", 0) or 0) + 1
+    )
+    st.session_state["v12_generation_recovery_feedback"] = True
+
+
 def _v11_user_error_message(exc: Exception) -> str:
     """Return a simple Chinese message for end users; never expose traceback."""
     msg = str(exc or "").lower()
@@ -1359,6 +1380,22 @@ div[class*="st-key-v12_basket_download_"] button{
   border-color:#ff9aac !important;
   color:#fff !important;
   box-shadow:0 5px 13px rgba(255,79,103,.26) !important;
+}
+/* STEP 06 的解除卡住按鈕：只復原本機送出介面，不清空創作內容。 */
+.st-key-v12_recover_generate_state button{
+  min-height:32px !important;
+  padding:.28rem .74rem !important;
+  border:1px solid rgba(255,199,113,.72) !important;
+  border-radius:9px !important;
+  background:rgba(230,126,34,.18) !important;
+  color:#fff1d1 !important;
+  font-weight:800 !important;
+  box-shadow:none !important;
+}
+.st-key-v12_recover_generate_state button:hover{
+  background:rgba(230,126,34,.42) !important;
+  border-color:#ffd18b !important;
+  color:#fff !important;
 }
 /* 人物照與畫風參考共用醒目的粉紅色原生上傳按鈕。 */
 .st-key-v12_person_photo_upload [data-testid="stFileUploaderDropzone"] button,
@@ -15952,11 +15989,13 @@ st.markdown(f'<div class="v11-section-tip">{t("generate_intro")}</div>', unsafe_
 # ============================================================
 st.session_state.setdefault("v11_generation_pending", False)
 st.session_state.setdefault("v11_generation_in_progress", False)
+st.session_state.setdefault("v12_frontend_generate_reset_revision", 0)
 
 _generation_pending = bool(st.session_state.get("v11_generation_pending", False))
 _generation_in_progress = bool(st.session_state.get("v11_generation_in_progress", False))
 _generation_locked = _generation_pending or _generation_in_progress
 _generation_feedback = st.session_state.pop("v11_generation_release_feedback", None)
+_generation_recovered = bool(st.session_state.pop("v12_generation_recovery_feedback", False))
 
 # ------------------------------------------------------------
 # 第一階段：使用者按下按鈕
@@ -15970,7 +16009,11 @@ if _v12_step04_frontend_enabled:
             "storageKey": "sticker-studio-next.step04-formal.v1",
             "disabled": _generation_locked,
         },
-        key="v12_step04_frontend_generate_formal",
+        # 早期驗證 stop 時，重新建立元件可解除其瀏覽器端 disabled 狀態。
+        key=(
+            "v12_step04_frontend_generate_formal_"
+            f"{int(st.session_state.get('v12_frontend_generate_reset_revision', 0) or 0)}"
+        ),
     )
     _generate_clicked = isinstance(_v12_frontend_generate_request, dict)
     if _generate_clicked:
@@ -15991,6 +16034,18 @@ else:
         disabled=_generation_locked,
         key="v11_generate_4x2",
     )
+
+# 一律保留此按鈕，因為前端送出元件可能在缺少必要資料時自行停在 disabled。
+with st.container(key="v12_recover_generate_state"):
+    _recover_left, _recover_center, _recover_right = st.columns([2.2, 1.6, 2.2])
+    with _recover_center:
+        st.button(
+            "↩️ 回復未生成狀態",
+            key="v12_recover_generate_state_button",
+            help="只解除卡住的「正在準備生成」按鈕；不會清除照片、文字或其他設定。",
+            on_click=_v12_recover_generation_ui_callback,
+            use_container_width=True,
+        )
 
 if _generate_clicked:
     if not _text_only_generation and not st.session_state.uploaded_image_bytes:
@@ -16062,6 +16117,8 @@ if isinstance(_generation_feedback, dict):
         st.success("🎉 生成完成，現在可以再次生成，或前往下方確認成果。")
     else:
         st.error("❌ 這次生成未完成，現在可以立即重新嘗試。")
+if _generation_recovered:
+    st.info("↩️ 已回復未生成狀態；照片、文字與其他創作設定都已保留。")
 
 # ------------------------------------------------------------
 # 第二階段：只有 pending lock 存在時才進入真正生成。

@@ -69,6 +69,12 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('v12_style_reference_soft_choice', APP)
         self.assertIn('v12_style_reference_strong_choice', APP)
 
+    def test_generate_recovery_remounts_the_browser_submit_button(self):
+        self.assertIn('def _v12_recover_generation_ui_callback()', APP)
+        self.assertIn('"↩️ 回復未生成狀態"', APP)
+        self.assertIn('v12_frontend_generate_reset_revision', APP)
+        self.assertIn('不會清除照片、文字或其他設定', APP)
+
     def test_text_person_mode_keeps_photo_and_makes_text_the_main_subject(self):
         self.assertIn('V12_TEXT_PERSON_STYLE_LABEL = "👤 文字搭人物（字大人小）"', APP)
         self.assertIn('key="v12_use_text_person_style"', APP)
