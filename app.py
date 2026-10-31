@@ -1277,6 +1277,14 @@ st.markdown("""
   background:#17639c !important;
   border-color:#17639c !important;
 }
+.v12-cloud-save-note{
+  margin:.42rem .1rem .78rem;
+  color:#f5f7ff;
+  font-size:.95rem;
+  font-weight:760;
+  line-height:1.72;
+  text-shadow:0 1px 2px rgba(0,0,0,.46);
+}
 /* 生成完成後的 LINE 捷徑：保持低干擾紫色，滑過時才加深。 */
 .st-key-v12_basket_line_creator_links{
   width:100% !important;
@@ -8616,7 +8624,13 @@ def _v12_render_sticker_basket_workspace():
         disabled=not bool(cloud_session) or not has_creation_materials,
     )
     if has_creation_materials:
-        st.caption(t("materials_private"))
+        _materials_private_note = html.escape(str(t("materials_private"))).replace(
+            "\n", "<br><br>"
+        )
+        st.markdown(
+            f'<div class="v12-cloud-save-note">{_materials_private_note}</div>',
+            unsafe_allow_html=True,
+        )
 
     _loaded_cloud_project_id = str(
         st.session_state.get("v12_loaded_cloud_project_id", "") or ""
