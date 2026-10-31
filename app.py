@@ -708,11 +708,13 @@ def _v12_style_reference_influence_changed(mode):
         st.session_state["v12_style_reference_soft_choice"] = True
         st.session_state["v12_style_reference_strong_choice"] = False
         st.session_state["v12_text_reference_priority"] = False
+        st.session_state["v12_text_reference_dimensional"] = False
     elif mode == "strong":
         st.session_state["v12_style_reference_strength"] = "強烈融入"
         st.session_state["v12_style_reference_soft_choice"] = False
         st.session_state["v12_style_reference_strong_choice"] = True
         st.session_state["v12_text_reference_priority"] = False
+        st.session_state["v12_text_reference_dimensional"] = False
     elif mode == "text_priority":
         st.session_state["v12_style_reference_soft_choice"] = False
         st.session_state["v12_style_reference_strong_choice"] = False
@@ -4290,7 +4292,7 @@ def _beta_library_metadata(record):
         "font_name", "text_style", "generation_method", "transparent_background",
         "style_mode", "custom_style_snapshot", "character_features",
         "custom_character", "custom_character_enabled",
-        "text_only_style", "text_person_style", "text_reference_priority",
+        "text_only_style", "text_person_style", "text_reference_priority", "text_reference_dimensional",
         "sticker_mode", "expression_specs",
         "sticker_texts", "sticker_action_prompts", "sticker_color_segments", "schema_version", "identity",
         "timestamps", "creative_settings", "package_settings", "main_no", "tab_no",
@@ -7858,6 +7860,7 @@ def _v12_template_transfer_contract(snapshot):
         "text_only_style": bool(snapshot.get("text_only_style", False)),
         "text_person_style": bool(snapshot.get("text_person_style", False)),
         "text_reference_priority": bool(snapshot.get("text_reference_priority", False)),
+        "text_reference_dimensional": bool(snapshot.get("text_reference_dimensional", False)),
         "character_features": copy.deepcopy(
             snapshot.get("character_features", []) or []
         ),
@@ -7913,6 +7916,7 @@ def _v12_new_project_metadata():
         "text_only_style": False,
         "text_person_style": False,
         "text_reference_priority": False,
+        "text_reference_dimensional": False,
         "character_features": [],
         "custom_character": "",
         "custom_character_enabled": False,
@@ -7942,6 +7946,7 @@ def _v12_new_project_metadata():
             "text_only_style": False,
             "text_person_style": False,
             "text_reference_priority": False,
+            "text_reference_dimensional": False,
             "font": {"name": ""},
             "text_style": "",
             "generation_method": "",
@@ -8038,6 +8043,15 @@ def _v12_normalize_project_metadata(metadata):
         _text_reference_priority_raw
         if isinstance(_text_reference_priority_raw, bool)
         else str(_text_reference_priority_raw or "").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
+    _text_reference_dimensional_raw = data.get(
+        "text_reference_dimensional", creative.get("text_reference_dimensional", False)
+    )
+    text_reference_dimensional = (
+        _text_reference_dimensional_raw
+        if isinstance(_text_reference_dimensional_raw, bool)
+        else str(_text_reference_dimensional_raw or "").strip().lower()
         in {"1", "true", "yes", "on"}
     )
     if text_only_style:
@@ -8146,6 +8160,7 @@ def _v12_normalize_project_metadata(metadata):
         "text_only_style": text_only_style,
         "text_person_style": text_person_style,
         "text_reference_priority": text_reference_priority,
+        "text_reference_dimensional": text_reference_dimensional,
         "character_features": character_features,
         "custom_character": custom_character,
         "custom_character_enabled": custom_character_enabled,
@@ -8174,6 +8189,7 @@ def _v12_normalize_project_metadata(metadata):
         "text_only_style": normalized["text_only_style"],
         "text_person_style": normalized["text_person_style"],
         "text_reference_priority": normalized["text_reference_priority"],
+        "text_reference_dimensional": normalized["text_reference_dimensional"],
         "font": {"name": normalized["font_name"]},
         "text_style": normalized["text_style"],
         "generation_method": normalized["generation_method"],
@@ -8802,6 +8818,9 @@ def _v12_load_history_record(record):
     st.session_state["v12_text_reference_priority"] = bool(
         metadata.get("text_reference_priority", False)
     )
+    st.session_state["v12_text_reference_dimensional"] = bool(
+        metadata.get("text_reference_dimensional", False)
+    )
     st.session_state["v12_style_reference_elements_enabled"] = False
     st.session_state["v12_style_reference_elements"] = []
     st.session_state["v12_style_reference_custom_elements"] = str(
@@ -9224,6 +9243,9 @@ def _v12_project_snapshot():
     ) and not project["text_only_style"]
     project["text_reference_priority"] = bool(
         st.session_state.get("v12_text_reference_priority", False)
+    )
+    project["text_reference_dimensional"] = bool(
+        st.session_state.get("v12_text_reference_dimensional", False)
     )
     # V12｜STEP 01A③ FIX：
     # 若使用「⭐ 自定義風格」，作品庫不要只顯示泛稱，
@@ -10100,6 +10122,7 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
             "text_only_style",
             "text_person_style",
             "text_reference_priority",
+            "text_reference_dimensional",
             "character_features",
             "custom_character",
             "text_style",
@@ -10746,6 +10769,7 @@ st.session_state.setdefault("v12_expression_last_recipe_labels", [])
 st.session_state.setdefault("v12_expression_recipe_cycle", 1)
 st.session_state.setdefault("v12_style_reference_strength", "柔和融入")
 st.session_state.setdefault("v12_text_reference_priority", False)
+st.session_state.setdefault("v12_text_reference_dimensional", False)
 st.session_state.setdefault("v12_style_reference_elements_enabled", False)
 st.session_state.setdefault("v12_style_reference_elements", [])
 st.session_state.setdefault("v12_style_reference_custom_elements", "")
@@ -10779,6 +10803,7 @@ _V12_CREATION_DRAFT_KEYS = (
     "v12_style_reference_fingerprint",
     "v12_style_reference_strength",
     "v12_text_reference_priority",
+    "v12_text_reference_dimensional",
     "v12_style_reference_custom_elements",
     # A redeemed template's custom prompt is intentionally separate from the
     # member's 01–10 library, but it still must survive the marketplace →
@@ -10850,6 +10875,7 @@ def _v12_restore_durable_style_reference():
         "v12_style_reference_fingerprint",
         "v12_style_reference_strength",
         "v12_text_reference_priority",
+        "v12_text_reference_dimensional",
         "v12_style_reference_custom_elements",
     ):
         if key in draft:
@@ -11150,6 +11176,7 @@ def _v12_clear_active_creation_callback():
     st.session_state["v12_style_reference_fingerprint"] = ""
     st.session_state["v12_style_reference_strength"] = "柔和融入"
     st.session_state["v12_text_reference_priority"] = False
+    st.session_state["v12_text_reference_dimensional"] = False
     st.session_state["v12_style_reference_elements_enabled"] = False
     st.session_state["v12_style_reference_elements"] = []
     st.session_state["v12_style_reference_custom_elements"] = ""
@@ -12356,6 +12383,7 @@ def _v12_clear_style_reference():
     st.session_state["v12_style_reference_filename"] = ""
     st.session_state["v12_style_reference_fingerprint"] = ""
     st.session_state["v12_text_reference_priority"] = False
+    st.session_state["v12_text_reference_dimensional"] = False
     st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
     _v12_update_navigation_safe_creation_draft(
         v12_style_source_mode=V12_STYLE_PRESET_MODE,
@@ -12363,6 +12391,7 @@ def _v12_clear_style_reference():
         v12_style_reference_filename="",
         v12_style_reference_fingerprint="",
         v12_text_reference_priority=False,
+        v12_text_reference_dimensional=False,
     )
 
 
@@ -13736,6 +13765,9 @@ def _v12_capture_style_reference_details_draft():
         v12_text_reference_priority=bool(
             st.session_state.get("v12_text_reference_priority", False)
         ),
+        v12_text_reference_dimensional=bool(
+            st.session_state.get("v12_text_reference_dimensional", False)
+        ),
         v12_style_reference_custom_elements=str(
             st.session_state.get("v12_style_reference_custom_elements", "") or ""
         ).strip()[:1200],
@@ -14385,19 +14417,29 @@ else:
             st.caption("🖋️ 已啟用文字畫風參考優先：預設只生成平面文字，優先重現參考圖的筆觸與色系；下方可另外指定要開放的補充效果。")
         with st.form("v12_style_reference_details_form", border=False):
             if _text_reference_priority_selected and _reference_priority_available:
-                st.text_area(
-                    "✨ 允許自訂補充效果（選填）（輸入完請點選套用）",
-                    key="v12_style_reference_custom_elements",
-                    placeholder=(
-                        "例如：強調毛筆筆勢痕跡、文字加入極淡的立體層次與灰黑色短陰影；"
-                        "也可明確指定外框、圖案或彩色特效。"
-                    ),
-                    max_chars=1200,
-                    help=(
-                        "只有此欄明確寫出的效果才會例外開放；未填寫時，"
-                        "仍維持純文字、無額外特效的畫風參考模式。"
-                    ),
-                )
+                _dimension_col, _effects_col = st.columns([1.1, 3.4], vertical_alignment="top")
+                with _dimension_col:
+                    st.checkbox(
+                        "加入立體感",
+                        key="v12_text_reference_dimensional",
+                        help=(
+                            "依照本次生成文字的筆畫、顏色與外輪廓，隨機產生相容的立體層次。"
+                        ),
+                    )
+                with _effects_col:
+                    st.text_area(
+                        "✨ 允許自訂補充效果（選填）（輸入完請點選套用）",
+                        key="v12_style_reference_custom_elements",
+                        placeholder=(
+                            "例如：強調毛筆筆勢痕跡、文字加入極淡的立體層次與灰黑色短陰影；"
+                            "也可明確指定外框、圖案或彩色特效。"
+                        ),
+                        max_chars=1200,
+                        help=(
+                            "只有此欄明確寫出的效果才會例外開放；未填寫時，"
+                            "仍維持純文字、無額外特效的畫風參考模式。"
+                        ),
+                    )
                 st.caption("此欄內容會隨作品與創作膠卷保存，日後載回時會自動帶回。")
             else:
                 st.text_area(
@@ -14434,6 +14476,9 @@ _v12_update_navigation_safe_creation_draft(
     v12_style_reference_strength=st.session_state.get("v12_style_reference_strength"),
     v12_text_reference_priority=bool(
         st.session_state.get("v12_text_reference_priority", False)
+    ),
+    v12_text_reference_dimensional=bool(
+        st.session_state.get("v12_text_reference_dimensional", False)
     ),
     v12_style_reference_custom_elements=st.session_state.get("v12_style_reference_custom_elements"),
     v12_loaded_project_custom_style=st.session_state.get(
@@ -15190,6 +15235,10 @@ _text_reference_priority_active = bool(
     and st.session_state.get("v12_text_reference_priority", False)
     and st.session_state.get("v12_style_reference_image_bytes")
 )
+_text_reference_dimensional_active = bool(
+    _text_reference_priority_active
+    and st.session_state.get("v12_text_reference_dimensional", False)
+)
 if _text_reference_priority_active:
     # 暫時收起既有圖卡，不清除使用者原本的選擇；取消優先模式後可直接恢復。
     st.session_state["v12_outline_gallery_open"] = False
@@ -15623,6 +15672,13 @@ if _text_reference_priority_active:
         "忽略任何既有的 125 種帶圖字型與文字外框／形狀效果，不得混用。"
         "不可複製參考圖的既有文字、標誌、完整排版或單一筆畫；請針對本次指定文字重新設計。"
     )
+    if _text_reference_dimensional_active:
+        prompt += (
+            "\n【加入立體感｜最高優先】本規則優先於前述『禁止 3D／浮雕／投影』限制。"
+            "每格文字必須依照本次生成文字本身的筆勢、顏色與外輪廓形狀，隨機設計一種相容且清楚可見的立體層次。"
+            "可使用與字體相連的淺浮雕、厚度、切面、內凹凸或短陰影；立體效果必須從文字字形自然長出，"
+            "並延續畫風參考的筆法與色系。不得加入人物、物件、獨立圖案、獨立對話框或與文字無關的裝飾。"
+        )
     _text_reference_effects = str(
         st.session_state.get("v12_style_reference_custom_elements", "") or ""
     ).strip()
