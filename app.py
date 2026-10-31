@@ -8175,10 +8175,19 @@ def _v12_normalize_project_metadata(metadata):
     # V12｜畫風參考改為單一自訂說明，不再保存已移除的多選元素。
     style_reference_elements = []
     style_reference_elements_enabled = False
+    # 空白是使用者明確移除補充效果的有效設定，不能把它視為「缺值」後
+    # 又從舊的 creative_settings 復活最後一次輸入的內容。只有舊快照真的
+    # 沒有這個 top-level 欄位時，才回退讀取巢狀的相容資料。
+    if "style_reference_custom_elements" in data:
+        raw_style_reference_custom_elements = data.get(
+            "style_reference_custom_elements", ""
+        )
+    else:
+        raw_style_reference_custom_elements = creative.get(
+            "style_reference_custom_elements", ""
+        )
     style_reference_custom_elements = str(
-        data.get("style_reference_custom_elements")
-        or creative.get("style_reference_custom_elements", "")
-        or ""
+        raw_style_reference_custom_elements or ""
     )[:1200]
 
     project_id = str(data.get("project_id") or identity.get("project_id") or base["project_id"])

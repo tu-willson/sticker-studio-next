@@ -51,6 +51,8 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('text_reference_priority=_text_reference_priority_active', APP)
         self.assertIn('✨ 允許自訂補充效果（選填）', APP)
         self.assertIn('【允許自訂補充效果｜唯一例外】', APP)
+        self.assertIn('if "style_reference_custom_elements" in data:', APP)
+        self.assertIn('raw_style_reference_custom_elements = data.get(', APP)
         self.assertIn('勾選或輸入後會自動套用，並隨作品與創作膠卷保存', APP)
         self.assertIn('key="v12_text_reference_dimensional"', APP)
         self.assertIn('on_change=_v12_capture_style_reference_details_draft', APP)
