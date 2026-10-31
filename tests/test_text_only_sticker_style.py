@@ -72,6 +72,7 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('【加入立體感｜保留內嵌效果優先】', APP)
         self.assertIn('加入一眼可辨識的字體厚度或切面，而不是只加平面描邊', APP)
         self.assertIn('每個字至少要有一側連續可見的厚度、側面或立體切面', APP)
+        self.assertIn('切面不得再使用相同的純黑；必須改用可見的深灰、墨灰或', APP)
         self.assertIn('嚴禁把文字退化成素面白字、通用 3D 字、統一黑色投影', APP)
         self.assertIn('text_reference_dimensional', APP)
         self.assertIn('立體感必須由使用者為新字體重新確認', APP)
