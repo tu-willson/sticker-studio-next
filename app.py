@@ -655,22 +655,21 @@ def _v12_custom_style_toggle_changed():
 
 
 def _v12_text_only_style_toggle_changed():
-    """Keep the text-only mode independent from all person/image style inputs."""
+    """Keep text-only stickers person-free while allowing a style reference."""
     enabled = bool(st.session_state.get("v12_use_text_only_style", False))
     if enabled:
         st.session_state["v12_use_custom_style"] = False
         st.session_state["v12_use_text_person_style"] = False
         st.session_state["v10_style_mode"] = V12_TEXT_ONLY_STYLE
-        st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
+        # 純文字模式不使用預設／自定義貼圖風格，但可用一張畫風參考圖
+        # 指定字體、材質與整體視覺語言；因此直接切到畫風參考來源。
+        st.session_state["v12_style_source_mode"] = V12_STYLE_REFERENCE_MODE
         st.session_state["v12_sticker_content_mode"] = V12_STICKER_TEXT_MODE
-        # This is an explicit mode switch: the current draft must not retain a
-        # person or a second style image that could influence text-only output.
+        # This is an explicit mode switch: a person image must never influence
+        # text-only output.  The separate style-reference image is intentionally
+        # retained, because it is the only visual-style source available here.
         st.session_state["uploaded_image_bytes"] = None
         st.session_state.pop("v12_person_photo_upload_widget", None)
-        st.session_state["v12_style_reference_clear_upload_control"] = True
-        st.session_state["v12_style_reference_image_bytes"] = None
-        st.session_state["v12_style_reference_filename"] = ""
-        st.session_state["v12_style_reference_fingerprint"] = ""
     elif str(st.session_state.get("v10_style_mode", "") or "") == V12_TEXT_ONLY_STYLE:
         last_preset = str(
             st.session_state.get("v12_last_preset_style_mode", "↓ 請選擇風格")
@@ -681,6 +680,7 @@ def _v12_text_only_style_toggle_changed():
         if last_preset not in V8_STYLES:
             last_preset = "↓ 請選擇風格"
         st.session_state["v10_style_mode"] = last_preset
+        st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
 
 
 def _v12_text_person_style_toggle_changed():
@@ -7570,7 +7570,7 @@ def _v12_normalize_sticker_action_prompts(value):
 
 
 def _v12_sticker_mode_value(value=None):
-    if str(st.session_state.get("v10_style_mode", "") or "") == V12_TEXT_ONLY_STYLE:
+    if bool(st.session_state.get("v12_use_text_only_style", False)):
         return "text"
     value = str(value if value is not None else st.session_state.get(
         "v12_sticker_content_mode", V12_STICKER_TEXT_MODE
@@ -8867,12 +8867,9 @@ def _v12_load_history_record(record):
     )
     if st.session_state["v12_use_text_only_style"]:
         st.session_state["v12_use_text_person_style"] = False
-        st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
+        st.session_state["v12_style_source_mode"] = V12_STYLE_REFERENCE_MODE
         st.session_state["v12_sticker_content_mode"] = V12_STICKER_TEXT_MODE
         st.session_state["uploaded_image_bytes"] = None
-        st.session_state["v12_style_reference_image_bytes"] = None
-        st.session_state["v12_style_reference_filename"] = ""
-        st.session_state["v12_style_reference_fingerprint"] = ""
     st.session_state["v12_use_custom_style"] = (
         loaded_style_mode == V8_STYLE_CUSTOM_OPTION
         and not st.session_state["v12_use_text_only_style"]
@@ -13730,6 +13727,28 @@ st.divider()
 
 v10_section(t("section_person"), "#ff5c7a")
 v12_section_caption(t("photo_intro"))
+# 文字主導模式屬於素材來源的選擇，放在 STEP 01 的人物照片說明下方，讓
+# 使用者在上傳前就清楚知道本次是否需要人物照片。
+with st.container(key="v12_style_mode_toggles"):
+    _text_only_toggle_col, _text_person_toggle_col = st.columns([1, 1], gap="large")
+    with _text_only_toggle_col:
+        _step01_use_text_only_style = st.checkbox(
+            V12_TEXT_ONLY_STYLE_CHECKBOX_LABEL,
+            key="v12_use_text_only_style",
+            on_change=_v12_text_only_style_toggle_changed,
+        )
+    with _text_person_toggle_col:
+        _step01_use_text_person_style = st.checkbox(
+            V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL,
+            key="v12_use_text_person_style",
+            on_change=_v12_text_person_style_toggle_changed,
+        )
+st.markdown(
+    '<div class="v12-text-led-style-note">'
+    '<div>📝 純文字設計與 👤 文字搭人物都以文字為主，可依需求選取~若為初次使用平台也可先不勾選。</div>'
+    '</div>',
+    unsafe_allow_html=True,
+)
 _photo_hint_col, _clear_creation_col = st.columns([6, 1.45], vertical_alignment="center")
 with _clear_creation_col:
     st.button(
@@ -13810,6 +13829,13 @@ if _style_source_mode not in {V12_STYLE_PRESET_MODE, V12_STYLE_REFERENCE_MODE}:
     _style_source_mode = V12_STYLE_PRESET_MODE
     st.session_state["v12_style_source_mode"] = _style_source_mode
 
+# 純文字設計只允許用畫風參考指定視覺語言，不能混入內建或自定義貼圖風格。
+_use_text_only_style = bool(st.session_state.get("v12_use_text_only_style", False))
+_use_text_person_style = bool(st.session_state.get("v12_use_text_person_style", False))
+if _use_text_only_style:
+    _style_source_mode = V12_STYLE_REFERENCE_MODE
+    st.session_state["v12_style_source_mode"] = V12_STYLE_REFERENCE_MODE
+
 # 原生 file_uploader 的值不可靠；創作草稿中的圖片才是畫風參考的真實來源。
 _v12_restore_durable_style_reference()
 _v12_prime_shared_template_style_for_render()
@@ -13820,27 +13846,30 @@ _style_source_mode = str(st.session_state.get(
 if st.session_state.pop("v12_style_reference_clear_upload_control", False):
     st.session_state.pop("v12_style_reference_upload", None)
 
-_style_preset_col, _style_reference_col = st.columns(2)
-with _style_preset_col:
-    st.button(
-        ("✓ " if _style_source_mode == V12_STYLE_PRESET_MODE else "")
-        + t("style_preset_mode"),
-        key="v12_select_style_preset_mode",
-        use_container_width=True,
-        type="primary" if _style_source_mode == V12_STYLE_PRESET_MODE else "secondary",
-        on_click=_v12_set_style_source_mode,
-        args=(V12_STYLE_PRESET_MODE,),
-    )
-with _style_reference_col:
-    st.button(
-        ("✓ " if _style_source_mode == V12_STYLE_REFERENCE_MODE else "")
-        + t("style_reference_mode"),
-        key="v12_select_style_reference_mode",
-        use_container_width=True,
-        type="primary" if _style_source_mode == V12_STYLE_REFERENCE_MODE else "secondary",
-        on_click=_v12_set_style_source_mode,
-        args=(V12_STYLE_REFERENCE_MODE,),
-    )
+if _use_text_only_style:
+    st.info("📝 純文字設計不使用人物照片、內建貼圖風格或自定義風格；可在下方上傳畫風參考，讓文字沿用想要的視覺語言。")
+else:
+    _style_preset_col, _style_reference_col = st.columns(2)
+    with _style_preset_col:
+        st.button(
+            ("✓ " if _style_source_mode == V12_STYLE_PRESET_MODE else "")
+            + t("style_preset_mode"),
+            key="v12_select_style_preset_mode",
+            use_container_width=True,
+            type="primary" if _style_source_mode == V12_STYLE_PRESET_MODE else "secondary",
+            on_click=_v12_set_style_source_mode,
+            args=(V12_STYLE_PRESET_MODE,),
+        )
+    with _style_reference_col:
+        st.button(
+            ("✓ " if _style_source_mode == V12_STYLE_REFERENCE_MODE else "")
+            + t("style_reference_mode"),
+            key="v12_select_style_reference_mode",
+            use_container_width=True,
+            type="primary" if _style_source_mode == V12_STYLE_REFERENCE_MODE else "secondary",
+            on_click=_v12_set_style_source_mode,
+            args=(V12_STYLE_REFERENCE_MODE,),
+        )
 
 # 自定義風格改由獨立勾選啟用，預設風格下拉只保留預設選項。
 _v8_style_items = [x for x in V8_STYLES if not x.startswith("⭐ 自訂")]
@@ -13868,35 +13897,10 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
         ).strip().lower() in {"1", "true", "yes", "on"} or (
             style_mode == V8_STYLE_CUSTOM_OPTION
         )
-    st.session_state.setdefault(
-        "v12_use_text_only_style", style_mode == V12_TEXT_ONLY_STYLE
-    )
-    st.session_state.setdefault("v12_use_text_person_style", False)
     # 元件建立前先處理跨版本草稿可能留下的互斥狀態。
     # 建立 checkbox 後不可直接寫回同一個 widget key，否則 Streamlit 會報錯。
-    if bool(st.session_state.get("v12_use_text_only_style", False)):
-        st.session_state["v12_use_custom_style"] = False
-        st.session_state["v12_use_text_person_style"] = False
-    # 文字主導的兩種模式左右並列，讓大尺寸預覽和完整選項名稱都能清楚閱讀。
-    with st.container(key="v12_style_mode_toggles"):
-        _text_only_toggle_col, _text_person_toggle_col = st.columns(
-            [1, 1], gap="large"
-        )
-        with _text_only_toggle_col:
-            _use_text_only_style = st.checkbox(
-                V12_TEXT_ONLY_STYLE_CHECKBOX_LABEL,
-                key="v12_use_text_only_style",
-                on_change=_v12_text_only_style_toggle_changed,
-            )
-        with _text_person_toggle_col:
-            _use_text_person_style = st.checkbox(
-                V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL,
-                key="v12_use_text_person_style",
-                on_change=_v12_text_person_style_toggle_changed,
-            )
     st.markdown(
         '<div class="v12-text-led-style-note">'
-        '<div>📝 純文字設計與 👤 文字搭人物都以文字為主，可依需求選取~若為初次使用平台也可先不勾選。</div>'
         '<div>⭐ 使用自定義風格可建立、保存並套用自己的風格 Prompt。</div>'
         '</div>',
         unsafe_allow_html=True,
@@ -13909,10 +13913,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
             key="v12_use_custom_style",
             on_change=_v12_custom_style_toggle_changed,
         )
-    if _use_text_only_style:
-        st.session_state["v10_style_mode"] = V12_TEXT_ONLY_STYLE
-        style_mode = V12_TEXT_ONLY_STYLE
-    elif _use_custom_style:
+    if _use_custom_style:
         # Keep the canonical mode explicit so prompts and saved projects retain
         # the exact custom-style behavior.
         st.session_state["v10_style_mode"] = V8_STYLE_CUSTOM_OPTION
@@ -14050,7 +14051,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
     if _use_text_only_style:
         st.info(
             "📝 已選擇「純文字設計（無人物）」：不需上傳人物照片。"
-            "人物照片與畫風參考已自動移除。輸入 01～08 的文字後，會以你選擇的字型與外框為核心，"
+            "可使用畫風參考決定文字的視覺語言。輸入 01～08 的文字後，會以你選擇的字型與外框為核心，"
             "每次隨機變化排版、配色、材質與抽象裝飾；不會產生人物、角色或場景。"
         )
     elif _use_text_person_style:
@@ -14243,7 +14244,10 @@ else:
                 width=240,
             )
         st.success(t("style_reference_enabled"))
-        st.info(t("style_identity_priority"))
+        if _use_text_only_style:
+            st.info("📝 純文字設計只會參考這張圖的筆觸、材質、配色與視覺節奏；不會帶入其中的人物、物件、既有文字或版面。")
+        else:
+            st.info(t("style_identity_priority"))
         st.button(
             "🗑️ 清除這張畫風參考",
             key="v12_clear_style_reference",
@@ -15368,7 +15372,7 @@ _v12_prompt_settings_admin = bool(st.session_state.get("v12_is_beta_admin", Fals
 if _v12_prompt_settings_admin:
     v10_subsection(t("settings_review"), "#ff9f43")
 style_mode = st.session_state.get("v10_style_mode", "↓ 請選擇風格")
-_text_only_generation = style_mode == V12_TEXT_ONLY_STYLE
+_text_only_generation = bool(st.session_state.get("v12_use_text_only_style", False))
 _text_person_generation = bool(st.session_state.get("v12_use_text_person_style", False))
 
 _prompt_color_segments = _v12_valid_color_segments(texts)
@@ -15396,22 +15400,31 @@ if _style_reference_active:
     _style_reference_strength = _v12_normalize_style_reference_strength(
         st.session_state.get("v12_style_reference_strength")
     )
-    _style_reference_strength_instruction = {
-        "柔和融入": "保留第一張人物照片的可辨識臉部與人物特徵；僅輕度採用第二張圖的配色、線條與筆觸，不採用第二張圖的角色外觀。",
-        "強烈融入": "只強烈採用第二張圖的視覺媒材與畫法（線條、筆觸、色塊、陰影、配色、留白）；絕不可採用其中的人物臉部、髮型、服裝、年齡、姿勢、道具或角色身份。第一張人物照片的身份與外觀永遠優先。",
-    }.get(_style_reference_strength, "第二張圖只提供視覺媒材與畫法，不提供人物角色。")
-    prompt += (
-        "\n【人物身份優先規則】第一張圖是唯一的人物／臉部參考。八格必須是同一位第一張照片中的人，保留其臉型、五官、髮型、髮色、鬍鬚、年齡感、膚色與可辨識特徵。"
-        "第二張圖僅供美術風格參考；即使圖中有人物，也禁止把那個人的臉、髮型、服裝、姿勢、年齡、性別、道具、身形或角色身份帶入結果。"
-        "兩張圖的角色外觀若有衝突，無條件以第一張人物照片為準；只從第二張圖擷取線條、筆觸、色彩、材質、明暗、構圖留白與視覺節奏。"
-        "\n【畫風參考模式】本次輸入的第二張圖片是畫風參考圖。"
-        + _style_reference_strength_instruction
-        + "請先辨識參考圖的高階視覺特徵，包括線條與筆觸、配色、陰影方式、畫面留白與整體情緒節奏，並把這些『畫風特徵』套用到第一張圖的人物。"
-        "請將第一張人物完整重新繪製並轉譯進參考圖的視覺語言，但不可把第二張圖中的人物重新畫入結果。"
-        "請創作全新的八格貼圖；"
-        "不要直接複製參考圖中的既有角色、文字、標誌、版面或任何單一貼圖內容。"
-        "不要套用其他預設或自定義貼圖風格。"
-    )
+    if _text_only_generation:
+        prompt += (
+            "\n【純文字畫風參考模式】本次唯一輸入圖片僅供字體材質、線條、配色、陰影、留白與視覺節奏參考。"
+            "即使參考圖含人物、角色、物件、既有文字或版面，也絕不可帶入結果；"
+            "八格仍只能出現使用者指定文字與抽象裝飾。"
+            "請創作全新的八格貼圖，不要直接複製參考圖中的既有文字、標誌或版面，"
+            "也不要套用其他預設或自定義貼圖風格。"
+        )
+    else:
+        _style_reference_strength_instruction = {
+            "柔和融入": "保留第一張人物照片的可辨識臉部與人物特徵；僅輕度採用第二張圖的配色、線條與筆觸，不採用第二張圖的角色外觀。",
+            "強烈融入": "只強烈採用第二張圖的視覺媒材與畫法（線條、筆觸、色塊、陰影、配色、留白）；絕不可採用其中的人物臉部、髮型、服裝、年齡、姿勢、道具或角色身份。第一張人物照片的身份與外觀永遠優先。",
+        }.get(_style_reference_strength, "第二張圖只提供視覺媒材與畫法，不提供人物角色。")
+        prompt += (
+            "\n【人物身份優先規則】第一張圖是唯一的人物／臉部參考。八格必須是同一位第一張照片中的人，保留其臉型、五官、髮型、髮色、鬍鬚、年齡感、膚色與可辨識特徵。"
+            "第二張圖僅供美術風格參考；即使圖中有人物，也禁止把那個人的臉、髮型、服裝、姿勢、年齡、性別、道具、身形或角色身份帶入結果。"
+            "兩張圖的角色外觀若有衝突，無條件以第一張人物照片為準；只從第二張圖擷取線條、筆觸、色彩、材質、明暗、構圖留白與視覺節奏。"
+            "\n【畫風參考模式】本次輸入的第二張圖片是畫風參考圖。"
+            + _style_reference_strength_instruction
+            + "請先辨識參考圖的高階視覺特徵，包括線條與筆觸、配色、陰影方式、畫面留白與整體情緒節奏，並把這些『畫風特徵』套用到第一張圖的人物。"
+            "請將第一張人物完整重新繪製並轉譯進參考圖的視覺語言，但不可把第二張圖中的人物重新畫入結果。"
+            "請創作全新的八格貼圖；"
+            "不要直接複製參考圖中的既有角色、文字、標誌、版面或任何單一貼圖內容。"
+            "不要套用其他預設或自定義貼圖風格。"
+        )
     _style_reference_custom_elements = str(
         st.session_state.get("v12_style_reference_custom_elements", "") or ""
     ).strip()
@@ -15419,8 +15432,9 @@ if _style_reference_active:
         prompt += (
             "\n【畫風參考補充】除了整體畫風外，使用者特別希望保留或轉譯以下特色：「"
             + _style_reference_custom_elements
-            + "」。請將其明確融入全新人物的設計、表情或局部視覺語言；"
-            "不要只當成背景裝飾，也不要直接複製參考圖中的既有角色、文字或版面。"
+            + ("」。請將其明確融入文字的筆畫、材質或抽象裝飾；"
+               if _text_only_generation else "」。請將其明確融入全新人物的設計、表情或局部視覺語言；")
+            + "不要只當成背景裝飾，也不要直接複製參考圖中的既有角色、文字或版面。"
         )
 elif style_mode == V8_STYLE_CUSTOM_OPTION:
     prompt += (
@@ -15876,12 +15890,22 @@ if st.session_state.get("v11_generation_pending", False):
                     )
                     if not _style_reference_bytes:
                         raise RuntimeError("畫風參考圖已失效，請重新上傳後再生成。")
-                    _image_request_kwargs["image"] = [
-                        ("person.png", ib, "image/png"),
-                        ("style-reference.jpg", BytesIO(_style_reference_bytes), "image/jpeg"),
-                    ]
-                    _stage_two_title = "🖼️ 美術組正在對照人物與畫風參考"
-                    _stage_two_note = "人物身份以你的照片為準，畫風只負責幫這場戲上色。"
+                    if _text_only_generation:
+                        # 純文字模式沒有、也不應該補上一張人物照；以畫風參考圖
+                        # 作為唯一 edit 輸入，讓模型只轉譯它的視覺語言。
+                        _image_request = _generation_client.with_options(timeout=240).images.edit
+                        _image_request_kwargs["image"] = (
+                            "style-reference.jpg", BytesIO(_style_reference_bytes), "image/jpeg"
+                        )
+                        _stage_two_title = "🖼️ 美術組正在轉譯文字的畫風參考"
+                        _stage_two_note = "只借用筆觸、材質與配色；不會帶入參考圖的人物或內容。"
+                    else:
+                        _image_request_kwargs["image"] = [
+                            ("person.png", ib, "image/png"),
+                            ("style-reference.jpg", BytesIO(_style_reference_bytes), "image/jpeg"),
+                        ]
+                        _stage_two_title = "🖼️ 美術組正在對照人物與畫風參考"
+                        _stage_two_note = "人物身份以你的照片為準，畫風只負責幫這場戲上色。"
 
                 if transparent:
                     _generation_prompt += (
@@ -15918,7 +15942,8 @@ if st.session_state.get("v11_generation_pending", False):
                         "第 2 幕／5", _stage_two_title, _stage_two_note, 31,
                     )
                     _status.info(
-                        "🖼️ 正在分析人物照片與畫風參考圖……"
+                        ("🖼️ 正在分析文字的畫風參考圖……"
+                         if _text_only_generation else "🖼️ 正在分析人物照片與畫風參考圖……")
                         if _style_reference_active else (
                             "🔤 正在安排純文字貼圖的版式……"
                             if _text_only_generation else "🖌️ 正在準備貼圖構圖……"
