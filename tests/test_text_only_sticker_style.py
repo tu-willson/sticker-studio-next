@@ -54,6 +54,15 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('此欄內容會隨作品與創作膠卷保存，日後載回時會自動帶回。', APP)
         self.assertIn('key="v12_text_reference_dimensional"', APP)
         self.assertIn('（勾選後請點選套用）', APP)
+
+    def test_reel_apply_preserves_text_reference_priority_in_navigation_draft(self):
+        self.assertIn(
+            'v12_text_reference_priority=bool(\n'
+            '            st.session_state.get("v12_text_reference_priority", False)\n'
+            '        ),',
+            APP,
+        )
+        self.assertIn('st.session_state["v12_style_reference_strong_choice"] = (', APP)
         self.assertIn('【加入立體感｜最高優先】', APP)
         self.assertIn('text_reference_dimensional', APP)
         self.assertIn('def _v12_style_reference_influence_changed(mode):', APP)

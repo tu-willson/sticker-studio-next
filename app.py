@@ -8821,6 +8821,16 @@ def _v12_load_history_record(record):
     st.session_state["v12_text_reference_dimensional"] = bool(
         metadata.get("text_reference_dimensional", False)
     )
+    # 載回膠卷／模板時，三個畫風融入選項必須重新由不可變的作品快照
+    # 推導，不能沿用離開創作頁前的 checkbox widget 狀態。
+    st.session_state["v12_style_reference_soft_choice"] = (
+        not st.session_state["v12_text_reference_priority"]
+        and st.session_state["v12_style_reference_strength"] == "柔和融入"
+    )
+    st.session_state["v12_style_reference_strong_choice"] = (
+        not st.session_state["v12_text_reference_priority"]
+        and st.session_state["v12_style_reference_strength"] == "強烈融入"
+    )
     st.session_state["v12_style_reference_elements_enabled"] = False
     st.session_state["v12_style_reference_elements"] = []
     st.session_state["v12_style_reference_custom_elements"] = str(
@@ -10227,6 +10237,14 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         ),
         v12_style_reference_strength=st.session_state.get(
             "v12_style_reference_strength"
+        ),
+        # 這兩個值也必須寫進導航安全草稿；否則頁面切換到創作區後，
+        # 先前草稿的「強烈融入」可能覆蓋膠卷保存的文字畫風優先設定。
+        v12_text_reference_priority=bool(
+            st.session_state.get("v12_text_reference_priority", False)
+        ),
+        v12_text_reference_dimensional=bool(
+            st.session_state.get("v12_text_reference_dimensional", False)
         ),
         v12_style_reference_custom_elements=st.session_state.get(
             "v12_style_reference_custom_elements"
