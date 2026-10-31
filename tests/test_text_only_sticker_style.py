@@ -37,6 +37,14 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('可在下方上傳畫風參考', APP)
         self.assertIn('人物照片已強制移除，此模式不接受人物照片。', APP)
 
+    def test_text_reference_priority_suspends_font_and_outline_without_erasing_them(self):
+        self.assertIn('key="v12_text_reference_priority"', APP)
+        self.assertIn('文字畫風參考優先（使用上傳參考圖的字體意象）', APP)
+        self.assertIn('disabled=_text_reference_priority_active', APP)
+        self.assertIn('not _text_reference_priority_active', APP)
+        self.assertIn('【文字畫風參考優先】', APP)
+        self.assertIn('text_reference_priority', APP)
+
     def test_text_person_mode_keeps_photo_and_makes_text_the_main_subject(self):
         self.assertIn('V12_TEXT_PERSON_STYLE_LABEL = "👤 文字搭人物（字大人小）"', APP)
         self.assertIn('key="v12_use_text_person_style"', APP)

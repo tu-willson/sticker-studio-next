@@ -4271,7 +4271,7 @@ def _beta_library_metadata(record):
         "font_name", "text_style", "generation_method", "transparent_background",
         "style_mode", "custom_style_snapshot", "character_features",
         "custom_character", "custom_character_enabled",
-        "text_only_style", "text_person_style",
+        "text_only_style", "text_person_style", "text_reference_priority",
         "sticker_mode", "expression_specs",
         "sticker_texts", "sticker_action_prompts", "sticker_color_segments", "schema_version", "identity",
         "timestamps", "creative_settings", "package_settings", "main_no", "tab_no",
@@ -7838,6 +7838,7 @@ def _v12_template_transfer_contract(snapshot):
         "style_mode": style_mode,
         "text_only_style": bool(snapshot.get("text_only_style", False)),
         "text_person_style": bool(snapshot.get("text_person_style", False)),
+        "text_reference_priority": bool(snapshot.get("text_reference_priority", False)),
         "character_features": copy.deepcopy(
             snapshot.get("character_features", []) or []
         ),
@@ -7892,6 +7893,7 @@ def _v12_new_project_metadata():
         "custom_style_snapshot": {},
         "text_only_style": False,
         "text_person_style": False,
+        "text_reference_priority": False,
         "character_features": [],
         "custom_character": "",
         "custom_character_enabled": False,
@@ -7920,6 +7922,7 @@ def _v12_new_project_metadata():
             "style": {"name": "", "mode": "", "custom_snapshot": {}},
             "text_only_style": False,
             "text_person_style": False,
+            "text_reference_priority": False,
             "font": {"name": ""},
             "text_style": "",
             "generation_method": "",
@@ -8008,6 +8011,15 @@ def _v12_normalize_project_metadata(metadata):
         _text_person_raw
         if isinstance(_text_person_raw, bool)
         else str(_text_person_raw or "").strip().lower() in {"1", "true", "yes", "on"}
+    )
+    _text_reference_priority_raw = data.get(
+        "text_reference_priority", creative.get("text_reference_priority", False)
+    )
+    text_reference_priority = (
+        _text_reference_priority_raw
+        if isinstance(_text_reference_priority_raw, bool)
+        else str(_text_reference_priority_raw or "").strip().lower()
+        in {"1", "true", "yes", "on"}
     )
     if text_only_style:
         # 純文字與文字搭人物互斥；舊快照只有 style_mode 時也可推回正確模式。
@@ -8114,6 +8126,7 @@ def _v12_normalize_project_metadata(metadata):
         "custom_style_snapshot": custom_style_snapshot,
         "text_only_style": text_only_style,
         "text_person_style": text_person_style,
+        "text_reference_priority": text_reference_priority,
         "character_features": character_features,
         "custom_character": custom_character,
         "custom_character_enabled": custom_character_enabled,
@@ -8141,6 +8154,7 @@ def _v12_normalize_project_metadata(metadata):
         },
         "text_only_style": normalized["text_only_style"],
         "text_person_style": normalized["text_person_style"],
+        "text_reference_priority": normalized["text_reference_priority"],
         "font": {"name": normalized["font_name"]},
         "text_style": normalized["text_style"],
         "generation_method": normalized["generation_method"],
@@ -8766,6 +8780,9 @@ def _v12_load_history_record(record):
     st.session_state["v12_style_reference_strength"] = _v12_normalize_style_reference_strength(
         metadata.get("style_reference_strength")
     )
+    st.session_state["v12_text_reference_priority"] = bool(
+        metadata.get("text_reference_priority", False)
+    )
     st.session_state["v12_style_reference_elements_enabled"] = False
     st.session_state["v12_style_reference_elements"] = []
     st.session_state["v12_style_reference_custom_elements"] = str(
@@ -9186,6 +9203,9 @@ def _v12_project_snapshot():
     project["text_person_style"] = bool(
         st.session_state.get("v12_use_text_person_style", False)
     ) and not project["text_only_style"]
+    project["text_reference_priority"] = bool(
+        st.session_state.get("v12_text_reference_priority", False)
+    )
     # V12｜STEP 01A③ FIX：
     # 若使用「⭐ 自定義風格」，作品庫不要只顯示泛稱，
     # 而是記錄使用者實際選取的「已儲存風格名稱」。
@@ -10060,6 +10080,7 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
             "style_mode",
             "text_only_style",
             "text_person_style",
+            "text_reference_priority",
             "character_features",
             "custom_character",
             "text_style",
@@ -10705,6 +10726,7 @@ st.session_state.setdefault("v12_expression_used_visual_pack_ids", [])
 st.session_state.setdefault("v12_expression_last_recipe_labels", [])
 st.session_state.setdefault("v12_expression_recipe_cycle", 1)
 st.session_state.setdefault("v12_style_reference_strength", "柔和融入")
+st.session_state.setdefault("v12_text_reference_priority", False)
 st.session_state.setdefault("v12_style_reference_elements_enabled", False)
 st.session_state.setdefault("v12_style_reference_elements", [])
 st.session_state.setdefault("v12_style_reference_custom_elements", "")
@@ -10737,6 +10759,7 @@ _V12_CREATION_DRAFT_KEYS = (
     "v12_style_reference_filename",
     "v12_style_reference_fingerprint",
     "v12_style_reference_strength",
+    "v12_text_reference_priority",
     "v12_style_reference_custom_elements",
     # A redeemed template's custom prompt is intentionally separate from the
     # member's 01–10 library, but it still must survive the marketplace →
@@ -10807,6 +10830,7 @@ def _v12_restore_durable_style_reference():
         "v12_style_reference_filename",
         "v12_style_reference_fingerprint",
         "v12_style_reference_strength",
+        "v12_text_reference_priority",
         "v12_style_reference_custom_elements",
     ):
         if key in draft:
@@ -11106,6 +11130,7 @@ def _v12_clear_active_creation_callback():
     st.session_state["v12_style_reference_filename"] = ""
     st.session_state["v12_style_reference_fingerprint"] = ""
     st.session_state["v12_style_reference_strength"] = "柔和融入"
+    st.session_state["v12_text_reference_priority"] = False
     st.session_state["v12_style_reference_elements_enabled"] = False
     st.session_state["v12_style_reference_elements"] = []
     st.session_state["v12_style_reference_custom_elements"] = ""
@@ -12295,12 +12320,14 @@ def _v12_clear_style_reference():
     st.session_state["v12_style_reference_image_bytes"] = None
     st.session_state["v12_style_reference_filename"] = ""
     st.session_state["v12_style_reference_fingerprint"] = ""
+    st.session_state["v12_text_reference_priority"] = False
     st.session_state["v12_style_source_mode"] = V12_STYLE_PRESET_MODE
     _v12_update_navigation_safe_creation_draft(
         v12_style_source_mode=V12_STYLE_PRESET_MODE,
         v12_style_reference_image_bytes=None,
         v12_style_reference_filename="",
         v12_style_reference_fingerprint="",
+        v12_text_reference_priority=False,
     )
 
 
@@ -13671,6 +13698,9 @@ def _v12_capture_style_reference_details_draft():
         v12_style_reference_strength=st.session_state.get(
             "v12_style_reference_strength"
         ),
+        v12_text_reference_priority=bool(
+            st.session_state.get("v12_text_reference_priority", False)
+        ),
         v12_style_reference_custom_elements=str(
             st.session_state.get("v12_style_reference_custom_elements", "") or ""
         ).strip()[:1200],
@@ -14271,6 +14301,26 @@ else:
             }[value],
             help=t("style_strength_help"),
         )
+        _reference_priority_available = bool(
+            st.session_state.get("v12_use_text_only_style", False)
+            or st.session_state.get("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
+            == V12_STICKER_TEXT_MODE
+        )
+        if not _reference_priority_available:
+            # 表情貼圖沒有文字筆畫可轉譯；保留已選字型與外框本身，
+            # 但不要讓這個文字專用開關在表情模式意外生效。
+            st.session_state["v12_text_reference_priority"] = False
+        _text_reference_priority_selected = st.checkbox(
+            "🖋️ 文字畫風參考優先（使用上傳參考圖的字體意象）",
+            key="v12_text_reference_priority",
+            disabled=not _reference_priority_available,
+            help=(
+                "啟用後會暫時不套用 125 種帶圖字型與文字外框，"
+                "改以這張畫風參考的字體筆觸、材質、配色與留白為最高優先。"
+            ),
+        )
+        if _text_reference_priority_selected and _reference_priority_available:
+            st.caption("🖋️ 已啟用文字畫風參考優先：下方的 125 種帶圖字型與文字外框設定會保留，但本次不會套用。")
         with st.form("v12_style_reference_details_form", border=False):
             st.text_area(
                 t("style_elements"),
@@ -14304,6 +14354,9 @@ _v12_update_navigation_safe_creation_draft(
     v12_style_reference_filename=st.session_state.get("v12_style_reference_filename"),
     v12_style_reference_fingerprint=st.session_state.get("v12_style_reference_fingerprint"),
     v12_style_reference_strength=st.session_state.get("v12_style_reference_strength"),
+    v12_text_reference_priority=bool(
+        st.session_state.get("v12_text_reference_priority", False)
+    ),
     v12_style_reference_custom_elements=st.session_state.get("v12_style_reference_custom_elements"),
     v12_loaded_project_custom_style=st.session_state.get(
         "v12_loaded_project_custom_style"
@@ -15054,6 +15107,15 @@ _prompt_expression_specs = (
     if _sticker_mode == "expression" and isinstance(_prepared_expression_specs, list)
     else expression_specs
 )
+_text_reference_priority_active = bool(
+    _sticker_mode == "text"
+    and st.session_state.get("v12_text_reference_priority", False)
+    and st.session_state.get("v12_style_reference_image_bytes")
+)
+if _text_reference_priority_active:
+    # 暫時收起既有圖卡，不清除使用者原本的選擇；取消優先模式後可直接恢復。
+    st.session_state["v12_outline_gallery_open"] = False
+    st.session_state["v10_font_gallery_open"] = False
 
 if _sticker_mode == "text":
     with st.expander(t("view_all_phrases"),expanded=False):
@@ -15077,7 +15139,10 @@ if _sticker_mode == "text":
         index=0,
         key="v8_text_style",
         format_func=lambda value: _v12_localized_option(value, V12_TEXT_OUTLINE_LABELS),
+        disabled=_text_reference_priority_active,
     )
+    if _text_reference_priority_active:
+        st.info("🖋️ 文字畫風參考優先已啟用：本次會保留你的外框選擇，但不會套用外框效果。")
 
     # 外框縮圖與貼圖風格縮圖採相同操作：平常維持選單精簡，
     # 需要比較效果時再展開，點擊圖卡名稱即可套用。
@@ -15090,8 +15155,9 @@ if _sticker_mode == "text":
         use_container_width=True,
         on_click=_v12_set_session_state_callback,
         args=("v12_outline_gallery_open", not st.session_state["v12_outline_gallery_open"]),
+        disabled=_text_reference_priority_active,
     )
-    if st.session_state["v12_outline_gallery_open"]:
+    if st.session_state["v12_outline_gallery_open"] and not _text_reference_priority_active:
         st.markdown(
             '<div class="v12-style-gallery-note">'
             '點選縮圖下方的外框名稱即可套用。縮圖保留透明背景，僅用來比較文字周圍的描邊、框形與裝飾效果。'
@@ -15158,6 +15224,7 @@ if _sticker_mode == "text":
         ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
         key="v12_font_quick_pick",
         format_func=_v12_font_choice_display,
+        disabled=_text_reference_priority_active,
     )
     if _quick_font_choice != "— 快速選擇字型｜可直接輸入數字 —":
         _quick_font_no = int(_quick_font_choice.split("｜", 1)[0])
@@ -15165,7 +15232,9 @@ if _sticker_mode == "text":
             st.session_state["v8_selected_font"] = _quick_font_no
             st.session_state["v10_font_gallery_open"] = False
         _selected_font = _quick_font_no
-    if not _selected_font:
+    if _text_reference_priority_active:
+        st.info("🖋️ 文字畫風參考優先已啟用：本次會保留你的字型選擇，但不會套用 125 種帶圖字型。")
+    elif not _selected_font:
         st.info(t("font_none"))
 
 # 選字型圖卡後回到快速選單與目前選擇提示的位置。
@@ -15202,12 +15271,17 @@ if _sticker_mode == "text":
         use_container_width=True,
         on_click=_v12_set_session_state_callback,
         args=("v10_font_gallery_open", not st.session_state.v10_font_gallery_open),
+        disabled=_text_reference_priority_active,
     )
 
 if _sticker_mode == "text":
     st.caption("來源出處：cz88422")
 
-if _sticker_mode == "text" and st.session_state.v10_font_gallery_open:
+if (
+    _sticker_mode == "text"
+    and st.session_state.v10_font_gallery_open
+    and not _text_reference_priority_active
+):
     st.markdown(
         '<div class="v12-font-gallery-note">📱 手機版已改為分頁瀏覽，每頁 12 種；點選後會立即關閉總覽並回到已選結果。</div>',
         unsafe_allow_html=True,
@@ -15455,13 +15529,30 @@ if _text_person_generation:
     )
 
 _selected_font_for_prompt = st.session_state.get("v8_selected_font")
-if _sticker_mode == "text" and text_style and text_style != "不使用外框":
+if _text_reference_priority_active:
+    prompt += (
+        "\n【文字畫風參考優先】畫風參考中的文字意象是本次文字設計的最高優先。"
+        "請仔細轉譯其筆觸的粗細變化、乾濕質感、邊緣、字重、節奏、留白、"
+        "配色、陰影與整體構圖動勢；使用者輸入的文字必須清楚可讀，但要以相同的視覺原理重新創作。"
+        "忽略任何既有的 125 種帶圖字型與文字外框／形狀效果，不得混用。"
+        "不可複製參考圖的既有文字、標誌、完整排版或單一筆畫；請針對本次指定文字重新設計。"
+    )
+if (
+    _sticker_mode == "text"
+    and not _text_reference_priority_active
+    and text_style
+    and text_style != "不使用外框"
+):
     prompt += (
         f"\n文字外框／形狀效果：{text_style}。"
         "此設定只影響每一句文字周圍的描邊、貼紙輪廓、對話框或裝飾形狀；"
         "不要取代文字本身的字型筆畫與材質。"
     )
-if _sticker_mode == "text" and _selected_font_for_prompt:
+if (
+    _sticker_mode == "text"
+    and not _text_reference_priority_active
+    and _selected_font_for_prompt
+):
     prompt += (
         f"\n125種帶圖字型參考：{_selected_font_for_prompt:03d}｜"
         f"{V8_TEXT_EFFECT_CATALOG[_selected_font_for_prompt]}。"
