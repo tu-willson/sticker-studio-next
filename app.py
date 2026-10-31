@@ -14382,14 +14382,30 @@ else:
                 ),
             )
         if _text_reference_priority_selected and _reference_priority_available:
-            st.caption("🖋️ 已啟用文字畫風參考優先：本次只生成平面文字，優先重現參考圖的筆觸與色系；不套用 125 種字型、外框或額外特效。")
+            st.caption("🖋️ 已啟用文字畫風參考優先：預設只生成平面文字，優先重現參考圖的筆觸與色系；下方可另外指定要開放的補充效果。")
         with st.form("v12_style_reference_details_form", border=False):
-            st.text_area(
-                t("style_elements"),
-                key="v12_style_reference_custom_elements",
-                placeholder=t("style_elements_placeholder"),
-                max_chars=1200,
-            )
+            if _text_reference_priority_selected and _reference_priority_available:
+                st.text_area(
+                    "✨ 允許自訂補充效果（選填）（輸入完請點選套用）",
+                    key="v12_style_reference_custom_elements",
+                    placeholder=(
+                        "例如：強調毛筆筆勢痕跡、文字加入極淡的立體層次與灰黑色短陰影；"
+                        "也可明確指定外框、圖案或彩色特效。"
+                    ),
+                    max_chars=1200,
+                    help=(
+                        "只有此欄明確寫出的效果才會例外開放；未填寫時，"
+                        "仍維持純文字、無額外特效的畫風參考模式。"
+                    ),
+                )
+                st.caption("此欄內容會隨作品與創作膠卷保存，日後載回時會自動帶回。")
+            else:
+                st.text_area(
+                    t("style_elements"),
+                    key="v12_style_reference_custom_elements",
+                    placeholder=t("style_elements_placeholder"),
+                    max_chars=1200,
+                )
             with st.container(key="v12_style_reference_save_button"):
                 _apply_style_reference_details = st.form_submit_button(
                     t("style_apply"),
@@ -15565,7 +15581,7 @@ if _style_reference_active:
     _style_reference_custom_elements = str(
         st.session_state.get("v12_style_reference_custom_elements", "") or ""
     ).strip()
-    if _style_reference_custom_elements:
+    if _style_reference_custom_elements and not _text_reference_priority_active:
         prompt += (
             "\n【畫風參考補充】除了整體畫風外，使用者特別希望保留或轉譯以下特色：「"
             + _style_reference_custom_elements
@@ -15604,6 +15620,17 @@ if _text_reference_priority_active:
         "忽略任何既有的 125 種帶圖字型與文字外框／形狀效果，不得混用。"
         "不可複製參考圖的既有文字、標誌、完整排版或單一筆畫；請針對本次指定文字重新設計。"
     )
+    _text_reference_effects = str(
+        st.session_state.get("v12_style_reference_custom_elements", "") or ""
+    ).strip()
+    if _text_reference_effects:
+        prompt += (
+            "\n【允許自訂補充效果｜唯一例外】使用者只允許額外加入以下明確指定的效果：「"
+            + _text_reference_effects
+            + "」。只解除實現這些效果所必需的限制，禁止自行延伸、替換或增加其他立體、陰影、"
+              "描邊、外框、圖案或彩色特效。所有補充效果都必須從屬於參考圖的筆法、留白與色系，"
+              "不可取代文字筆觸，也不可降低指定文字的正確性與可讀性。"
+        )
 if (
     _sticker_mode == "text"
     and not _text_reference_priority_active
