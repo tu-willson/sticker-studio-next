@@ -604,6 +604,9 @@ GENERATOR_CSS = r"""
 .step04-generator-root button { width:100%; min-height:42px; border:0; border-radius:9px;
   background:#ff5878; color:#fff; font:inherit; font-size:16px; font-weight:850; cursor:pointer; }
 .step04-generator-root button:disabled { opacity:.62; cursor:wait; }
+.step04-generator-root button.is-text-required:disabled { cursor:not-allowed; }
+.step04-generator-note { margin:.58rem 0 0; padding:.52rem .72rem; border:1px solid rgba(255,209,102,.72);
+  border-radius:8px; background:rgba(117,81,14,.36); color:#fff2bd; font-size:14px; font-weight:780; }
 """
 GENERATOR_JS = r"""
 export default function(component) {
@@ -613,10 +616,27 @@ export default function(component) {
     try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
     catch (_) { return null; }
   };
-  root.innerHTML = `<button ${data.disabled ? 'disabled' : ''}>${data.disabled ? '🔄 AI 正在生成，請稍候……' : '✨ 生成 4×2 八格總圖'}</button>`;
+  const state = readDraft();
+  const textModeEmpty = Boolean(
+    state
+    && state.mode === 'text'
+    && !((Array.isArray(state.slots) ? state.slots : []).some(
+      slot => String(slot?.text || '').trim()
+    ))
+  );
+  const disabled = Boolean(data.disabled || textModeEmpty);
+  const label = data.disabled
+    ? '🔄 AI 正在生成，請稍候……'
+    : '✨ 生成 4×2 八格總圖';
+  const textRequiredNote = String(
+    data.textRequiredNote || '「使用文字貼圖」模式，至少填入一格文字。'
+  );
+  root.innerHTML = `<button class="${textModeEmpty && !data.disabled ? 'is-text-required' : ''}" ${disabled ? 'disabled' : ''}>${label}</button>`
+    + (textModeEmpty && !data.disabled
+      ? `<div class="step04-generator-note">${textRequiredNote}</div>`
+      : '');
   const button = root.querySelector('button');
   button.addEventListener('click', () => {
-    const state = readDraft();
     if (!state) return;
     button.disabled = true;
     button.textContent = '🔄 正在準備生成…';

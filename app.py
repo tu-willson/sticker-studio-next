@@ -15640,6 +15640,10 @@ _generation_pending = bool(st.session_state.get("v11_generation_pending", False)
 _generation_in_progress = bool(st.session_state.get("v11_generation_in_progress", False))
 _generation_locked = _generation_pending or _generation_in_progress
 _generation_feedback = st.session_state.pop("v11_generation_release_feedback", None)
+_text_generation_missing_content = (
+    _sticker_mode == "text"
+    and not any(str(text or "").strip() for text in texts)
+)
 
 # ------------------------------------------------------------
 # 第一階段：使用者按下按鈕
@@ -15652,6 +15656,7 @@ if _v12_step04_frontend_enabled:
         data={
             "storageKey": "sticker-studio-next.step04-formal.v1",
             "disabled": _generation_locked,
+            "textRequiredNote": "「使用文字貼圖」模式，至少填入一格文字。",
         },
         key="v12_step04_frontend_generate_formal",
     )
@@ -15671,9 +15676,11 @@ else:
         t("generating") if _generation_locked else t("generate"),
         type="primary",
         use_container_width=True,
-        disabled=_generation_locked,
+        disabled=_generation_locked or _text_generation_missing_content,
         key="v11_generate_4x2",
     )
+    if _text_generation_missing_content and not _generation_locked:
+        st.warning("「使用文字貼圖」模式，至少填入一格文字。")
 
 if _generate_clicked:
     if not _text_only_generation and not st.session_state.uploaded_image_bytes:
