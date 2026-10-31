@@ -69,6 +69,8 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('每個字至少要有一側連續可見的厚度、側面或立體切面', APP)
         self.assertIn('嚴禁把文字退化成素面白字、通用 3D 字、統一黑色投影', APP)
         self.assertIn('text_reference_dimensional', APP)
+        self.assertIn('立體感必須由使用者為新字體重新確認', APP)
+        self.assertIn('v12_style_reference_clear_upload_control"] = True', APP)
         self.assertIn('def _v12_style_reference_influence_changed(mode):', APP)
         self.assertIn('v12_style_reference_soft_choice', APP)
         self.assertIn('v12_style_reference_strong_choice', APP)

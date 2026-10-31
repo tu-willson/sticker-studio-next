@@ -8830,6 +8830,9 @@ def _v12_load_history_record(record):
     else:
         st.session_state.pop("v12_loaded_cloud_project_id", None)
     st.session_state["v12_current_project"] = metadata
+    # 載回作品／膠卷的快照具有最高優先權。延後清空上一次 file_uploader
+    # 的控制值，避免舊上傳檔在下一次 render 時覆蓋膠卷保存的參考圖與立體設定。
+    st.session_state["v12_style_reference_clear_upload_control"] = True
     # A saved project must replace the browser draft, never merge with it.
     st.session_state["v12_step04_frontend_revision"] = (
         int(st.session_state.get("v12_step04_frontend_revision", 0)) + 1
@@ -12422,6 +12425,16 @@ def _v12_set_style_reference_from_upload(uploaded_file):
     if fingerprint == st.session_state.get("v12_style_reference_fingerprint"):
         return
 
+    # 「加入立體感」必須是針對目前這張字體參考圖重新確認的選擇。
+    # 不可把上一張圖的勾選狀態靜默帶到新圖，否則畫面雖顯示已啟用，
+    # 使用者卻無法判斷本次輸入是否真的適合加入立體切面。
+    _was_dimensional = bool(
+        st.session_state.get("v12_text_reference_dimensional", False)
+    )
+    _replacing_existing_reference = bool(
+        st.session_state.get("v12_style_reference_image_bytes")
+    )
+
     image = Image.open(BytesIO(raw))
     image.load()
     image = image.convert("RGB")
@@ -12435,6 +12448,9 @@ def _v12_set_style_reference_from_upload(uploaded_file):
         str(getattr(uploaded_file, "name", "") or "參考畫風圖片")[:120]
     )
     st.session_state["v12_style_reference_fingerprint"] = fingerprint
+    st.session_state["v12_text_reference_dimensional"] = False
+    if _replacing_existing_reference and _was_dimensional:
+        st.session_state["v12_style_reference_dimension_reset_notice"] = True
     _v12_update_navigation_safe_creation_draft(
         v12_style_source_mode=V12_STYLE_REFERENCE_MODE,
         v10_style_mode="↓ 請選擇風格",
@@ -12442,10 +12458,9 @@ def _v12_set_style_reference_from_upload(uploaded_file):
         v12_style_reference_image_bytes=buffer.getvalue(),
         v12_style_reference_filename=st.session_state["v12_style_reference_filename"],
         v12_style_reference_fingerprint=fingerprint,
-        # 參考圖可隨時替換；不能因此遺失已即時設定的立體感或補充效果。
-        v12_text_reference_dimensional=bool(
-            st.session_state.get("v12_text_reference_dimensional", False)
-        ),
+        # 畫風參考圖已更換；立體感必須由使用者為新字體重新確認。
+        # 補充效果仍保留，讓使用者可跨參考圖延續自己的文字指令。
+        v12_text_reference_dimensional=False,
         v12_style_reference_custom_elements=str(
             st.session_state.get("v12_style_reference_custom_elements", "") or ""
         ).strip()[:1200],
@@ -14432,6 +14447,11 @@ else:
                 width=240,
             )
         st.success(t("style_reference_enabled"))
+        if st.session_state.pop("v12_style_reference_dimension_reset_notice", False):
+            st.info(
+                "已更換畫風參考圖片；「加入立體感」已自動取消，"
+                "請依這張新參考圖重新勾選。"
+            )
         if _use_text_only_style:
             st.info("📝 純文字設計只會參考這張圖的筆觸、材質、配色與視覺節奏；不會帶入其中的人物、物件、既有文字或版面。")
         else:
