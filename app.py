@@ -2506,6 +2506,17 @@ html{scroll-behavior:smooth;}
   font-weight:700;
   line-height:1.55;
 }
+/* 上方作品名稱與 STEP 05 的主欄位採同一個 1050px 對齊線。 */
+.st-key-v12_project_name_top{
+  width:min(1050px,100%) !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+.st-key-v12_project_name_top [data-testid="stTextInput"]{
+  width:100% !important;
+  margin-left:0 !important;
+  margin-right:0 !important;
+}
 .v12-beta-login-welcome strong{font-weight:950;}
 .v12-beta-login-copy{
   margin:.35rem auto .65rem;
@@ -15326,25 +15337,26 @@ _v12_update_navigation_safe_creation_draft(
     transparent_png_option=bool(transparent),
 )
 
-_v12_project_name_initial = _v12_normalize_project_name(
-    st.session_state.get(
-        "v12_project_name_input",
-        _v12_current_project().get("project_name", ""),
+with st.container(key="v12_project_name_top"):
+    _v12_project_name_initial = _v12_normalize_project_name(
+        st.session_state.get(
+            "v12_project_name_input",
+            _v12_current_project().get("project_name", ""),
+        )
     )
-)
-if "v12_project_name_top_input" not in st.session_state:
-    st.session_state["v12_project_name_top_input"] = _v12_project_name_initial
-st.markdown("### 🏷️ 作品名稱")
-st.caption("此名稱會同時用於「作品｜市集」內的所有紀錄。")
-if not str(st.session_state.get("v12_project_name_top_input", "") or "").strip():
-    st.caption("未填寫時，會自動使用：未命名作品 替代。")
-st.text_input(
-    "為這組作品命名",
-    key="v12_project_name_top_input",
-    placeholder="例如：生活日常篇",
-    max_chars=80,
-    on_change=_v12_project_name_top_on_change,
-)
+    if "v12_project_name_top_input" not in st.session_state:
+        st.session_state["v12_project_name_top_input"] = _v12_project_name_initial
+    st.markdown("### 🏷️ 作品名稱")
+    st.caption("此名稱會同時用於「作品｜市集」內的所有紀錄。")
+    if not str(st.session_state.get("v12_project_name_top_input", "") or "").strip():
+        st.caption("未填寫時，會自動使用：未命名作品 替代。")
+    st.text_input(
+        "為這組作品命名",
+        key="v12_project_name_top_input",
+        placeholder="例如：生活日常篇",
+        max_chars=80,
+        on_change=_v12_project_name_top_on_change,
+    )
 
 _v12_prompt_settings_admin = bool(st.session_state.get("v12_is_beta_admin", False))
 if _v12_prompt_settings_admin:
@@ -15618,6 +15630,11 @@ if not _v12_prompt_settings_admin:
 
 
 v10_section(t("section_generate"), "#e67e22")
+if _sticker_mode == "text":
+    st.markdown(
+        '<div class="v11-section-tip">「使用文字貼圖」模式，至少填入一格文字，避免送出失敗。</div>',
+        unsafe_allow_html=True,
+    )
 st.markdown(f'<div class="v11-section-tip">{t("generate_intro")}</div>', unsafe_allow_html=True)
 
 # ============================================================
@@ -15640,10 +15657,6 @@ _generation_pending = bool(st.session_state.get("v11_generation_pending", False)
 _generation_in_progress = bool(st.session_state.get("v11_generation_in_progress", False))
 _generation_locked = _generation_pending or _generation_in_progress
 _generation_feedback = st.session_state.pop("v11_generation_release_feedback", None)
-_text_generation_missing_content = (
-    _sticker_mode == "text"
-    and not any(str(text or "").strip() for text in texts)
-)
 
 # ------------------------------------------------------------
 # 第一階段：使用者按下按鈕
@@ -15656,7 +15669,6 @@ if _v12_step04_frontend_enabled:
         data={
             "storageKey": "sticker-studio-next.step04-formal.v1",
             "disabled": _generation_locked,
-            "textRequiredNote": "「使用文字貼圖」模式，至少填入一格文字。",
         },
         key="v12_step04_frontend_generate_formal",
     )
@@ -15676,11 +15688,9 @@ else:
         t("generating") if _generation_locked else t("generate"),
         type="primary",
         use_container_width=True,
-        disabled=_generation_locked or _text_generation_missing_content,
+        disabled=_generation_locked,
         key="v11_generate_4x2",
     )
-    if _text_generation_missing_content and not _generation_locked:
-        st.warning("「使用文字貼圖」模式，至少填入一格文字。")
 
 if _generate_clicked:
     if not _text_only_generation and not st.session_state.uploaded_image_bytes:
@@ -15690,7 +15700,6 @@ if _generate_clicked:
     # 文字模式至少需要一格文字；無文字表情模式則由每格的表情／特效方向生成，
     # 不應共用「必須填貼圖文字」的驗證。
     if _sticker_mode == "text" and not any(str(text or "").strip() for text in texts):
-        st.warning(t("text_first"))
         st.stop()
 
     _click_beta_session = _beta_current_user()

@@ -604,9 +604,6 @@ GENERATOR_CSS = r"""
 .step04-generator-root button { width:100%; min-height:42px; border:0; border-radius:9px;
   background:#ff5878; color:#fff; font:inherit; font-size:16px; font-weight:850; cursor:pointer; }
 .step04-generator-root button:disabled { opacity:.62; cursor:wait; }
-.step04-generator-root button.is-text-required:disabled { cursor:not-allowed; }
-.step04-generator-note { margin:.58rem 0 0; padding:.52rem .72rem; border:1px solid rgba(255,209,102,.72);
-  border-radius:8px; background:rgba(117,81,14,.36); color:#fff2bd; font-size:14px; font-weight:780; }
 """
 GENERATOR_JS = r"""
 export default function(component) {
@@ -624,20 +621,17 @@ export default function(component) {
       slot => String(slot?.text || '').trim()
     ))
   );
-  const disabled = Boolean(data.disabled || textModeEmpty);
+  const disabled = Boolean(data.disabled);
   const label = data.disabled
     ? '🔄 AI 正在生成，請稍候……'
     : '✨ 生成 4×2 八格總圖';
-  const textRequiredNote = String(
-    data.textRequiredNote || '「使用文字貼圖」模式，至少填入一格文字。'
-  );
-  root.innerHTML = `<button class="${textModeEmpty && !data.disabled ? 'is-text-required' : ''}" ${disabled ? 'disabled' : ''}>${label}</button>`
-    + (textModeEmpty && !data.disabled
-      ? `<div class="step04-generator-note">${textRequiredNote}</div>`
-      : '');
+  root.innerHTML = `<button ${disabled ? 'disabled' : ''}>${label}</button>`;
   const button = root.querySelector('button');
   button.addEventListener('click', () => {
     if (!state) return;
+    // 文字編輯器存在於瀏覽器端；先在此判斷，避免空白請求送到後端後
+    // 讓按鈕被短暫鎖住。固定提醒則由 STEP 06 標題下方呈現。
+    if (textModeEmpty) return;
     button.disabled = true;
     button.textContent = '🔄 正在準備生成…';
     setTriggerValue('request', {state});
