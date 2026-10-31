@@ -74,6 +74,8 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('"↩️ 回復未生成狀態"', APP)
         self.assertIn('v12_frontend_generate_reset_revision', APP)
         self.assertIn('不會清除照片、文字或其他設定', APP)
+        self.assertIn('disabled=_generation_locked', APP)
+        self.assertIn('絕不能中斷有效生成', APP)
 
     def test_text_person_mode_keeps_photo_and_makes_text_the_main_subject(self):
         self.assertIn('V12_TEXT_PERSON_STYLE_LABEL = "👤 文字搭人物（字大人小）"', APP)

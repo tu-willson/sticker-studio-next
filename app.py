@@ -1042,6 +1042,13 @@ def _v12_recover_generation_ui_callback() -> None:
     Its purpose is to remount the browser-side submit control after an early
     validation stop (for example, missing photo or all text slots empty).
     """
+    # 生成中的作業由本機鎖與後端 reservation 管理；此按鈕只能修復
+    # 未真正建立作業時遺留的前端 disabled，絕不能中斷有效生成。
+    if bool(st.session_state.get("v11_generation_pending", False)) or bool(
+        st.session_state.get("v11_generation_in_progress", False)
+    ):
+        st.session_state["v12_generation_recovery_blocked"] = True
+        return
     _v11_clear_generation_state()
     for _key in (
         "v11_generation_started_at",
@@ -15996,6 +16003,9 @@ _generation_in_progress = bool(st.session_state.get("v11_generation_in_progress"
 _generation_locked = _generation_pending or _generation_in_progress
 _generation_feedback = st.session_state.pop("v11_generation_release_feedback", None)
 _generation_recovered = bool(st.session_state.pop("v12_generation_recovery_feedback", False))
+_generation_recovery_blocked = bool(
+    st.session_state.pop("v12_generation_recovery_blocked", False)
+)
 
 # ------------------------------------------------------------
 # 第一階段：使用者按下按鈕
@@ -16035,7 +16045,8 @@ else:
         key="v11_generate_4x2",
     )
 
-# 一律保留此按鈕，因為前端送出元件可能在缺少必要資料時自行停在 disabled。
+# 一律保留此按鈕，因為前端送出元件可能在缺少必要資料時自行停在 disabled；
+# 已建立的生成作業則必須維持鎖定，不能讓它介入。
 with st.container(key="v12_recover_generate_state"):
     _recover_left, _recover_center, _recover_right = st.columns([2.2, 1.6, 2.2])
     with _recover_center:
@@ -16045,6 +16056,7 @@ with st.container(key="v12_recover_generate_state"):
             help="只解除卡住的「正在準備生成」按鈕；不會清除照片、文字或其他設定。",
             on_click=_v12_recover_generation_ui_callback,
             use_container_width=True,
+            disabled=_generation_locked,
         )
 
 if _generate_clicked:
@@ -16119,6 +16131,8 @@ if isinstance(_generation_feedback, dict):
         st.error("❌ 這次生成未完成，現在可以立即重新嘗試。")
 if _generation_recovered:
     st.info("↩️ 已回復未生成狀態；照片、文字與其他創作設定都已保留。")
+if _generation_recovery_blocked:
+    st.info("🔒 圖片仍在生成中，為避免影響本次作業，暫時不能回復未生成狀態。")
 
 # ------------------------------------------------------------
 # 第二階段：只有 pending lock 存在時才進入真正生成。
