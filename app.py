@@ -8651,13 +8651,24 @@ def _v12_render_sticker_basket_workspace():
     st.markdown(f"### {t('project_title')}")
     st.caption(t("project_caption"))
     _v12_prepare_project_name_input()
-    st.text_input(
-        t("project_label"),
-        key="v12_project_name_input",
-        placeholder=t("project_placeholder"),
-        max_chars=80,
-        on_change=_v12_project_name_on_change,
+    _project_name_input_col, _project_name_commit_col = st.columns(
+        [5.7, 0.9], vertical_alignment="bottom"
     )
+    with _project_name_input_col:
+        st.text_input(
+            t("project_label"),
+            key="v12_project_name_input",
+            placeholder=t("project_placeholder"),
+            max_chars=80,
+            on_change=_v12_project_name_on_change,
+        )
+    with _project_name_commit_col:
+        st.button(
+            t("project_name_commit"),
+            key="v12_project_name_commit",
+            help="確認目前輸入的作品名稱；不會保存作品或變更其他設定。",
+            on_click=_v12_project_name_on_change,
+        )
     _v12_render_project_name_browser_safety_net()
     name_preview = _v12_project_snapshot().get("project_name", "")
     if not name_preview:
@@ -15764,13 +15775,24 @@ with st.container(key="v12_project_name_top"):
     st.caption("此名稱會同時用於「作品｜市集」內的所有紀錄。")
     if not str(st.session_state.get("v12_project_name_top_input", "") or "").strip():
         st.caption("未填寫時，會自動使用：未命名作品 替代。")
-    st.text_input(
-        "為這組作品命名",
-        key="v12_project_name_top_input",
-        placeholder="例如：生活日常篇",
-        max_chars=80,
-        on_change=_v12_project_name_top_on_change,
+    _project_name_top_input_col, _project_name_top_commit_col = st.columns(
+        [5.7, 0.9], vertical_alignment="bottom"
     )
+    with _project_name_top_input_col:
+        st.text_input(
+            "為這組作品命名",
+            key="v12_project_name_top_input",
+            placeholder="例如：生活日常篇",
+            max_chars=80,
+            on_change=_v12_project_name_top_on_change,
+        )
+    with _project_name_top_commit_col:
+        st.button(
+            t("project_name_commit"),
+            key="v12_project_name_top_commit",
+            help="確認目前輸入的作品名稱；不會保存作品或變更其他設定。",
+            on_click=_v12_project_name_top_on_change,
+        )
 
 _v12_prompt_settings_admin = bool(st.session_state.get("v12_is_beta_admin", False))
 if _v12_prompt_settings_admin:
