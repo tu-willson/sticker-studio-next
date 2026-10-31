@@ -1513,6 +1513,8 @@ div[class*="st-key-v12_basket_download_"] button{
   padding-top:2.08rem;
 }
 .st-key-v12_style_reference_examples [data-testid="stLinkButton"] a{
+  width:210px !important;
+  max-width:100%;
   min-height:42px !important;
   background:rgba(111, 116, 218, .42) !important;
   border:1px solid rgba(196, 201, 255, .66) !important;
@@ -1526,12 +1528,18 @@ div[class*="st-key-v12_basket_download_"] button{
   color:#fff !important;
 }
 .v12-style-reference-caption{
-  margin:.55rem 0 1rem;
+  width:min(1050px,100%);
+  box-sizing:border-box;
+  margin:.55rem auto 1rem;
+  padding:0 1.05rem;
   color:#f5f7ff;
   font-size:.98rem;
   font-weight:760;
   line-height:1.68;
   text-shadow:0 1px 2px rgba(0,0,0,.48);
+}
+@media (max-width:720px){
+  .v12-style-reference-caption{padding:0 .8rem;}
 }
 /* 登出屬於帳號狀態操作，使用紅色警示按鈕避免誤認為一般設定。 */
 .st-key-beta_logout button{
@@ -14634,9 +14642,9 @@ else:
     with _style_reference_right:
         with st.container(key="v12_style_reference_examples"):
             st.link_button(
-                t("style_reference_examples"),
+                "🔗 文字參考範例（出處：花瓣）",
                 "https://huaban.com/boards/44417392?source_file_id=339054540",
-                use_container_width=True,
+                use_container_width=False,
             )
     if _style_reference_upload is not None:
         try:
