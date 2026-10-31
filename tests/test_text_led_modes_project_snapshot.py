@@ -29,6 +29,8 @@ class TextLedModesProjectSnapshotTests(unittest.TestCase):
         self.assertIn('const findInputs = () =>', APP)
         self.assertIn('const mirror = (source, value) =>', APP)
         self.assertIn('input.addEventListener(\'input\', saveAndMirror)', APP)
+        self.assertIn('const mustClearVisibleFields = clearRevision > 0', APP)
+        self.assertIn('st.session_state["v12_project_name_clear_revision"] = (', APP)
 
 
 if __name__ == "__main__":

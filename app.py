@@ -9117,12 +9117,14 @@ def _v12_render_project_name_browser_safety_net():
     """
     project_id = str(_v12_current_project().get("project_id", "") or "new")
     storage_key = f"v12-project-title-draft:{project_id}"
+    clear_revision = int(st.session_state.get("v12_project_name_clear_revision", 0) or 0)
     label = t("project_label")
     components.html(
         f"""
         <script>
         (() => {{
           const storageKey = {json.dumps(storage_key)};
+          const clearRevision = {json.dumps(clear_revision)};
           const label = {json.dumps(label)};
           const parentDocument = window.parent && window.parent.document;
           if (!parentDocument) return;
@@ -9147,6 +9149,14 @@ def _v12_render_project_name_browser_safety_net():
           const connect = () => {{
             const inputs = findInputs();
             if (!inputs.length) return;
+            const clearRevisionKey = 'v12-project-title-clear-revision';
+            const mustClearVisibleFields = clearRevision > 0
+              && window.parent.localStorage.getItem(clearRevisionKey) !== String(clearRevision);
+            if (mustClearVisibleFields) {{
+              window.parent.localStorage.removeItem(storageKey);
+              window.parent.localStorage.setItem(clearRevisionKey, String(clearRevision));
+              inputs.forEach((input) => writeNativeValue(input, '', true));
+            }}
             const stored = window.parent.localStorage.getItem(storageKey);
             inputs.forEach((input) => {{
               if (input.dataset.v12ProjectTitleBridge === storageKey) return;
@@ -10773,6 +10783,7 @@ st.session_state.setdefault("v12_text_reference_dimensional", False)
 st.session_state.setdefault("v12_style_reference_elements_enabled", False)
 st.session_state.setdefault("v12_style_reference_elements", [])
 st.session_state.setdefault("v12_style_reference_custom_elements", "")
+st.session_state.setdefault("v12_project_name_clear_revision", 0)
 st.session_state.setdefault("generated_4x2_bytes", None)
 st.session_state.setdefault("last_prompt", "")
 st.session_state.setdefault("crop_boxes", None)
@@ -11228,6 +11239,9 @@ def _v12_clear_active_creation_callback():
     st.session_state["v12_current_project"] = _v12_new_project_metadata()
     st.session_state["v12_project_name_input"] = ""
     st.session_state["v12_project_name_top_input"] = ""
+    st.session_state["v12_project_name_clear_revision"] = (
+        int(st.session_state.get("v12_project_name_clear_revision", 0) or 0) + 1
+    )
     st.session_state["v12_creation_draft_snapshot"] = {}
     st.session_state["v12_navigation_safe_creation_draft"] = {}
     st.session_state["v12_restore_creation_draft"] = False
