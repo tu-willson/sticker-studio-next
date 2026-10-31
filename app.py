@@ -14654,8 +14654,8 @@ else:
                 '<a class="v12-style-reference-example-link" '
                 'href="https://huaban.com/boards/44417392?source_file_id=339054540" '
                 'target="_blank" rel="noopener noreferrer">'
-                '<span class="v12-style-reference-example-link-title">🔗 文字參考範例</span>'
-                '<span class="v12-style-reference-example-link-source">(出處:花瓣)</span>'
+                '<span class="v12-style-reference-example-link-title">文字參考範例連結</span>'
+                '<span class="v12-style-reference-example-link-source">（出處：花瓣）</span>'
                 '</a>',
                 unsafe_allow_html=True,
             )
