@@ -8651,8 +8651,8 @@ def _v12_render_sticker_basket_workspace():
     st.markdown(f"### {t('project_title')}")
     st.caption(t("project_caption"))
     _v12_prepare_project_name_input()
-    _project_name_input_col, _project_name_commit_col = st.columns(
-        [5.7, 0.9], vertical_alignment="bottom"
+    _project_name_input_col, _project_name_commit_col, _project_name_spacer_col = st.columns(
+        [3.3, 0.8, 2.5], vertical_alignment="bottom"
     )
     with _project_name_input_col:
         st.text_input(
@@ -15775,8 +15775,8 @@ with st.container(key="v12_project_name_top"):
     st.caption("此名稱會同時用於「作品｜市集」內的所有紀錄。")
     if not str(st.session_state.get("v12_project_name_top_input", "") or "").strip():
         st.caption("未填寫時，會自動使用：未命名作品 替代。")
-    _project_name_top_input_col, _project_name_top_commit_col = st.columns(
-        [5.7, 0.9], vertical_alignment="bottom"
+    _project_name_top_input_col, _project_name_top_commit_col, _project_name_top_spacer_col = st.columns(
+        [3.3, 0.8, 2.5], vertical_alignment="bottom"
     )
     with _project_name_top_input_col:
         st.text_input(
