@@ -1512,21 +1512,30 @@ div[class*="st-key-v12_basket_download_"] button{
 .st-key-v12_style_reference_examples{
   padding-top:2.08rem;
 }
-.st-key-v12_style_reference_examples [data-testid="stLinkButton"] a{
+.v12-style-reference-example-link{
+  display:flex;
+  flex-direction:column;
   width:210px !important;
   max-width:100%;
   min-height:42px !important;
+  box-sizing:border-box;
+  padding:.42rem .68rem;
   background:rgba(111, 116, 218, .42) !important;
   border:1px solid rgba(196, 201, 255, .66) !important;
   color:#f5f4ff !important;
   font-weight:820 !important;
   box-shadow:0 4px 12px rgba(48, 45, 118, .20) !important;
+  border-radius:.5rem;
+  text-decoration:none !important;
+  line-height:1.25;
 }
-.st-key-v12_style_reference_examples [data-testid="stLinkButton"] a:hover{
+.v12-style-reference-example-link:hover{
   background:rgba(133, 139, 241, .68) !important;
   border-color:#e0e3ff !important;
   color:#fff !important;
 }
+.v12-style-reference-example-link-title{align-self:flex-start;font-size:.88rem;}
+.v12-style-reference-example-link-source{align-self:flex-end;font-size:.72rem;opacity:.86;}
 .v12-style-reference-caption{
   width:min(1050px,100%);
   box-sizing:border-box;
@@ -14641,10 +14650,14 @@ else:
         )
     with _style_reference_right:
         with st.container(key="v12_style_reference_examples"):
-            st.link_button(
-                "🔗 文字參考範例（出處：花瓣）",
-                "https://huaban.com/boards/44417392?source_file_id=339054540",
-                use_container_width=False,
+            st.markdown(
+                '<a class="v12-style-reference-example-link" '
+                'href="https://huaban.com/boards/44417392?source_file_id=339054540" '
+                'target="_blank" rel="noopener noreferrer">'
+                '<span class="v12-style-reference-example-link-title">🔗 文字參考範例</span>'
+                '<span class="v12-style-reference-example-link-source">(出處:花瓣)</span>'
+                '</a>',
+                unsafe_allow_html=True,
             )
     if _style_reference_upload is not None:
         try:
