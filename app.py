@@ -12442,6 +12442,13 @@ def _v12_set_style_reference_from_upload(uploaded_file):
         v12_style_reference_image_bytes=buffer.getvalue(),
         v12_style_reference_filename=st.session_state["v12_style_reference_filename"],
         v12_style_reference_fingerprint=fingerprint,
+        # 參考圖可隨時替換；不能因此遺失已即時設定的立體感或補充效果。
+        v12_text_reference_dimensional=bool(
+            st.session_state.get("v12_text_reference_dimensional", False)
+        ),
+        v12_style_reference_custom_elements=str(
+            st.session_state.get("v12_style_reference_custom_elements", "") or ""
+        ).strip()[:1200],
     )
 
 
@@ -13841,7 +13848,7 @@ elif _shared_template_apply_error == "failed":
 
 
 def _v12_capture_style_reference_details_draft():
-    """Commit editable reference notes before a form-submit rerun."""
+    """Persist reference-detail widgets immediately in the durable creation draft."""
     _v12_update_navigation_safe_creation_draft(
         v12_style_reference_strength=st.session_state.get(
             "v12_style_reference_strength"
@@ -14499,52 +14506,41 @@ else:
             )
         if _text_reference_priority_selected and _reference_priority_available:
             st.caption("🖋️ 已啟用文字畫風參考優先：預設只生成平面文字，優先重現參考圖的筆觸與色系；下方可另外指定要開放的補充效果。")
-        with st.form("v12_style_reference_details_form", border=False):
-            if _text_reference_priority_selected and _reference_priority_available:
-                _dimension_col, _effects_col = st.columns([1.1, 3.4], vertical_alignment="top")
-                with _dimension_col:
-                    st.checkbox(
-                        "加入立體感",
-                        key="v12_text_reference_dimensional",
-                        help=(
-                            "依照本次生成文字的筆畫、顏色與外輪廓，隨機產生相容的立體層次。"
-                        ),
-                    )
-                    st.markdown(
-                        '<div style="color:rgba(255,255,255,.92);font-size:.9rem;font-weight:780;line-height:1.45;padding:.1rem .15rem .45rem;">（勾選後請點選套用）</div>',
-                        unsafe_allow_html=True,
-                    )
-                with _effects_col:
-                    st.text_area(
-                        "✨ 允許自訂補充效果（選填）（輸入完請點選套用）",
-                        key="v12_style_reference_custom_elements",
-                        placeholder=(
-                            "例如：強調毛筆筆勢痕跡、文字加入極淡的立體層次與灰黑色短陰影；"
-                            "也可明確指定外框、圖案或彩色特效。"
-                        ),
-                        max_chars=1200,
-                        help=(
-                            "只有此欄明確寫出的效果才會例外開放；未填寫時，"
-                            "仍維持純文字、無額外特效的畫風參考模式。"
-                        ),
-                    )
-                st.caption("此欄內容會隨作品與創作膠卷保存，日後載回時會自動帶回。")
-            else:
+        if _text_reference_priority_selected and _reference_priority_available:
+            _dimension_col, _effects_col = st.columns([1.1, 3.4], vertical_alignment="top")
+            with _dimension_col:
+                st.checkbox(
+                    "加入立體感",
+                    key="v12_text_reference_dimensional",
+                    on_change=_v12_capture_style_reference_details_draft,
+                    help=(
+                        "依照本次生成文字的筆畫、顏色與外輪廓，隨機產生相容的立體層次。"
+                    ),
+                )
+            with _effects_col:
                 st.text_area(
-                    t("style_elements"),
+                    "✨ 允許自訂補充效果（選填）",
                     key="v12_style_reference_custom_elements",
-                    placeholder=t("style_elements_placeholder"),
+                    placeholder=(
+                        "例如：強調毛筆筆勢痕跡、文字加入極淡的立體層次與灰黑色短陰影；"
+                        "也可明確指定外框、圖案或彩色特效。"
+                    ),
                     max_chars=1200,
+                    on_change=_v12_capture_style_reference_details_draft,
+                    help=(
+                        "只有此欄明確寫出的效果才會例外開放；未填寫時，"
+                        "仍維持純文字、無額外特效的畫風參考模式。"
+                    ),
                 )
-            with st.container(key="v12_style_reference_save_button"):
-                _apply_style_reference_details = st.form_submit_button(
-                    t("style_apply"),
-                    type="primary",
-                    use_container_width=True,
-                    on_click=_v12_capture_style_reference_details_draft,
-                )
-        if _apply_style_reference_details:
-            st.success(t("style_applied"))
+            st.caption("勾選或輸入後會自動套用，並隨作品與創作膠卷保存；日後載回時會自動帶回。")
+        else:
+            st.text_area(
+                t("style_elements"),
+                key="v12_style_reference_custom_elements",
+                placeholder=t("style_elements_placeholder"),
+                max_chars=1200,
+                on_change=_v12_capture_style_reference_details_draft,
+            )
         st.caption(t("style_elements_help"))
         st.caption(t("style_materials_caption"))
 

@@ -49,11 +49,12 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('只可復刻位於文字本身內部的視覺語言', APP)
         self.assertIn('若參考圖為黑白／墨色，僅使用黑、灰、白與紙色', APP)
         self.assertIn('text_reference_priority=_text_reference_priority_active', APP)
-        self.assertIn('✨ 允許自訂補充效果（選填）（輸入完請點選套用）', APP)
+        self.assertIn('✨ 允許自訂補充效果（選填）', APP)
         self.assertIn('【允許自訂補充效果｜唯一例外】', APP)
-        self.assertIn('此欄內容會隨作品與創作膠卷保存，日後載回時會自動帶回。', APP)
+        self.assertIn('勾選或輸入後會自動套用，並隨作品與創作膠卷保存', APP)
         self.assertIn('key="v12_text_reference_dimensional"', APP)
-        self.assertIn('（勾選後請點選套用）', APP)
+        self.assertIn('on_change=_v12_capture_style_reference_details_draft', APP)
+        self.assertNotIn('（勾選後請點選套用）', APP)
 
     def test_reel_apply_preserves_text_reference_priority_in_navigation_draft(self):
         self.assertIn(
