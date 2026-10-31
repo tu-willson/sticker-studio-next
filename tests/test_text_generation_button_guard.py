@@ -17,11 +17,19 @@ class TextGenerationButtonGuardTests(unittest.TestCase):
         self.assertNotIn('_text_generation_missing_content', APP)
 
     def test_browser_generator_uses_the_current_local_text_draft(self):
-        self.assertIn('const textModeEmpty = Boolean(', FRONTEND)
+        self.assertIn('const isTextModeEmpty = (state) => Boolean(', FRONTEND)
         self.assertIn("state.mode === 'text'", FRONTEND)
         self.assertIn("slot => String(slot?.text || '').trim()", FRONTEND)
         self.assertIn('const disabled = Boolean(data.disabled);', FRONTEND)
-        self.assertIn('if (textModeEmpty) return;', FRONTEND)
+        self.assertIn("button.addEventListener('click', () => {", FRONTEND)
+        self.assertIn('const state = readDraft();', FRONTEND)
+        self.assertIn('if (isTextModeEmpty(state)) return;', FRONTEND)
+
+    def test_browser_generator_does_not_capture_a_stale_draft_before_click(self):
+        generator = FRONTEND.split('GENERATOR_JS = r"""', 1)[1].split('"""', 1)[0]
+        before_click, click_handler = generator.split("button.addEventListener('click', () => {", 1)
+        self.assertNotIn('const state = readDraft();', before_click)
+        self.assertIn('const state = readDraft();', click_handler)
 
 
 if __name__ == "__main__":

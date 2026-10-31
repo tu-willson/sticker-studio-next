@@ -613,8 +613,7 @@ export default function(component) {
     try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
     catch (_) { return null; }
   };
-  const state = readDraft();
-  const textModeEmpty = Boolean(
+  const isTextModeEmpty = (state) => Boolean(
     state
     && state.mode === 'text'
     && !((Array.isArray(state.slots) ? state.slots : []).some(
@@ -628,10 +627,14 @@ export default function(component) {
   root.innerHTML = `<button ${disabled ? 'disabled' : ''}>${label}</button>`;
   const button = root.querySelector('button');
   button.addEventListener('click', () => {
+    // STEP 04 inputs deliberately stay browser-only while users type, so this
+    // component must read the draft *at click time*.  Capturing it above would
+    // submit the version that existed when STEP 06 first rendered instead.
+    const state = readDraft();
     if (!state) return;
     // 文字編輯器存在於瀏覽器端；先在此判斷，避免空白請求送到後端後
     // 讓按鈕被短暫鎖住。固定提醒則由 STEP 06 標題下方呈現。
-    if (textModeEmpty) return;
+    if (isTextModeEmpty(state)) return;
     button.disabled = true;
     button.textContent = '🔄 正在準備生成…';
     setTriggerValue('request', {state});
