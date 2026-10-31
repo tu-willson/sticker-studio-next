@@ -14426,6 +14426,10 @@ else:
                             "依照本次生成文字的筆畫、顏色與外輪廓，隨機產生相容的立體層次。"
                         ),
                     )
+                    st.markdown(
+                        '<div style="color:rgba(255,255,255,.92);font-size:.9rem;font-weight:780;line-height:1.45;padding:.1rem .15rem .45rem;">（勾選後請點選套用）</div>',
+                        unsafe_allow_html=True,
+                    )
                 with _effects_col:
                     st.text_area(
                         "✨ 允許自訂補充效果（選填）（輸入完請點選套用）",
