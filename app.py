@@ -4469,11 +4469,26 @@ def _beta_save_library_project(session, record, progress_callback=None,
     metadata["cloud_asset_manifest"] = manifest
     slot = {}
     if not is_overwrite:
-        slot = _beta_rpc(
-            "create_library_project_slot",
-            {"p_project_id": project_id, "p_title": title, "p_metadata": metadata},
-            access_token=session["access_token"],
-        )
+        try:
+            slot = _beta_rpc(
+                "create_library_project_slot",
+                {"p_project_id": project_id, "p_title": title, "p_metadata": metadata},
+                access_token=session["access_token"],
+            )
+        except RuntimeError as exc:
+            # Sessions created before the workspace identity fix can still
+            # carry a project id that has already been saved.  A fresh save
+            # must never fail simply because that stale local id collides with
+            # the existing cloud record; issue a new id and reserve again.
+            if str(exc) != "beta_request_failed_http_409":
+                raise
+            project_id = str(uuid4())
+            metadata["project_id"] = project_id
+            slot = _beta_rpc(
+                "create_library_project_slot",
+                {"p_project_id": project_id, "p_title": title, "p_metadata": metadata},
+                access_token=session["access_token"],
+            )
         if isinstance(slot, list):
             slot = slot[0] if slot else {}
         if not isinstance(slot, dict):
@@ -4580,6 +4595,7 @@ def _beta_save_library_project(session, record, progress_callback=None,
     _report(100, "雲端作品保存完成！")
     return {
         "saved": True,
+        "project_id": project_id,
         "saved_count": int(slot.get("saved_count", 0) or 0),
         "library_capacity": int(slot.get("library_capacity", 2) or 2),
     }
@@ -8445,7 +8461,12 @@ def _v12_remove_sticker_basket_item(item_id):
 
 
 def _v12_clear_sticker_basket_callback():
-    """Require a second deliberate click before clearing only workspace images."""
+    """Confirm workspace clearing, then start a fresh cloud-save identity.
+
+    The creation settings deliberately remain available for the next batch, but
+    the former project id must never be reused as a new library-project slot.
+    Otherwise Supabase correctly rejects the second save with HTTP 409.
+    """
     if not bool(st.session_state.get("v12_basket_clear_confirmation_pending", False)):
         st.session_state["v12_basket_clear_confirmation_pending"] = True
         return
@@ -8456,6 +8477,18 @@ def _v12_clear_sticker_basket_callback():
     st.session_state["v12_sticker_basket_batch_number"] = 0
     st.session_state.pop("v12_basket_main_choice", None)
     st.session_state.pop("v12_basket_tab_choice", None)
+    # Clearing the workspace means the creator is beginning a new saved work.
+    # Keep the active creative settings, while issuing a new project identity so
+    # a later save creates a distinct cloud record instead of colliding with the
+    # already-saved project's primary key.
+    project = dict(_v12_current_project())
+    now = _v12_now_iso()
+    project["project_id"] = str(uuid4())
+    project["created_at"] = now
+    project["updated_at"] = now
+    project.pop("cloud_asset_manifest", None)
+    st.session_state["v12_current_project"] = _v12_normalize_project_metadata(project)
+    st.session_state.pop("v12_loaded_cloud_project_id", None)
     st.session_state["v12_basket_clear_confirmation_pending"] = False
     st.session_state["v12_basket_clear_feedback"] = True
 
@@ -8773,6 +8806,12 @@ def _v12_render_sticker_basket_workspace():
                     overwrite_project_id=_loaded_cloud_project_id or None,
                 )
                 if cloud_save.get("saved"):
+                    # A second save before clearing the workspace is an update
+                    # to this work.  When the workspace is cleared, the clear
+                    # callback above removes this marker and creates a fresh id.
+                    st.session_state["v12_loaded_cloud_project_id"] = str(
+                        cloud_save.get("project_id") or ""
+                    ).strip()
                     cloud_progress.progress(
                         100,
                         text=t("cloud_saved", count=cloud_save["saved_count"], limit=cloud_save["library_capacity"]),
