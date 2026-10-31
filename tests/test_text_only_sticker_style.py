@@ -54,6 +54,9 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('勾選或輸入後會自動套用，並隨作品與創作膠卷保存', APP)
         self.assertIn('key="v12_text_reference_dimensional"', APP)
         self.assertIn('on_change=_v12_capture_style_reference_details_draft', APP)
+        self.assertIn('.st-key-v12_text_reference_dimensional [data-testid="stCheckbox"] label p', APP)
+        self.assertIn('width:27px !important;', APP)
+        self.assertIn('color:#ffe09a !important;', APP)
         self.assertNotIn('（勾選後請點選套用）', APP)
 
     def test_reel_apply_preserves_text_reference_priority_in_navigation_draft(self):

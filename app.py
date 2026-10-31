@@ -1246,6 +1246,42 @@ st.markdown("""
   font-weight:760;
   line-height:1.65;
 }
+/* 畫風融入三選一：基礎選項維持深白，文字優先與立體感用同一組紫金色提示。 */
+.st-key-v12_style_reference_soft_choice [data-testid="stCheckbox"] label p,
+.st-key-v12_style_reference_strong_choice [data-testid="stCheckbox"] label p{
+  color:#f4f7ff !important;
+  font-weight:760 !important;
+  text-shadow:0 1px 3px rgba(0,0,0,.68);
+}
+.st-key-v12_text_reference_priority [data-testid="stCheckbox"] label p,
+.st-key-v12_text_reference_dimensional [data-testid="stCheckbox"] label p{
+  color:#ffe09a !important;
+  font-weight:860 !important;
+  text-shadow:0 1px 4px rgba(0,0,0,.76),0 0 12px rgba(255,196,78,.18);
+}
+.st-key-v12_text_reference_priority [data-testid="stCheckbox"] label p{
+  font-size:1.03rem !important;
+}
+.st-key-v12_text_reference_dimensional [data-testid="stCheckbox"] label p{
+  font-size:1.2rem !important;
+  letter-spacing:.02em;
+}
+.st-key-v12_text_reference_priority [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div,
+.st-key-v12_text_reference_dimensional [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div{
+  border:2px solid rgba(255,211,111,.9) !important;
+  background:rgba(122,76,178,.48) !important;
+  box-shadow:0 0 0 2px rgba(255,205,102,.13) !important;
+}
+.st-key-v12_text_reference_dimensional [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div{
+  width:27px !important;
+  height:27px !important;
+}
+.st-key-v12_text_reference_priority [data-testid="stCheckbox"] [data-baseweb="checkbox"]:has(input:checked) > div,
+.st-key-v12_text_reference_dimensional [data-testid="stCheckbox"] [data-baseweb="checkbox"]:has(input:checked) > div{
+  border-color:#fff0bf !important;
+  background:#9366ce !important;
+  box-shadow:0 0 0 2px rgba(255,219,131,.26),0 5px 14px rgba(112,67,175,.32) !important;
+}
 .st-key-v12_use_text_only_style [data-testid="stCheckbox"] label p img,
 .st-key-v12_use_text_person_style [data-testid="stCheckbox"] label p img{
   width:77px !important;
