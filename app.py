@@ -1508,6 +1508,31 @@ div[class*="st-key-v12_basket_download_"] button{
   background:#e53e57 !important;
   border-color:#e53e57 !important;
 }
+/* 畫風參考的網路文字範例：獨立於粉紅上傳操作的半透明靛藍連結。 */
+.st-key-v12_style_reference_examples{
+  padding-top:2.08rem;
+}
+.st-key-v12_style_reference_examples [data-testid="stLinkButton"] a{
+  min-height:42px !important;
+  background:rgba(111, 116, 218, .42) !important;
+  border:1px solid rgba(196, 201, 255, .66) !important;
+  color:#f5f4ff !important;
+  font-weight:820 !important;
+  box-shadow:0 4px 12px rgba(48, 45, 118, .20) !important;
+}
+.st-key-v12_style_reference_examples [data-testid="stLinkButton"] a:hover{
+  background:rgba(133, 139, 241, .68) !important;
+  border-color:#e0e3ff !important;
+  color:#fff !important;
+}
+.v12-style-reference-caption{
+  margin:.55rem 0 1rem;
+  color:#f5f7ff;
+  font-size:.98rem;
+  font-weight:760;
+  line-height:1.68;
+  text-shadow:0 1px 2px rgba(0,0,0,.48);
+}
 /* 登出屬於帳號狀態操作，使用紅色警示按鈕避免誤認為一般設定。 */
 .st-key-beta_logout button{
   background:#e53935 !important;
@@ -14592,7 +14617,10 @@ else:
     style = style_mode
     custom_style = ""
     st.markdown(f"<div style='text-align:center;margin:16px 0 6px;font-size:19px;font-weight:800;'>{t('style_reference_title')}</div>", unsafe_allow_html=True)
-    st.caption(t("style_reference_caption"))
+    st.markdown(
+        f'<div class="v12-style-reference-caption">{html.escape(t("style_reference_caption"))}</div>',
+        unsafe_allow_html=True,
+    )
     _style_reference_left, _style_reference_center, _style_reference_right = st.columns([1, 2, 1])
     with _style_reference_center:
         _style_reference_upload = _beta_image_uploader(
@@ -14603,6 +14631,13 @@ else:
             on_change=_v12_style_reference_upload_changed,
             help=t("style_reference_help"),
         )
+    with _style_reference_right:
+        with st.container(key="v12_style_reference_examples"):
+            st.link_button(
+                t("style_reference_examples"),
+                "https://huaban.com/boards/44417392?source_file_id=339054540",
+                use_container_width=True,
+            )
     if _style_reference_upload is not None:
         try:
             _v12_set_style_reference_from_upload(_style_reference_upload)
