@@ -8625,7 +8625,7 @@ def _v12_render_sticker_basket_workspace():
     )
     if has_creation_materials:
         _materials_private_note = html.escape(str(t("materials_private"))).replace(
-            "\n", "<br><br>"
+            "\n", "<br>"
         )
         st.markdown(
             f'<div class="v12-cloud-save-note">{_materials_private_note}</div>',
