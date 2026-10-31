@@ -45,6 +45,8 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('text_reference_priority', APP)
         self.assertIn('【文字畫風參考優先｜嚴格純文字】', APP)
         self.assertIn('嚴禁 3D 立體字、浮雕、描邊、外框、底牌、對話框、投影、光暈', APP)
+        self.assertIn('【參考圖文字內嵌效果優先例外】本規則優先於前述禁止效果', APP)
+        self.assertIn('只可復刻位於文字本身內部的視覺語言', APP)
         self.assertIn('若參考圖為黑白／墨色，僅使用黑、灰、白與紙色', APP)
         self.assertIn('text_reference_priority=_text_reference_priority_active', APP)
         self.assertIn('✨ 允許自訂補充效果（選填）（輸入完請點選套用）', APP)
