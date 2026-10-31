@@ -63,7 +63,9 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
             APP,
         )
         self.assertIn('st.session_state["v12_style_reference_strong_choice"] = (', APP)
-        self.assertIn('【加入立體感｜最高優先】', APP)
+        self.assertIn('【加入立體感｜保留內嵌效果優先】', APP)
+        self.assertIn('第一步必須完整重現上述文字內部視覺語言；第二步才', APP)
+        self.assertIn('嚴禁把文字退化成素面白字、通用 3D 字、統一黑色投影', APP)
         self.assertIn('text_reference_dimensional', APP)
         self.assertIn('def _v12_style_reference_influence_changed(mode):', APP)
         self.assertIn('v12_style_reference_soft_choice', APP)
