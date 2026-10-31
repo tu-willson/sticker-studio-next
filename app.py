@@ -1321,6 +1321,12 @@ st.markdown("""
   line-height:1.72;
   text-shadow:0 1px 2px rgba(0,0,0,.46);
 }
+.v12-cloud-save-note.v12-cloud-save-note-new-work{
+  color:#ffe19a;
+}
+.v12-cloud-save-note.v12-cloud-save-note-overwrite{
+  color:#ffc4d0;
+}
 /* 生成完成後的 LINE 捷徑：保持低干擾紫色，滑過時才加深。 */
 .st-key-v12_basket_line_creator_links{
   width:100% !important;
@@ -8735,10 +8741,13 @@ def _v12_render_sticker_basket_workspace():
         disabled=not bool(cloud_session) or not has_creation_materials,
     )
     if has_creation_materials:
-        _materials_private_lines = str(t("materials_private")).split("\n\n", 1)
+        _materials_private_lines = str(t("materials_private")).split("\n\n")
         _materials_private_first = html.escape(_materials_private_lines[0])
         _materials_private_second = html.escape(
             _materials_private_lines[1] if len(_materials_private_lines) > 1 else ""
+        )
+        _materials_private_third = html.escape(
+            _materials_private_lines[2] if len(_materials_private_lines) > 2 else ""
         )
         _materials_note_col, _clear_basket_col = st.columns(
             [5.8, 1.7], vertical_alignment="center"
@@ -8766,7 +8775,14 @@ def _v12_render_sticker_basket_workspace():
             )
         if _materials_private_second:
             st.markdown(
-                f'<div class="v12-cloud-save-note">{_materials_private_second}</div>',
+                f'<div class="v12-cloud-save-note v12-cloud-save-note-new-work">'
+                f'{_materials_private_second}</div>',
+                unsafe_allow_html=True,
+            )
+        if _materials_private_third:
+            st.markdown(
+                f'<div class="v12-cloud-save-note v12-cloud-save-note-overwrite">'
+                f'{_materials_private_third}</div>',
                 unsafe_allow_html=True,
             )
 

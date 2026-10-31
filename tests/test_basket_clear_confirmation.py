@@ -25,6 +25,10 @@ class BasketClearConfirmationTests(unittest.TestCase):
         self.assertIn('st.session_state["v12_loaded_cloud_project_id"] = str(', APP)
         self.assertIn('if str(exc) != "beta_request_failed_http_409":', APP)
 
+    def test_save_rules_use_distinct_new_and_overwrite_note_colours(self):
+        self.assertIn("v12-cloud-save-note-new-work", APP)
+        self.assertIn("v12-cloud-save-note-overwrite", APP)
+
 
 if __name__ == "__main__":
     unittest.main()
