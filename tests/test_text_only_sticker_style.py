@@ -44,6 +44,9 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('not _text_reference_priority_active', APP)
         self.assertIn('【文字畫風參考優先】', APP)
         self.assertIn('text_reference_priority', APP)
+        self.assertIn('def _v12_style_reference_influence_changed(mode):', APP)
+        self.assertIn('v12_style_reference_soft_choice', APP)
+        self.assertIn('v12_style_reference_strong_choice', APP)
 
     def test_text_person_mode_keeps_photo_and_makes_text_the_main_subject(self):
         self.assertIn('V12_TEXT_PERSON_STYLE_LABEL = "👤 文字搭人物（字大人小）"', APP)

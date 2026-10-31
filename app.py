@@ -700,6 +700,25 @@ def _v12_text_person_style_toggle_changed():
         st.session_state["v12_sticker_content_mode"] = V12_STICKER_TEXT_MODE
 
 
+def _v12_style_reference_influence_changed(mode):
+    """Treat the three visible checkboxes as one mutually exclusive choice."""
+    mode = str(mode or "").strip()
+    if mode == "soft":
+        st.session_state["v12_style_reference_strength"] = "柔和融入"
+        st.session_state["v12_style_reference_soft_choice"] = True
+        st.session_state["v12_style_reference_strong_choice"] = False
+        st.session_state["v12_text_reference_priority"] = False
+    elif mode == "strong":
+        st.session_state["v12_style_reference_strength"] = "強烈融入"
+        st.session_state["v12_style_reference_soft_choice"] = False
+        st.session_state["v12_style_reference_strong_choice"] = True
+        st.session_state["v12_text_reference_priority"] = False
+    elif mode == "text_priority":
+        st.session_state["v12_style_reference_soft_choice"] = False
+        st.session_state["v12_style_reference_strong_choice"] = False
+        st.session_state["v12_text_reference_priority"] = True
+
+
 def _v12_sync_saved_style_choice_to_editor(choice):
     """Make the active-style picker and editor one reliable selection flow."""
     choice = str(choice or "").strip()
@@ -14290,17 +14309,6 @@ else:
         )
         if st.session_state.get("v12_style_reference_strength") != _normalized_style_strength:
             st.session_state["v12_style_reference_strength"] = _normalized_style_strength
-        st.radio(
-            f"{t('style_strength')}{t('style_strength_immediate')}",
-            V12_STYLE_REFERENCE_STRENGTHS,
-            horizontal=True,
-            key="v12_style_reference_strength",
-            format_func=lambda value: {
-                "柔和融入": t("style_strength_soft"),
-                "強烈融入": t("style_strength_strong"),
-            }[value],
-            help=t("style_strength_help"),
-        )
         _reference_priority_available = bool(
             st.session_state.get("v12_use_text_only_style", False)
             or st.session_state.get("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
@@ -14310,15 +14318,53 @@ else:
             # 表情貼圖沒有文字筆畫可轉譯；保留已選字型與外框本身，
             # 但不要讓這個文字專用開關在表情模式意外生效。
             st.session_state["v12_text_reference_priority"] = False
-        _text_reference_priority_selected = st.checkbox(
-            "🖋️ 文字畫風參考優先（使用上傳參考圖的字體意象）",
-            key="v12_text_reference_priority",
-            disabled=not _reference_priority_available,
-            help=(
-                "啟用後會暫時不套用 125 種帶圖字型與文字外框，"
-                "改以這張畫風參考的字體筆觸、材質、配色與留白為最高優先。"
-            ),
+        _reference_strength = _v12_normalize_style_reference_strength(
+            st.session_state.get("v12_style_reference_strength")
         )
+        st.markdown(f"**{t('style_strength')}{t('style_strength_immediate')}**")
+        _text_reference_priority_selected = bool(
+            st.session_state.get("v12_text_reference_priority", False)
+            and _reference_priority_available
+        )
+        # 三個看似獨立的勾選框實際上代表同一組互斥的畫風影響程度；
+        # 這樣可避免 radio 的圓點外觀，也讓「文字優先」緊接在兩個程度後。
+        st.session_state["v12_style_reference_soft_choice"] = (
+            not _text_reference_priority_selected and _reference_strength == "柔和融入"
+        )
+        st.session_state["v12_style_reference_strong_choice"] = (
+            not _text_reference_priority_selected and _reference_strength == "強烈融入"
+        )
+        _reference_soft_col, _reference_strong_col, _reference_text_col = st.columns(
+            [1, 1, 2.7], vertical_alignment="center"
+        )
+        with _reference_soft_col:
+            st.checkbox(
+                t("style_strength_soft"),
+                key="v12_style_reference_soft_choice",
+                on_change=_v12_style_reference_influence_changed,
+                args=("soft",),
+                help=t("style_strength_help"),
+            )
+        with _reference_strong_col:
+            st.checkbox(
+                t("style_strength_strong"),
+                key="v12_style_reference_strong_choice",
+                on_change=_v12_style_reference_influence_changed,
+                args=("strong",),
+                help=t("style_strength_help"),
+            )
+        with _reference_text_col:
+            st.checkbox(
+                "🖋️ 文字畫風參考優先（使用上傳參考圖的字體意象）",
+                key="v12_text_reference_priority",
+                on_change=_v12_style_reference_influence_changed,
+                args=("text_priority",),
+                disabled=not _reference_priority_available,
+                help=(
+                    "啟用後會暫時不套用 125 種帶圖字型與文字外框，"
+                    "改以這張畫風參考的字體筆觸、材質、配色與留白為最高優先。"
+                ),
+            )
         if _text_reference_priority_selected and _reference_priority_available:
             st.caption("🖋️ 已啟用文字畫風參考優先：下方的 125 種帶圖字型與文字外框設定會保留，但本次不會套用。")
         with st.form("v12_style_reference_details_form", border=False):
