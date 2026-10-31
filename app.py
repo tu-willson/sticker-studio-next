@@ -1515,6 +1515,12 @@ div[class*="st-key-v12_basket_download_"] button{
   font-size:.96rem;
   line-height:1.55;
 }
+.v12-text-generation-reminder{
+  border-color:rgba(255,209,102,.72);
+  background:rgba(117,81,14,.36);
+  color:#fff2bd;
+  font-weight:780;
+}
 /* 畫風參考的原生 X 會在換頁時被 Streamlit 模擬成空檔事件；改用預覽下方的
    明確清除按鈕，避免把正常換頁誤判為刪除。 */
 .st-key-v12_style_reference_upload [data-testid="stFileChipDeleteBtn"]{
@@ -15632,7 +15638,7 @@ if not _v12_prompt_settings_admin:
 v10_section(t("section_generate"), "#e67e22")
 if _sticker_mode == "text":
     st.markdown(
-        '<div class="v11-section-tip">「使用文字貼圖」模式，至少填入一格文字，避免送出失敗。</div>',
+        '<div class="v11-section-tip v12-text-generation-reminder">「使用文字貼圖」模式，至少填入一格文字，避免送出失敗。</div>',
         unsafe_allow_html=True,
     )
 st.markdown(f'<div class="v11-section-tip">{t("generate_intro")}</div>', unsafe_allow_html=True)

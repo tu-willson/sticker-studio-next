@@ -12,6 +12,7 @@ class TextGenerationButtonGuardTests(unittest.TestCase):
         self.assertIn('v10_section(t("section_generate"), "#e67e22")', APP)
         self.assertIn('if _sticker_mode == "text":', APP)
         self.assertIn('「使用文字貼圖」模式，至少填入一格文字，避免送出失敗。', APP)
+        self.assertIn('.v12-text-generation-reminder', APP)
         self.assertIn('disabled=_generation_locked,', APP)
         self.assertNotIn('_text_generation_missing_content', APP)
 
