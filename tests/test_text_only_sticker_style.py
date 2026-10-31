@@ -68,6 +68,18 @@ class TextOnlyStickerStyleTests(unittest.TestCase):
         self.assertIn('def _v12_style_reference_influence_changed(mode):', APP)
         self.assertIn('v12_style_reference_soft_choice', APP)
         self.assertIn('v12_style_reference_strong_choice', APP)
+        self.assertIn(
+            'v12_use_text_only_style=bool(\n'
+            '            st.session_state.get("v12_use_text_only_style", False)\n'
+            '        ),',
+            APP,
+        )
+        self.assertIn(
+            'v12_use_text_person_style=bool(\n'
+            '            st.session_state.get("v12_use_text_person_style", False)\n'
+            '        ),',
+            APP,
+        )
 
     def test_generate_recovery_remounts_the_browser_submit_button(self):
         self.assertIn('def _v12_recover_generation_ui_callback()', APP)

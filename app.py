@@ -10270,6 +10270,14 @@ def _v12_apply_shared_template(snapshot, style_reference_bytes, title):
         uploaded_image_bytes=current_photo or None,
         v12_style_source_mode=st.session_state.get("v12_style_source_mode"),
         v10_style_mode=st.session_state.get("v10_style_mode"),
+        # 膠卷載回後會先切換到創作頁；文字主導模式的 checkbox 也必須
+        # 覆蓋舊草稿，否則畫面會錯誤顯示成未勾選。
+        v12_use_text_only_style=bool(
+            st.session_state.get("v12_use_text_only_style", False)
+        ),
+        v12_use_text_person_style=bool(
+            st.session_state.get("v12_use_text_person_style", False)
+        ),
         v12_style_reference_image_bytes=st.session_state.get(
             "v12_style_reference_image_bytes"
         ),
