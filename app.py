@@ -12146,7 +12146,7 @@ def _v12_render_ai_copy_assistant():
 def build_prompt(style, custom_style, selected_character, custom_character,
                  texts, transparent, color_segments=None, ai_copy_topic="", ai_copy_tone="", ai_copy_topics=None,
                  sticker_mode="text", expression_specs=None, action_prompts=None,
-                 text_only=False, text_person=False):
+                 text_only=False, text_person=False, text_reference_priority=False):
     _layout_instruction = "人物與特效請置中安排，四周保留自然空間，方便後續以裁切線微調。"
     _safety_margin_instruction = "每格左右與上下都要保留至少約 12% 的乾淨透明／背景安全邊距，作為裁切走廊。"
     if text_only:
@@ -12154,17 +12154,33 @@ def build_prompt(style, custom_style, selected_character, custom_character,
             "本次為「純文字創意貼圖」模式，不需人物照片。",
             "請一次生成一張清楚的4×2八格LINE貼圖總圖。",
             "第一排四格、第二排四格；依使用者輸入順序由左至右、由上至下對應。",
-            "八格都是獨立的純文字貼圖：只能出現各格指定的文字、該文字的字型筆畫、外框、材質、陰影與抽象裝飾。",
+            (
+                "八格都是獨立的純文字貼圖：只能出現各格指定文字本身與其字型筆畫。"
+                if text_reference_priority else
+                "八格都是獨立的純文字貼圖：只能出現各格指定的文字、該文字的字型筆畫、外框、材質、陰影與抽象裝飾。"
+            ),
             "嚴禁出現人物、臉部、身體、動物、角色、手勢、日常物件、場景、風景、對話人物或具象插圖。",
             "文字必須完全正確、清楚可讀；不可錯字、漏字、改字、加入額外文字、編號、英數符號或水印。",
             "相鄰貼圖之間必須保留一整條連續、乾淨的背景色或透明空間作為裁切走廊；不要畫格線、框線或分隔線。",
-            "【排版硬性規則】將 8 格視為 8 張完全獨立、不可跨越的畫板。每一格的文字、外框、陰影、光芒與裝飾都必須完整留在該格內，絕對不得延伸、重疊或漏進左右／上下相鄰格。",
+            (
+                "【排版硬性規則】將 8 格視為 8 張完全獨立、不可跨越的畫板。每一格的文字本身都必須完整留在該格內，絕對不得延伸、重疊或漏進左右／上下相鄰格。"
+                if text_reference_priority else
+                "【排版硬性規則】將 8 格視為 8 張完全獨立、不可跨越的畫板。每一格的文字、外框、陰影、光芒與裝飾都必須完整留在該格內，絕對不得延伸、重疊或漏進左右／上下相鄰格。"
+            ),
             _safety_margin_instruction + "內容較多時必須整體縮小，不可把多出的部分放到隔壁格。",
             "非常重要：圖片中禁止出現01、02、03、04、05、06、07、08等編號。",
             "禁止加入格號、序號、位置標籤或數字標記。",
-            "每次生成可重新設計字體的排版、配色、材質、層次與抽象裝飾；但必須優先保留使用者選擇的字型與文字外框特徵。",
-            "本次隨機創意方向：" + random.choice(V12_TEXT_ONLY_VARIATION_DIRECTIONS) + "。",
         ]
+        if text_reference_priority:
+            p.append(
+                "本次由畫風參考圖主導文字筆觸；只可在筆畫的粗細、字距、留白、墨色濃淡與行列節奏做克制變化，"
+                "不可為了貼圖感自行增加材質、層次或抽象裝飾。"
+            )
+        else:
+            p.extend([
+                "每次生成可重新設計字體的排版、配色、材質、層次與抽象裝飾；但必須優先保留使用者選擇的字型與文字外框特徵。",
+                "本次隨機創意方向：" + random.choice(V12_TEXT_ONLY_VARIATION_DIRECTIONS) + "。",
+            ])
     elif text_person:
         p = [
             "本次為「文字搭人物（字大人小）」模式；第一張人物照片是唯一的人物身份參考。",
@@ -14366,7 +14382,7 @@ else:
                 ),
             )
         if _text_reference_priority_selected and _reference_priority_available:
-            st.caption("🖋️ 已啟用文字畫風參考優先：下方的 125 種帶圖字型與文字外框設定會保留，但本次不會套用。")
+            st.caption("🖋️ 已啟用文字畫風參考優先：本次只生成平面文字，優先重現參考圖的筆觸與色系；不套用 125 種字型、外框或額外特效。")
         with st.form("v12_style_reference_details_form", border=False):
             st.text_area(
                 t("style_elements"),
@@ -15514,6 +15530,7 @@ prompt = build_prompt(
     action_prompts=_prompt_sticker_action_prompts,
     text_only=_text_only_generation,
     text_person=_text_person_generation,
+    text_reference_priority=_text_reference_priority_active,
 )
 
 if _style_reference_active:
@@ -15577,9 +15594,13 @@ if _text_person_generation:
 _selected_font_for_prompt = st.session_state.get("v8_selected_font")
 if _text_reference_priority_active:
     prompt += (
-        "\n【文字畫風參考優先】畫風參考中的文字意象是本次文字設計的最高優先。"
-        "請仔細轉譯其筆觸的粗細變化、乾濕質感、邊緣、字重、節奏、留白、"
-        "配色、陰影與整體構圖動勢；使用者輸入的文字必須清楚可讀，但要以相同的視覺原理重新創作。"
+        "\n【文字畫風參考優先｜嚴格純文字】畫風參考中的文字筆觸與留白是本次唯一的視覺主角。"
+        "使用者輸入的文字必須完全正確、清楚可讀；請重新創作成接近參考圖的筆勢、粗細變化、乾濕感、"
+        "邊緣、字重、字距、留白與行列節奏，而不是泛用的書法字或一般貼圖字。"
+        "每格只保留文字本身：嚴禁 3D 立體字、浮雕、描邊、外框、底牌、對話框、投影、光暈、反光、"
+        "閃粉、爆炸線、愛心、泡泡、幾何圖案、圖示、花紋、具象物件或任何額外特效。"
+        "顏色必須從參考圖現有色系取樣：若參考圖為黑白／墨色，僅使用黑、灰、白與紙色；"
+        "只有參考圖本身已有明確單一點綴色時，才可使用那一種平面點綴色，絕不可自行加入其他彩色效果。"
         "忽略任何既有的 125 種帶圖字型與文字外框／形狀效果，不得混用。"
         "不可複製參考圖的既有文字、標誌、完整排版或單一筆畫；請針對本次指定文字重新設計。"
     )
