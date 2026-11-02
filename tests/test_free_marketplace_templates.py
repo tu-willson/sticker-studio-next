@@ -5,6 +5,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "app.py"
 MIGRATION = ROOT / "supabase" / "migrations" / "20261103_000073_allow_free_marketplace_templates.sql"
+CREATIVE_TEXT_TAG_MIGRATION = (
+    ROOT / "supabase" / "migrations" / "20261103_000074_add_creative_text_marketplace_tag.sql"
+)
 
 
 class FreeMarketplaceTemplatesTests(unittest.TestCase):
@@ -27,6 +30,13 @@ class FreeMarketplaceTemplatesTests(unittest.TestCase):
         self.assertIn("示範連結", source)
         self.assertIn("width:140px !important", source)
         self.assertNotIn('key="v12_newebpay_reconcile"', source)
+
+    def test_creative_text_is_a_server_validated_marketplace_tag(self):
+        source = APP.read_text(encoding="utf-8")
+        sql = CREATIVE_TEXT_TAG_MIGRATION.read_text(encoding="utf-8")
+        self.assertIn('"創意文字"', source)
+        self.assertIn("'創意文字'", sql)
+        self.assertIn("v12-reel-action-notice", source)
 
 
 if __name__ == "__main__":

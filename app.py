@@ -91,7 +91,7 @@ V12_SHARED_TEMPLATE_TAGS = [
     "日常招呼", "可愛療癒", "搞笑吐槽", "心情情緒", "情侶曖昧",
     "親友互動", "職場同事", "校園學生", "家庭親子", "寵物日常",
     "節日祝福", "生日慶祝", "加油鼓勵", "感謝道歉", "美食生活",
-    "旅行出遊", "運動健身", "商務客服", "自媒體創作", "其他主題",
+    "旅行出遊", "運動健身", "商務客服", "自媒體創作", "創意文字", "其他主題",
 ]
 
 
@@ -2410,6 +2410,32 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
   font-weight:800;
   text-align:center;
 }
+/* 將膠卷／市集操作結果留在被點選的膠卷旁，避免只出現在頁面最上方。 */
+.v12-reel-action-notice{
+  margin:.72rem 0 .18rem;
+  padding:.72rem .78rem;
+  border:1px solid rgba(255,188,95,.9);
+  border-left:4px solid #ffc15f;
+  border-radius:.62rem;
+  background:rgba(102,67,17,.42);
+  color:#fff4d7;
+  font-size:.88rem;
+  font-weight:820;
+  line-height:1.5;
+  box-shadow:0 6px 16px rgba(7,12,30,.22);
+}
+.v12-reel-action-notice.is-success{
+  border-color:rgba(103,228,182,.88);
+  border-left-color:#54dca7;
+  background:rgba(20,102,76,.38);
+  color:#ddffef;
+}
+.v12-reel-action-notice.is-error{
+  border-color:rgba(255,135,153,.9);
+  border-left-color:#ff718d;
+  background:rgba(119,35,55,.42);
+  color:#ffe3e9;
+}
 .v12-reel-rules{
   margin:1.1rem 0 .7rem;
   color:#fff;
@@ -4051,13 +4077,18 @@ def _v12_delete_creator_reel_callback(session, reel_id):
 def _v12_collect_creator_reel_callback(session, reel_id):
     """Collect before Streamlit's single automatic rerun."""
     try:
-        st.session_state["v12_creator_reel_collection_feedback"] = (
-            _beta_collect_creator_reel(session, reel_id)
-        )
+        feedback = _beta_collect_creator_reel(session, reel_id)
+        feedback["reel_id"] = str(reel_id)
+        st.session_state["v12_creator_reel_collection_feedback"] = feedback
     except Exception as exc:
-        st.session_state["v12_creator_reel_collection_error"] = (
-            "limit" if "creator_reel_collection_limit" in str(exc or "") else "failed"
-        )
+        st.session_state["v12_creator_reel_collection_error"] = {
+            "type": (
+                "limit"
+                if "creator_reel_collection_limit" in str(exc or "")
+                else "failed"
+            ),
+            "reel_id": str(reel_id),
+        }
 
 
 def _v12_publish_creator_reel_callback(session, reel, publish_limit):
@@ -4089,18 +4120,25 @@ def _v12_publish_creator_reel_callback(session, reel, publish_limit):
         st.session_state.get(f"v12_shared_template_rights_{reel_id}", False)
     )
     if len(title.strip()) < 3:
-        st.session_state["v12_shared_template_publish_error"] = "title"
+        st.session_state["v12_shared_template_publish_error"] = {
+            "type": "title", "reel_id": reel_id
+        }
         return
     if not isinstance(tags, list) or not tags:
-        st.session_state["v12_shared_template_publish_error"] = "tags"
+        st.session_state["v12_shared_template_publish_error"] = {
+            "type": "tags", "reel_id": reel_id
+        }
         return
     if not confirmed:
-        st.session_state["v12_shared_template_publish_error"] = "rights"
+        st.session_state["v12_shared_template_publish_error"] = {
+            "type": "rights", "reel_id": reel_id
+        }
         return
     try:
         published = _beta_publish_creator_reel(
             session, reel, title, description, cost, tags
         )
+        published["reel_id"] = reel_id
         st.session_state["v12_shared_template_publish_feedback"] = published
     except Exception as exc:
         message = str(exc or "")
@@ -4113,6 +4151,7 @@ def _v12_publish_creator_reel_callback(session, reel, publish_limit):
         st.session_state["v12_shared_template_publish_error"] = {
             "type": error,
             "limit": int(publish_limit or 0),
+            "reel_id": reel_id,
         }
 
 
@@ -10204,6 +10243,17 @@ def _v12_render_shared_template_manager(session):
                 )
 
 
+def _v12_render_reel_action_notice(message, level="warning"):
+    """Show a persistent, card-local result beside the reel that was acted on."""
+    safe_level = level if level in {"success", "error", "warning"} else "warning"
+    extra_class = "" if safe_level == "warning" else f" is-{safe_level}"
+    st.markdown(
+        '<div class="v12-reel-action-notice%s">%s</div>'
+        % (extra_class, html.escape(str(message or ""))),
+        unsafe_allow_html=True,
+    )
+
+
 def _v12_render_creator_reels(session, shelf="active"):
     """Render one private Creator Reel shelf inside My Works."""
     try:
@@ -10218,23 +10268,43 @@ def _v12_render_creator_reels(session, shelf="active"):
     collection_feedback = st.session_state.pop(
         "v12_creator_reel_collection_feedback", None
     )
+    collection_notice = None
     if isinstance(collection_feedback, dict):
-        st.success(
-            t(
+        collection_notice = {
+            "reel_id": str(collection_feedback.get("reel_id", "") or ""),
+            "level": "success",
+            "message": t(
                 "creator_reel_collect_success",
                 count=collection_feedback.get("count", 0),
                 limit=collection_feedback.get("limit", 0),
-            )
-        )
-    collection_error = str(
-        st.session_state.pop("v12_creator_reel_collection_error", "") or ""
+            ),
+        }
+        st.success(collection_notice["message"])
+    collection_error = st.session_state.pop(
+        "v12_creator_reel_collection_error", ""
     )
-    if collection_error == "limit":
-        st.warning(
-            t("creator_reel_collect_limit", limit=status["collected_reel_limit"])
-        )
-    elif collection_error == "failed":
-        st.error(t("creator_reel_collect_failed"))
+    collection_error_payload = (
+        collection_error
+        if isinstance(collection_error, dict)
+        else {"type": str(collection_error or ""), "reel_id": ""}
+    )
+    collection_error_type = str(collection_error_payload.get("type", "") or "")
+    if collection_error_type == "limit":
+        collection_notice = {
+            "reel_id": str(collection_error_payload.get("reel_id", "") or ""),
+            "level": "warning",
+            "message": t(
+                "creator_reel_collect_limit", limit=status["collected_reel_limit"]
+            ),
+        }
+        st.warning(collection_notice["message"])
+    elif collection_error_type == "failed":
+        collection_notice = {
+            "reel_id": str(collection_error_payload.get("reel_id", "") or ""),
+            "level": "error",
+            "message": t("creator_reel_collect_failed"),
+        }
+        st.error(collection_notice["message"])
     if st.session_state.pop("v12_creator_reel_delete_feedback", False):
         st.success("🗑️ 創作膠卷已刪除。")
     rename_feedback = str(
@@ -10262,6 +10332,7 @@ def _v12_render_creator_reels(session, shelf="active"):
         "v12_shared_template_publish_feedback", None
     )
     publish_error = st.session_state.pop("v12_shared_template_publish_error", None)
+    publish_notice = None
     if not status["eligible"]:
         st.info(t("creator_reel_subscription_only"))
         return
@@ -10334,34 +10405,69 @@ def _v12_render_creator_reels(session, shelf="active"):
     shelf_title = "⭐ 已收藏的膠卷" if desired_status == "collected" else "🎞️ 未收藏的膠卷"
     st.markdown(f"#### {shelf_title}")
     if desired_status == "collected":
-        # 發布成功或缺少欄位的提醒只屬於「已收藏」分頁；放在這個
-        # 標題下方，避免使用者誤以為是整個創作膠卷頁面的錯誤。
+        # 發布提醒仍保留在分頁上方，並且稍後會同步顯示於被操作膠卷左側。
         if isinstance(template_feedback, dict):
-            st.success(
-                t(
+            publish_notice = {
+                "reel_id": str(template_feedback.get("reel_id", "") or ""),
+                "level": "success",
+                "message": t(
                     "shared_template_publish_success",
                     count=template_feedback.get("count", 0),
                     limit=template_feedback.get("limit", 0),
-                )
+                ),
+            }
+            st.success(publish_notice["message"])
+        publish_error_payload = (
+            publish_error
+            if isinstance(publish_error, dict)
+            else {"type": str(publish_error or ""), "reel_id": ""}
+        )
+        publish_error_type = str(publish_error_payload.get("type", "") or "")
+        if publish_error_type == "title":
+            publish_notice = {
+                "reel_id": str(publish_error_payload.get("reel_id", "") or ""),
+                "level": "warning",
+                "message": t("shared_template_title_required"),
+            }
+        elif publish_error_type == "tags":
+            publish_notice = {
+                "reel_id": str(publish_error_payload.get("reel_id", "") or ""),
+                "level": "warning",
+                "message": t("shared_template_tags_required"),
+            }
+        elif publish_error_type == "rights":
+            publish_notice = {
+                "reel_id": str(publish_error_payload.get("reel_id", "") or ""),
+                "level": "warning",
+                "message": t("shared_template_rights_required"),
+            }
+        elif publish_error_type == "limit":
+            publish_notice = {
+                "reel_id": str(publish_error_payload.get("reel_id", "") or ""),
+                "level": "warning",
+                "message": t(
+                    "shared_template_publish_limit",
+                    limit=publish_error_payload.get(
+                        "limit", status["publish_template_limit"]
+                    ),
+                ),
+            }
+        elif publish_error_type == "exists":
+            publish_notice = {
+                "reel_id": str(publish_error_payload.get("reel_id", "") or ""),
+                "level": "warning",
+                "message": t("shared_template_already_published"),
+            }
+        elif publish_error_type:
+            publish_notice = {
+                "reel_id": str(publish_error_payload.get("reel_id", "") or ""),
+                "level": "error",
+                "message": t("shared_template_publish_failed"),
+            }
+        if publish_notice:
+            getattr(st, "error" if publish_notice["level"] == "error" else "warning")(
+                publish_notice["message"]
             )
-        if publish_error == "title":
-            st.warning(t("shared_template_title_required"))
-        elif publish_error == "tags":
-            st.warning(t("shared_template_tags_required"))
-        elif publish_error == "rights":
-            st.warning(t("shared_template_rights_required"))
-        elif isinstance(publish_error, dict):
-            if publish_error.get("type") == "limit":
-                st.warning(
-                    t(
-                        "shared_template_publish_limit",
-                        limit=publish_error.get("limit", status["publish_template_limit"]),
-                    )
-                )
-            elif publish_error.get("type") == "exists":
-                st.warning(t("shared_template_already_published"))
-            else:
-                st.error(t("shared_template_publish_failed"))
         st.caption("已購入膠卷與已收藏膠捲共用數量上限。")
         st.info(
             f"已收藏+已購入：{status['shared_reel_count']}／"
@@ -10439,6 +10545,20 @@ def _v12_render_creator_reels(session, shelf="active"):
                 )
             except Exception:
                 st.info(t("creator_reel_preview_unavailable"))
+            if (
+                isinstance(collection_notice, dict)
+                and collection_notice.get("reel_id") == reel_id
+            ):
+                _v12_render_reel_action_notice(
+                    collection_notice["message"], collection_notice["level"]
+                )
+            if (
+                isinstance(publish_notice, dict)
+                and publish_notice.get("reel_id") == reel_id
+            ):
+                _v12_render_reel_action_notice(
+                    publish_notice["message"], publish_notice["level"]
+                )
         with right:
             title_col, rename_col = st.columns([3.2, 1])
             with title_col:
