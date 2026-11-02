@@ -18,20 +18,34 @@ function redirect(path: string): Response {
   return new Response(null, { status: 303, headers: { Location: `${SITE_URL}/${path}` } });
 }
 
+// Keep browser-visible diagnostics intentionally coarse: they help support
+// investigate a failed redirect without exposing payment payloads or secrets.
+function invalidReturn(reason: string): Response {
+  console.warn("NEWEBPAY_RETURN_INVALID", reason);
+  return redirect(`?payment=invalid&reason=${encodeURIComponent(reason)}`);
+}
+
 Deno.serve(async (request) => {
-  if (request.method !== "POST") return redirect("?payment=invalid");
+  if (request.method !== "POST") return invalidReturn("method");
   try {
     const fields = await requestFields(request);
     const tradeInfo = fields.TradeInfo || "";
     const tradeSha = fields.TradeSha || "";
-    if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !HASH_KEY || !HASH_IV || !tradeInfo || !tradeSha) return redirect("?payment=invalid");
-    if (!constantTimeEqual(await newebpayTradeSha(tradeInfo, HASH_KEY, HASH_IV), tradeSha.toUpperCase())) return redirect("?payment=invalid");
-    const decoded = parseNewebpayMpgValues(await decryptNewebpayCbc(tradeInfo, HASH_KEY, HASH_IV));
+    if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !HASH_KEY || !HASH_IV) return invalidReturn("configuration");
+    if (!tradeInfo || !tradeSha) return invalidReturn("payload");
+    if (!constantTimeEqual(await newebpayTradeSha(tradeInfo, HASH_KEY, HASH_IV), tradeSha.toUpperCase())) return invalidReturn("signature");
+
+    let decoded: Record<string, string>;
+    try {
+      decoded = parseNewebpayMpgValues(await decryptNewebpayCbc(tradeInfo, HASH_KEY, HASH_IV));
+    } catch {
+      return invalidReturn("decrypt");
+    }
     const reference = decoded.MerchantOrderNo || "";
-    if (!reference) return redirect("?payment=invalid");
+    if (!reference) return invalidReturn("reference");
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
     const { data } = await admin.from("commerce_orders").select("id").eq("provider_order_reference", reference).maybeSingle();
-    if (!data?.id) return redirect("?payment=invalid");
+    if (!data?.id) return invalidReturn("order");
     const result = new URLSearchParams({ payment_order: String(data.id) });
     const status = safeProviderText(decoded.Status || fields.Status, 60);
     const message = safeProviderText(decoded.Message, 180);
@@ -39,7 +53,8 @@ Deno.serve(async (request) => {
     if (message) result.set("payment_message", message);
     // NotifyURL, not this browser redirect, is the only entitlement path.
     return redirect(`?${result.toString()}`);
-  } catch {
-    return redirect("?payment=invalid");
+  } catch (error) {
+    console.error("NEWEBPAY_RETURN_UNEXPECTED", error instanceof Error ? error.name : "unknown");
+    return invalidReturn("unexpected");
   }
 });
