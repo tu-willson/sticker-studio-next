@@ -6823,6 +6823,12 @@ def _beta_render_admin_console(session):
         st.info("此操作只用於驗證方案權益：不會收款、不會寄送付款通知，也不會對外顯示為正式訂單。")
         # 測試購買不再默默沿用上方「補次／扣次」的選取會員。明確列出
         # 授權對象，避免管理員在切換測試帳號時把方案給錯人。
+        direct_target_email = st.text_input(
+            "直接輸入授權帳號 Email（優先使用）",
+            placeholder="例如：member@example.com",
+            key="beta_admin_test_purchase_direct_email",
+            help="填入後會優先以完全相符的會員 Email 授與；留白時才使用下方選單。",
+        ).strip().lower()
         _test_purchase_labels = list(options.keys())
         _test_purchase_default = (
             _test_purchase_labels.index(selected_label)
@@ -6836,10 +6842,36 @@ def _beta_render_admin_console(session):
             help="先在上方搜尋會員；此方案只會授與這裡顯示的使用者。",
         )
         test_purchase_target = options[test_purchase_target_label]
-        st.caption(
-            "將授與："
-            f"{test_purchase_target.get('email') or '未提供 Email'}"
-        )
+        direct_target_error = ""
+        if direct_target_email:
+            if "@" not in direct_target_email:
+                direct_target_error = "請輸入完整的授權帳號 Email。"
+            else:
+                try:
+                    direct_matches = _beta_admin_list_members(session, direct_target_email)
+                    exact_matches = [
+                        member for member in direct_matches
+                        if isinstance(member, dict)
+                        and str(member.get("email", "") or "").strip().lower() == direct_target_email
+                        and member.get("user_id")
+                    ]
+                except Exception:
+                    exact_matches = []
+                    direct_target_error = "目前無法查詢此帳號，請稍後再試或改用下方選單。"
+                if not direct_target_error:
+                    if len(exact_matches) == 1:
+                        test_purchase_target = exact_matches[0]
+                    elif not exact_matches:
+                        direct_target_error = "找不到完全相符的會員 Email，未授與任何測試方案。"
+                    else:
+                        direct_target_error = "查到重複的會員 Email，請改用上方會員選單確認。"
+        if direct_target_error:
+            st.warning(direct_target_error)
+        else:
+            st.caption(
+                "將授與："
+                f"{test_purchase_target.get('email') or '未提供 Email'}"
+            )
         product_options = {
             "7 次生成包｜圖片生成 7 次／AI幫想每日 7 次／作品庫 7 組／膠卷 7 卷／市集 3 組｜單次購買・效期 30 天": "credit_pack_7",
             "基本創作包｜圖片生成 20 次／AI幫想每日 15 次／作品集 20 組｜單次購買・效期 30 天": "basic_monthly",
@@ -6857,7 +6889,9 @@ def _beta_render_admin_console(session):
         )
         st.caption("每次測試購買都會建立獨立的 30 天創作包額度；不會自動續扣。")
         if st.button("授與指定使用者測試方案", type="primary", key="beta_admin_test_purchase"):
-            if len(purchase_note.strip()) < 3:
+            if direct_target_error:
+                st.warning(direct_target_error)
+            elif len(purchase_note.strip()) < 3:
                 st.warning("請填寫至少 3 個字的測試備註。")
             else:
                 try:
