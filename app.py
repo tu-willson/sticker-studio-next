@@ -3556,15 +3556,25 @@ def _beta_http(method, path, payload=None, access_token=None):
         # database details private, but preserve our small set of deliberate,
         # user-actionable domain codes so the UI can explain what happened.
         error_code = ""
+        error_text = ""
         try:
             error_payload = json.loads(exc.read().decode("utf-8") or "{}")
             if isinstance(error_payload, dict):
                 error_code = str(error_payload.get("message", "") or "")
+                # PostgREST may put a PostgreSQL RAISE message in ``details``
+                # rather than ``message``.  Search all standard fields so a
+                # clear capacity error never becomes a generic UI failure.
+                error_text = " ".join(
+                    str(error_payload.get(field, "") or "")
+                    for field in ("message", "details", "hint", "code")
+                ).lower()
         except Exception:
             pass
         known_codes = {
             "shared_template_already_exists",
             "shared_template_publish_limit",
+            "shared_templates_marketplace_required",
+            "invalid_shared_template",
             "shared_templates_subscription_required",
             "shared_template_insufficient_credits",
             "invalid_library_project_update",
@@ -3587,6 +3597,9 @@ def _beta_http(method, path, payload=None, access_token=None):
         }
         if error_code in known_codes:
             raise RuntimeError(error_code) from exc
+        for known_code in known_codes:
+            if known_code in error_text:
+                raise RuntimeError(known_code) from exc
         raise RuntimeError(f"beta_request_failed_http_{exc.code}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
         raise RuntimeError("beta_request_failed") from exc
@@ -4146,6 +4159,10 @@ def _v12_publish_creator_reel_callback(session, reel, publish_limit):
             error = "limit"
         elif "shared_template_already_exists" in message:
             error = "exists"
+        elif "shared_templates_marketplace_required" in message:
+            error = "marketplace_required"
+        elif "invalid_shared_template" in message:
+            error = "invalid"
         else:
             error = "failed"
         st.session_state["v12_shared_template_publish_error"] = {
@@ -10457,6 +10474,18 @@ def _v12_render_creator_reels(session, shelf="active"):
                 "reel_id": str(publish_error_payload.get("reel_id", "") or ""),
                 "level": "warning",
                 "message": t("shared_template_already_published"),
+            }
+        elif publish_error_type == "marketplace_required":
+            publish_notice = {
+                "reel_id": str(publish_error_payload.get("reel_id", "") or ""),
+                "level": "warning",
+                "message": "目前方案沒有市集發布權益，請先購買有效的創作包後再試。",
+            }
+        elif publish_error_type == "invalid":
+            publish_notice = {
+                "reel_id": str(publish_error_payload.get("reel_id", "") or ""),
+                "level": "warning",
+                "message": "請確認膠卷名稱、分類標籤與分享權利確認欄位皆已正確填寫。",
             }
         elif publish_error_type:
             publish_notice = {

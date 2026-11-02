@@ -37,6 +37,8 @@ class FreeMarketplaceTemplatesTests(unittest.TestCase):
         self.assertIn('"創意文字"', source)
         self.assertIn("'創意文字'", sql)
         self.assertIn("v12-reel-action-notice", source)
+        self.assertIn('("message", "details", "hint", "code")', source)
+        self.assertIn('"shared_templates_marketplace_required"', source)
 
 
 if __name__ == "__main__":
