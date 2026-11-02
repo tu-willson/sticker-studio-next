@@ -3782,6 +3782,43 @@ def _v12_render_newebpay_form(checkout):
     )
 
 
+def _v12_close_payment_return_popup():
+    """Close the hosted-payment popup and preserve the original app session.
+
+    The payment POST has to leave Streamlit's sandboxed component in a new
+    tab. Authentication deliberately remains only in the original Streamlit
+    session, so the return tab should close instead of asking the member to
+    sign in again.
+    """
+    components.html(
+        """
+        <div id="payment-return-popup-note" style="display:none"></div>
+        <script>
+        (() => {
+          const popup = window.top;
+          try {
+            if (!popup || !popup.opener || popup.opener.closed) return;
+            const note = document.getElementById('payment-return-popup-note');
+            if (note) {
+              note.style.cssText = 'display:block;padding:8px 10px;color:#f8fafc;font:14px sans-serif;';
+              note.textContent = '付款已完成，正在回到原付款頁…';
+            }
+            window.setTimeout(() => {
+              try { popup.opener.focus(); } catch (_) {}
+              try { popup.close(); } catch (_) {}
+            }, 700);
+          } catch (_) {
+            // If a browser blocks closing, leave the original purchase tab
+            // untouched; it still contains the authenticated member session.
+          }
+        })();
+        </script>
+        """,
+        height=38,
+        scrolling=False,
+    )
+
+
 def _beta_my_commerce_order_status(session, order_id):
     """Read only the signed-in member's own order state after a payment return."""
     if not re.fullmatch(
@@ -13624,6 +13661,7 @@ if re.fullmatch(
     str(st.query_params.get("payment_order", "") or ""),
 ):
     st.session_state["v12_view"] = "pricing"
+    _v12_close_payment_return_popup()
 
 
 # ============================================================

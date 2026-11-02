@@ -3,6 +3,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+APP = (ROOT / "app.py").read_text(encoding="utf-8")
 MIGRATION = (ROOT / "supabase/migrations/20261102_000068_newebpay_live_checkout_foundation.sql").read_text(encoding="utf-8")
 ONE_TIME_MIGRATION = (ROOT / "supabase/migrations/20261102_000069_one_time_creator_packs.sql").read_text(encoding="utf-8")
 CHECKOUT = (ROOT / "supabase/functions/newebpay-checkout/index.ts").read_text(encoding="utf-8")
@@ -43,6 +44,12 @@ class NewebPayLiveFoundationTests(unittest.TestCase):
         self.assertIn("record_newebpay_periodic_renewal", PERIODIC_NOTIFY)
         self.assertNotIn("finalize_newebpay_initial_payment", RETURN)
         self.assertNotIn("record_newebpay_periodic_renewal", PERIODIC_RETURN)
+
+    def test_payment_return_popup_closes_without_recreating_member_session(self):
+        self.assertIn("def _v12_close_payment_return_popup", APP)
+        self.assertIn("popup.opener.focus()", APP)
+        self.assertIn("popup.close()", APP)
+        self.assertIn("_v12_close_payment_return_popup()", APP)
 
     def test_all_callback_functions_allow_provider_posts_without_jwt(self):
         for name in (
