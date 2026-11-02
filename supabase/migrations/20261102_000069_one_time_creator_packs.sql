@@ -205,8 +205,8 @@ begin
   update public.commerce_orders set status = 'paid', paid_at = v_start,
     provider_transaction_reference = v_transaction, payment_result = coalesce(p_payment_result, '{}'::jsonb)
   where id = v_order.id;
-  update public.newebpay_checkout_sessions set used_at = v_start
-  where order_id = v_order.id and used_at is null;
+  update public.newebpay_checkout_sessions as checkout_session set used_at = v_start
+  where checkout_session.order_id = v_order.id and checkout_session.used_at is null;
   insert into public.member_entitlements (
     id, user_id, kind, daily_copy_limit, starts_at, expires_at,
     external_reference, note, product_code, order_id, library_capacity
