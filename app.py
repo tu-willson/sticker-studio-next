@@ -3846,11 +3846,28 @@ def _v12_close_payment_return_popup():
         (() => {
           const popup = window.top;
           try {
-            if (!popup || popup.name !== 'newebpay_checkout' || !popup.opener || popup.opener.closed) return;
+            if (!popup) return;
+            const params = new URLSearchParams(popup.location.search || '');
+            const isPaymentReturn = params.has('payment_order');
+            const isNamedCheckout = popup.name === 'newebpay_checkout';
+            // NewebPay may set a cross-origin opener policy while returning
+            // from its hosted page.  In that case `window.opener` is null,
+            // even though this is still the popup created by the member.
+            // The opaque order id is safe to use only as a return-page marker.
+            if (!isPaymentReturn || (!isNamedCheckout && !popup.opener)) return;
             window.setTimeout(() => {
-              try { popup.opener.focus(); } catch (_) {}
+              const opener = popup.opener;
+              try {
+                if (opener && !opener.closed) {
+                  opener.focus();
+                  // The member session stays in the original tab; refreshing
+                  // it picks up the verified entitlement without asking them
+                  // to sign in again.
+                  opener.location.reload();
+                }
+              } catch (_) {}
               try { popup.close(); } catch (_) {}
-            }, 700);
+            }, 900);
           } catch (_) {
             // If a browser blocks closing, leave the original purchase tab
             // untouched; it still contains the authenticated member session.
