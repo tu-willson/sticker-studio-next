@@ -4112,6 +4112,29 @@ def _v12_publish_creator_reel_callback(session, reel, publish_limit):
     reel_id = str(
         (reel or {}).get("id") or (reel or {}).get("reel_id") or ""
     )
+    # Capacity is the primary actionable reason.  Check it before form-field
+    # validation so a full marketplace does not misleadingly blame a newly
+    # added tag or another secondary field.
+    try:
+        existing_sources = _beta_list_my_shared_template_sources(session)
+        active_publication_count = sum(
+            1
+            for publication_status in existing_sources.values()
+            if str(publication_status or "") in {"uploading", "published"}
+        )
+        if int(publish_limit or 0) > 0 and active_publication_count >= int(
+            publish_limit
+        ):
+            st.session_state["v12_shared_template_publish_error"] = {
+                "type": "limit",
+                "limit": int(publish_limit),
+                "reel_id": reel_id,
+            }
+            return
+    except Exception:
+        # The server rechecks this transactionally; retain its response when
+        # the lightweight preflight cannot be read.
+        pass
     snapshot = (reel or {}).get("snapshot") or {}
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     source_name = str((reel or {}).get("source_project_name", "") or "").strip()

@@ -39,6 +39,7 @@ class FreeMarketplaceTemplatesTests(unittest.TestCase):
         self.assertIn("v12-reel-action-notice", source)
         self.assertIn('("message", "details", "hint", "code")', source)
         self.assertIn('"shared_templates_marketplace_required"', source)
+        self.assertIn("active_publication_count", source)
 
 
 if __name__ == "__main__":
