@@ -7707,7 +7707,7 @@ V12_TEXT_ONLY_STYLE = "📝 純文字創意貼圖"
 V12_TEXT_PERSON_STYLE_LABEL = "👤 文字搭人物（字大人小）"
 V12_TEXT_ONLY_STYLE_CHECKBOX_LABEL = (
     "![純文字設計範例](https://raw.githubusercontent.com/tu-willson/"
-    "sticker-studio-next/main/static/style_examples/text-only.png) "
+    "sticker-studio-next/main/static/style_examples/text-only.png?v=619f0b5) "
     "純文字設計（無人物）"
 )
 V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL = (
