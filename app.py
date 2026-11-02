@@ -3566,6 +3566,15 @@ def _beta_payuni_sandbox_enabled():
     return value in {"1", "true", "yes", "on"}
 
 
+def _beta_newebpay_live_enabled():
+    """Formal NewebPay remains invisible until both deployment gates are enabled."""
+    try:
+        value = str(st.secrets.get("NEWEBPAY_LIVE_ENABLED", "") or "").strip().lower()
+    except Exception:
+        return False
+    return value in {"1", "true", "yes", "on"}
+
+
 def _beta_create_payuni_checkout(session, product_code):
     """Create a member-owned pending order; the browser cannot mark it paid."""
     response = _beta_rpc(
@@ -3589,6 +3598,35 @@ def _beta_create_payuni_checkout(session, product_code):
         "order_id": order_id,
         "product_name": str(response.get("product_name", "") or ""),
         "amount_twd": int(response.get("amount_twd", 0) or 0),
+        "expires_at": str(response.get("expires_at", "") or ""),
+    }
+
+
+def _beta_create_newebpay_checkout(session, product_code):
+    """Create a pending formal order; only the verified NotifyURL can complete it."""
+    response = _beta_rpc(
+        "create_my_newebpay_checkout",
+        {
+            "p_product_code": str(product_code or ""),
+            "p_idempotency_key": str(__import__("uuid").uuid4()),
+        },
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("newebpay_checkout_invalid")
+    checkout_id = str(response.get("checkout_id", "") or "")
+    order_id = str(response.get("order_id", "") or "")
+    payment_flow = str(response.get("payment_flow", "") or "")
+    if not checkout_id or not order_id or payment_flow not in {"mpg", "periodic"}:
+        raise RuntimeError("newebpay_checkout_invalid")
+    return {
+        "checkout_id": checkout_id,
+        "order_id": order_id,
+        "product_name": str(response.get("product_name", "") or ""),
+        "amount_twd": int(response.get("amount_twd", 0) or 0),
+        "payment_flow": payment_flow,
         "expires_at": str(response.get("expires_at", "") or ""),
     }
 
@@ -3629,6 +3667,35 @@ def _beta_payuni_checkout_payload(checkout_id):
     return {"action": payload["action"], "fields": {name: str(fields[name]) for name in required}}
 
 
+def _beta_newebpay_checkout_payload(checkout_id, payment_flow):
+    """Fetch a short-lived, signed NewebPay form without exposing any secret."""
+    config = _beta_config()
+    if not config or not checkout_id or payment_flow not in {"mpg", "periodic"}:
+        raise RuntimeError("newebpay_checkout_invalid")
+    checkout_url = (
+        f"{config['url']}/functions/v1/newebpay-checkout?checkout="
+        f"{urllib.parse.quote(str(checkout_id), safe='')}"
+    )
+    request = urllib.request.Request(checkout_url, headers={"Accept": "application/json"}, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8") or "{}")
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError) as exc:
+        raise RuntimeError("newebpay_checkout_payload_failed") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("fields"), dict):
+        raise RuntimeError("newebpay_checkout_payload_invalid")
+    if payment_flow == "mpg":
+        expected_action = "https://core.newebpay.com/MPG/mpg_gateway"
+        required = ("MerchantID", "TradeInfo", "TradeSha", "Version", "EncryptType")
+    else:
+        expected_action = "https://core.newebpay.com/MPG/period"
+        required = ("MerchantID_", "PostData_")
+    fields = payload["fields"]
+    if payload.get("action") != expected_action or any(not str(fields.get(name, "") or "") for name in required):
+        raise RuntimeError("newebpay_checkout_payload_invalid")
+    return {"action": payload["action"], "fields": {name: str(fields[name]) for name in required}}
+
+
 def _v12_render_payuni_sandbox_form(checkout):
     """Show a user-clicked signed POST form without exposing PAYUNi secrets."""
     payload = _beta_payuni_checkout_payload(checkout.get("checkout_id"))
@@ -3649,6 +3716,34 @@ def _v12_render_payuni_sandbox_form(checkout):
         <!-- Streamlit Components run inside a sandboxed iframe.  A named new
              tab is the browser-permitted way to leave that iframe for a
              third-party hosted payment form. -->
+        <form action="{html.escape(payload['action'])}" method="post" target="_blank">
+          {hidden_fields}<button type="submit">{label}</button>
+        </form>
+        """,
+        height=53,
+        scrolling=False,
+    )
+
+
+def _v12_render_newebpay_form(checkout):
+    """Render a deliberate user-click POST to NewebPay's hosted payment page."""
+    payload = _beta_newebpay_checkout_payload(
+        checkout.get("checkout_id"), checkout.get("payment_flow")
+    )
+    hidden_fields = "".join(
+        f'<input type="hidden" name="{html.escape(name)}" value="{html.escape(value)}">'
+        for name, value in payload["fields"].items()
+    )
+    label = html.escape(t("pricing_newebpay_open"))
+    components.html(
+        f"""
+        <style>
+          html, body {{ margin: 0; background: transparent; font-family: sans-serif; }}
+          form {{ margin: 0; }}
+          button {{ width: 100%; border: 0; border-radius: 0.5rem; padding: 0.62rem 1rem;
+                    background: #ff5579; color: white; font-size: 1rem; font-weight: 700; cursor: pointer; }}
+          button:hover {{ background: #e94069; }}
+        </style>
         <form action="{html.escape(payload['action'])}" method="post" target="_blank">
           {hidden_fields}<button type="submit">{label}</button>
         </form>
@@ -12765,6 +12860,8 @@ def _v12_select_purchase_product_callback(product_code):
     st.session_state["v12_pending_purchase_product"] = product_code
     st.session_state.pop("v12_payuni_checkout", None)
     st.session_state.pop("v12_payuni_checkout_error", None)
+    st.session_state.pop("v12_newebpay_checkout", None)
+    st.session_state.pop("v12_newebpay_checkout_error", None)
 
 
 def _v12_create_payuni_checkout_callback(session, product_code):
@@ -12780,6 +12877,21 @@ def _v12_create_payuni_checkout_callback(session, product_code):
     except Exception:
         st.session_state.pop("v12_payuni_checkout", None)
         st.session_state["v12_payuni_checkout_error"] = "unknown"
+
+
+def _v12_create_newebpay_checkout_callback(session, product_code):
+    """Create exactly one formal pending order during the Streamlit callback pass."""
+    try:
+        st.session_state["v12_newebpay_checkout"] = _beta_create_newebpay_checkout(
+            session, product_code
+        )
+        st.session_state.pop("v12_newebpay_checkout_error", None)
+    except RuntimeError as exc:
+        st.session_state.pop("v12_newebpay_checkout", None)
+        st.session_state["v12_newebpay_checkout_error"] = str(exc)
+    except Exception:
+        st.session_state.pop("v12_newebpay_checkout", None)
+        st.session_state["v12_newebpay_checkout_error"] = "unknown"
 
 
 def _v12_load_workspace_project_callback(project):
@@ -13199,6 +13311,8 @@ def _v12_render_pricing_page():
         st.session_state.pop("v12_pending_purchase_product", None)
         st.session_state.pop("v12_payuni_checkout", None)
         st.session_state.pop("v12_payuni_checkout_error", None)
+        st.session_state.pop("v12_newebpay_checkout", None)
+        st.session_state.pop("v12_newebpay_checkout_error", None)
         selected_code = ""
 
     st.markdown(
@@ -13304,7 +13418,33 @@ def _v12_render_pricing_page():
     if chosen:
         st.markdown(f"### {t('pricing_selected', name=chosen['name'], price=chosen['price'])}")
         if session:
-            if _beta_payuni_sandbox_enabled():
+            if _beta_newebpay_live_enabled():
+                _checkout = st.session_state.get("v12_newebpay_checkout")
+                if isinstance(_checkout, dict) and _checkout.get("product_name"):
+                    st.success(t("pricing_newebpay_ready"))
+                    try:
+                        _v12_render_newebpay_form(_checkout)
+                    except Exception:
+                        st.error(t("pricing_newebpay_error"))
+                    st.caption(t("pricing_newebpay_scope"))
+                else:
+                    st.info(t("pricing_newebpay_intro"))
+                    st.button(
+                        t("pricing_newebpay_start"),
+                        key="v12_newebpay_checkout",
+                        type="primary",
+                        use_container_width=True,
+                        on_click=_v12_create_newebpay_checkout_callback,
+                        args=(session, chosen["code"]),
+                    )
+                checkout_error = str(
+                    st.session_state.get("v12_newebpay_checkout_error", "") or ""
+                )
+                if checkout_error == "subscription_plan_not_upgrade":
+                    st.error(t("pricing_subscription_not_upgrade_error"))
+                elif checkout_error:
+                    st.error(t("pricing_newebpay_error"))
+            elif _beta_payuni_sandbox_enabled():
                 _checkout = st.session_state.get("v12_payuni_checkout")
                 if isinstance(_checkout, dict) and _checkout.get("product_name"):
                     st.success(t("pricing_sandbox_ready"))

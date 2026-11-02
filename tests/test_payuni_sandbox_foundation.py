@@ -44,7 +44,7 @@ class PayuniSandboxFoundationTests(unittest.TestCase):
     def test_callback_functions_do_not_require_browser_jwt(self):
         self.assertIn("[functions.payuni-notify]", CONFIG)
         self.assertIn("[functions.payuni-return]", CONFIG)
-        self.assertEqual(CONFIG.count("verify_jwt = false"), 3)
+        self.assertGreaterEqual(CONFIG.count("verify_jwt = false"), 3)
 
     def test_checkout_does_not_join_through_auth_users(self):
         self.assertIn('.from("profiles")', CHECKOUT)

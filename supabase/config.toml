@@ -8,3 +8,18 @@ verify_jwt = false
 
 [functions.payuni-return]
 verify_jwt = false
+
+[functions.newebpay-checkout]
+verify_jwt = false
+
+[functions.newebpay-notify]
+verify_jwt = false
+
+[functions.newebpay-return]
+verify_jwt = false
+
+[functions.newebpay-periodic-notify]
+verify_jwt = false
+
+[functions.newebpay-periodic-return]
+verify_jwt = false
