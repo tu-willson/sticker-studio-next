@@ -448,12 +448,12 @@ CATALOG["ja"].update({
 
 # Keep the paid-pack terminology consistent across secondary locales as well.
 CATALOG["en"].update({
-    "creator_reel_subscription_only": "Creator Reels require an active Basic, Standard, or Advanced creative pack. The 7-generation pack adds credits only.",
-    "creator_reel_not_saved_subscription": "🎞️ This generation was not saved as a Creator Reel: Creator Reels require an active Basic, Standard, or Advanced creative pack. Free trials and the 7-generation pack are not saved automatically.",
+    "creator_reel_subscription_only": "Creator Reels cannot be created right now. Please try again shortly.",
+    "creator_reel_not_saved_subscription": "🎞️ This generation was not saved as a Creator Reel. Please try again shortly; your image and credits are unaffected.",
 })
 CATALOG["ja"].update({
-    "creator_reel_subscription_only": "クリエイターリールには有効なベーシック／スタンダード／アドバンス制作パックが必要です。7回パックは回数追加のみです。",
-    "creator_reel_not_saved_subscription": "🎞️ 今回の生成はクリエイターリールに保存されませんでした。クリエイターリールには有効なベーシック／スタンダード／アドバンス制作パックが必要で、無料体験と7回パックは自動保存されません。",
+    "creator_reel_subscription_only": "クリエイターリールを現在作成できません。しばらくしてからもう一度お試しください。",
+    "creator_reel_not_saved_subscription": "🎞️ 今回の生成はクリエイターリールに保存されませんでした。しばらくしてから再試行してください。画像と生成回数には影響しません。",
 })
 
 
