@@ -17,6 +17,7 @@ import urllib.error
 import urllib.parse
 import secrets
 import textwrap
+from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 from i18n import LANGUAGES, tr
 from step04_frontend_test import render_frontend_editor, render_frontend_generate_button
@@ -232,88 +233,68 @@ def _v12_pricing_rules_markdown():
         return textwrap.dedent("""
         - Each successfully generated **4×2 original sticker grid** uses **1 image generation**. Failed generations do not use a generation.
         - The AI Ideas allowance resets daily in Taiwan time and is separate from image generations.
-        - A one-time generation pack does not renew automatically and is valid for 30 days.
-        - Each subscription cycle is a fixed **30 days** starting on successful payment. Unused subscription generations carry over until the end of the following billing cycle; the earliest-expiring generations are used first.
-
-        > **Example:** If you start Basic on May 10 with 20 generations and have 5 left on June 9, 20 more are added on June 10, giving you 25. The carried-over 5 are available until July 9 and are used first.
-
-        - After cancellation, current benefits remain available until the billing cycle ends and there is no charge for the next cycle. If saved projects exceed the new plan's limit, nothing is deleted automatically, but you must remove projects before saving another.
-
-        > **Example:** For a May 10–June 9 cycle, cancelling on May 20 keeps your generation, AI Ideas, and library benefits until June 9. There is no renewal charge or new allowance on June 10.
-
+        - Every creative pack is a **one-time payment**. It never renews automatically. Each purchase creates its own **30-day** credit lot beginning when payment succeeds.
+        - Later purchases add a new lot; they never extend or replace unused credits in an earlier lot. Eligible paid credits are used by their earliest expiry.
+        - AI Ideas, cloud-library, reel, and marketplace limits follow the highest active Basic, Standard, or Advanced creative pack. The 7-generation pack adds credits only.
+        - When a paid tier expires, saved work is not deleted. You can still view, load, download, or delete it; if you exceed the current limit, save new work only after reducing it. Marketplace publishing and editing are unavailable without an active tier, but existing listings can be delisted.
         - Each creative project can save up to 40 selected stickers into My Works; MAIN/TAB export images do not count toward the 40-sticker limit. Load it back into the studio to download it again later.
         """).strip()
     if locale == "ja":
         return textwrap.dedent("""
         - **4×2 の元ステッカー総画像**を1回正常に生成すると、画像生成回数を **1回** 使用します。生成失敗時は回数を消費しません。
         - AIアイデアの利用枠は台湾時間で毎日計算され、画像生成回数とは別に管理されます。
-        - 単発の生成パックは自動更新されず、購入後30日間有効です。
-        - サブスクリプションの1サイクルは決済成功日から固定 **30日間** です。未使用の生成回数は次の請求期間の終了まで繰り越せ、期限の早い回数から使用されます。
-
-        > **例：**5月10日にベーシックで20回分を取得し、6月9日に5回残っている場合、6月10日にさらに20回分が追加され合計25回になります。繰り越した5回分は7月9日まで利用でき、先に使用されます。
-
-        - 解約後も当月の特典は請求期間の終了まで使え、次回の請求は行われません。作品数が新しいプラン上限を超えても自動削除はされませんが、新規保存前にご自身で整理が必要です。
-
-        > **例：**5月10日から6月9日までの期間に5月20日に解約した場合、6月9日までは画像生成、AIアイデア、作品庫の特典を利用できます。6月10日に更新請求や新しい利用枠の追加はありません。
-
+        - すべての制作パックは**単発決済**で、自動更新されません。決済成功時から各購入分ごとに **30日間** 有効です。
+        - 後から購入しても、以前の未使用回数の期限は延長されません。対象となる有料回数は期限の早い順に使用されます。
+        - AIアイデア、作品庫、リール、マーケット上限は、有効なベーシック／スタンダード／アドバンスのうち最上位パックに従います。7回パックは回数追加のみです。
+        - 有料パックの期限後も保存済み作品は削除されません。閲覧・読み込み・ダウンロード・削除はできますが、上限超過時は整理するまで新規保存できません。マーケットの新規公開・編集は利用できず、既存公開の取り下げのみ可能です。
         - 1つの作品につき選択したステッカーを最大40枚「マイ作品」へ保存できます。MAIN／TABの書き出し画像は40枚の上限に含まれません。後から制作ページに読み戻して、再ダウンロードできます。
         """).strip()
     return textwrap.dedent("""
     - 每次成功生成 1 張 **4×2 原始貼圖總圖**，扣除 1 次圖片生成次數；生成失敗不扣次數。
     - AI幫想額度按台灣時間每日計算，與圖片生成次數分開計算。
-    - 訂閱一個循環固定為 **30 天**，自付款成功日開始計算；未使用的訂閱生成次數可保留至下一個帳務週期結束，系統優先使用最早到期的次數。
-
-    > **例子：**你在 5 月 10 日訂閱基本方案，取得 20 次圖片生成次數；到了 6 月 9 日還剩 5 次。6 月 10 日進入新一期後會再加入 20 次，因此共有 25 次可用；原本保留的 5 次最晚可用到 7 月 9 日，系統會優先使用這 5 次。
-
-    - 單次生成包為一次性購買，不會自動續訂，購買後有效期為 30 天。
-    - 取消訂閱後，當期權益可使用至帳務週期結束，下一期不再續扣。作品集保存總數超過新方案上限時，不會自動刪除，須自行刪減後才能新增保存。
-
-    > **例子：**你的訂閱週期是 5 月 10 日至 6 月 9 日；若在 5 月 20 日取消，仍可使用當期的圖片生成次數、AI幫想額度與作品庫權益至 6 月 9 日。6 月 10 日起不會再扣款，也不會發放新一期的方案額度。
-
+    - 所有創作包皆為**單次購買**，不會自動續訂；每一筆付款成功後各自建立一份 **30 天**有效的額度。
+    - 後續加購只會新增新的額度批次，**不會延長、取代或覆蓋**舊批次的剩餘次數；付費額度會優先使用最早到期的批次。
+    - AI幫想、雲端作品庫、膠卷與市集上限，採目前仍有效的基本／標準／進階創作包中最高的一級；**7 次生成包只補充圖片生成次數，不提升方案權益。**
+    - 付費創作包到期後，既有作品不會被刪除，仍可查看、載回、下載或刪除；若作品數超過目前上限，需先整理至上限內才能新增。沒有有效創作包時，市集不可新發布或編輯，但可將既有作品下架。
     - 每組創作的作品最多保存 40 張已選貼圖進入作品集；MAIN／TAB 規格圖不計入 40 張上限。日後可載回創作頁後重新下載。
     """).strip()
 
 
 def _v12_plan_change_policy_markdown():
-    """Explain the planned paid-plan change policy without changing sandbox billing."""
+    """Explain one-time pack stacking and expiry behaviour."""
     locale = _v12_ui_locale()
     if locale == "en":
-        return """#### Plan changes (applies when live billing is enabled)
+        return """#### One-time creative-pack rules
 
-- **Upgrade only while active:** a current subscriber may only buy a higher subscription plan. It takes effect after payment succeeds, at the new plan's full listed price, and starts a new 30-day cycle.
-- **Unused generations:** remaining subscription generations from the previous plan are retained. The new plan's full generation allowance is then added; existing grant expiry rules still apply.
-- **Same plan / downgrade:** repurchase and downgrade are not available while a subscription is active. Once PAYUNi recurring billing is approved, the same plan renews automatically at the end of its 30-day cycle. Sandbox checkout never charges automatically.
-- **One-time 7-generation pack:** is separate from subscriptions and can be used alongside them.
+- **Repeat purchases are allowed:** purchase any creative pack again whenever you need it. No purchase creates recurring billing.
+- **Independent expiry:** every purchase keeps its own 30-day expiry. A new pack never extends an earlier pack's remaining credits.
+- **Tier benefits:** the highest still-active Basic, Standard, or Advanced pack controls AI Ideas, cloud library, reels, and marketplace limits. The 7-generation pack is credit-only.
 
-> **Example:** If Basic started on June 10 with 5 generations remaining and Standard is purchased on June 25, Standard takes effect immediately. The account has the retained 5 plus Standard's 30 generations, and the new subscription benefits run for 30 days from June 25."""
+> **Example:** If 7 Basic credits have 10 days left and you buy Standard, the Basic lot still expires in 10 days and the new 30 Standard credits expire in 30 days. The Standard tier applies while it remains active."""
     if locale == "ja":
-        return """#### プラン変更（正式決済開始後に適用）
+        return """#### 単発制作パックのルール
 
-- **有効期間中はアップグレードのみ：** 現在より上位のプランだけ購入できます。決済成功後すぐに反映され、新プランを定価で購入して新たに30日間の利用期間を開始します。
-- **未使用の生成回数：** 旧プランで残っている生成回数は保持され、新プランの全生成回数が加算されます。既存の付与分の有効期限ルールは維持されます。
-- **同一プラン／ダウングレード：** 有効な契約期間中は購入できません。PAYUNi の定期課金承認後は、30日周期の終了時に同一プランが自動更新されます。サンドボックスでは自動課金されません。
-- **7回生成パック：** サブスクリプションとは別の単発パックで、併用できます。"""
-    return """#### 🔄 方案升級、續訂與降級說明
+- **再購入可能：** 必要な時にどのパックも再購入できます。定期課金は発生しません。
+- **期限は購入ごとに独立：** 各購入分は30日間有効で、後から購入しても以前の残回数の期限は延長されません。
+- **プラン特典：** 有効なベーシック／スタンダード／アドバンスのうち最上位パックが上限を決めます。7回パックは回数追加のみです。"""
+    return """#### 🧾 單次創作包與到期規則
 
-> **正式金流啟用後適用：** 方案價格與付款金額一律由伺服器鎖定；付款頁不能由瀏覽器自行修改金額。
+> **正式金流啟用後適用：** 價格與付款金額均由伺服器鎖定；所有商品皆為單次付款，**不會自動續訂或定期扣款**。
 
 | 情況 | 規則 |
 | --- | --- |
-| **升級方案** | 有效訂閱期間只可升級至更高方案；付款成功後立即生效，依新方案的**完整售價**購買，並自成功付款時起重新計算 **30 天**。 |
-| **同方案再次購買** | 有效訂閱期間不開放重複購買。 |
-| **降級方案** | 有效訂閱期間不開放直接降級或購買較低方案；可在目前週期結束後重新選擇。 |
-| **7 次生成包** | 不屬於訂閱升降級，可與訂閱方案同時持有，依各自效期使用。 |
-| **市集／膠卷權益** | 升級後立即採用新方案的容量與發布上限；既有內容不會自動刪除。若日後降級且內容超過新上限，仍可查看與使用，但須整理至上限內才能再新增。 |
+| **重複購買** | 基本、標準、進階與 7 次生成包都可隨時再次購買。每筆付款成功後各自新增一份 30 天額度。 |
+| **額度效期** | 新購買不會延長舊批次；每筆剩餘次數依自己的到期日保留，付費額度優先使用最早到期的一筆。 |
+| **方案權益** | AI幫想、作品庫、膠卷與市集上限採目前有效的最高創作包；7 次生成包只增加生成次數。 |
+| **到期後** | 已保存內容不刪除。超出目前上限時可查看、載回、下載、刪除，但整理至上限內前不可新增；沒有有效創作包時不可新發布或編輯市集，仍可下架既有公開作品。 |
 
-#### 🧮 升級與次數範例
+#### 🧮 額度範例
 
-基本方案為 **NT\\$99／20 次**，標準方案為 **NT\\$149／30 次**。你在 **6 月 10 日**訂閱基本方案，尚餘 **5 次**，原訂閱權益會在 **7 月 9 日**到期；若在 **6 月 25 日**購入標準方案：
+基本創作包尚餘 **7 次、10 天到期**；之後購入標準創作包 **30 次、30 天到期**：
 
-- **付款金額：** 依標準方案完整售價支付 **NT$149**，不再依剩餘天數計算差額。
-- **生效時間：** NT$149 付款成功後，立刻採用標準方案的 AI 幫想、雲端作品庫、膠卷與市集上限；新一期訂閱自 **6 月 25 日**起算 30 天，到期日為 **7 月 24 日**。
-- **圖片生成次數：** 原本剩下的 **5 次**會保留，再加入標準方案完整的 **30 次**，因此可使用 **5＋30＝35 次**；系統仍依既有點數效期與優先順序扣除。
-
-> 目前 PAYUNi 沙盒階段已驗證付款與回呼；正式付款也會依此完整新一期方案的規則發放權益。"""
+- **額度明細：**基本創作包 7 次仍在第 10 天到期；標準創作包 30 次在第 30 天到期，兩筆不會互相延長。
+- **使用順序：**基本／推薦碼額度優先；接著使用付費額度中最早到期的基本創作包，再使用標準創作包。
+- **權益：**標準創作包有效期間，立即使用標準的 AI幫想、作品庫、膠卷與市集上限；標準到期後，若基本創作包仍有效，會回到基本權益。"""
 
 
 def _v12_member_rules_markdown():
@@ -328,12 +309,12 @@ def _v12_member_rules_markdown():
 
 <div class="v12-member-rules-callout v12-member-rules-callout-free"><strong>免費會員權益：</strong>可使用基礎貼圖創作、首次登入 <strong>2 次</strong>圖片生成體驗額度、每日 <strong>2 次</strong> AI 幫想，以及雲端作品庫 <strong>2 組</strong>。</div>
 
-| 方案 | 月費／售價 | 每月圖片生成次數 | AI幫想每日額度 | 雲端作品庫上限 |
+| 創作包 | 單次售價 | 圖片生成次數 | AI幫想每日額度 | 雲端作品庫上限 |
 | --- | ---: | ---: | ---: | ---: |
-| 基本方案 | NT$99／月 | 20 次 | 15 次 | 20 組 |
-| 標準方案 | NT$149／月 | 30 次 | 20 次 | 30 組 |
-| 進階方案 | NT$199／月 | 45 次 | 25 次 | 40 組 |
-| 單次生成包 | NT$49／包 | 7 次 | 7 次 | 7 組 |
+| 基本創作包 | NT$99／筆 | 20 次／30 天 | 15 次 | 20 組 |
+| 標準創作包 | NT$149／筆 | 30 次／30 天 | 20 次 | 30 組 |
+| 進階創作包 | NT$199／筆 | 45 次／30 天 | 25 次 | 40 組 |
+| 7 次生成包 | NT$49／筆 | 7 次／30 天 | 不提升 | 不提升 |
 
 膠捲與市集規則請至「作品｜市集」頁面查看。
 
@@ -345,13 +326,13 @@ def _v12_member_rules_markdown():
 
 - 每組作品可保存原始人物照片、已上傳的畫風參考與使用者選取的貼圖成品；單組最多保存 **40 張貼圖**，**MAIN／TAB** 規格圖不計入此上限。
 - 未勾選保存的裁切貼圖不會寫入作品庫；ZIP 壓縮檔不會另行保存，可在日後將作品載回創作頁後重新下載。
-- 作品庫容量依目前有效方案計算；免費會員預設可保存 2 組作品，訂閱或單次生成包則依方案權益提供容量。
+- 作品庫容量依目前有效的最高創作包計算；免費會員預設可保存 2 組作品。7 次生成包只增加圖片生成次數，不提升容量。
 
 #### 📌 重要提醒
 
-<div class="v12-member-rules-callout v12-member-rules-callout-priority"><strong>生成次數使用順序：</strong>基本會員點數 → 推薦碼獎勵 → 訂閱方案／7 次生成包 → 市集創作者回饋。</div>
+<div class="v12-member-rules-callout v12-member-rules-callout-priority"><strong>生成次數使用順序：</strong>基本會員點數 → 推薦碼獎勵 → 創作包／7 次生成包（最早到期優先） → 市集創作者回饋。</div>
 
-本服務提供數位化 AI 創作與雲端保存功能。使用者須確認上傳照片、參考圖、文字與生成內容具有合法使用權，且不侵害他人權利。正式付款頁面將同步揭示付款、續訂、取消與退款相關說明。"""
+本服務提供數位化 AI 創作與雲端保存功能。使用者須確認上傳照片、參考圖、文字與生成內容具有合法使用權，且不侵害他人權利。所有創作包均為單次購買，正式付款頁面將揭示付款、有效期間與退款相關說明。"""
     if locale == "en":
         return """#### 🎨 What the service provides
 
@@ -359,12 +340,12 @@ Line Sticker Studio is an AI-assisted LINE sticker creation service. Members can
 
 #### 💳 Plans and allowances
 
-| Plan | Price | Monthly image generations | Daily AI Ideas | Cloud projects |
+| Creative pack | One-time price | Image generations | Daily AI Ideas | Cloud projects |
 | --- | ---: | ---: | ---: | ---: |
-| Basic | NT$99/month | 20 | 15 | 20 |
-| Standard | NT$149/month | 30 | 20 | 30 |
-| Advanced | NT$199/month | 45 | 25 | 40 |
-| One-time pack | NT$49/pack | 7 | 7 | 7 |
+| Basic Creative Pack | NT$99 | 20 / 30 days | 15 | 20 |
+| Standard Creative Pack | NT$149 | 30 / 30 days | 20 | 30 |
+| Advanced Creative Pack | NT$199 | 45 / 30 days | 25 | 40 |
+| 7-Generation Pack | NT$49 | 7 / 30 days | No upgrade | No upgrade |
 
 #### ✨ Image generations and use
 
@@ -385,12 +366,12 @@ Sticker Studio Next は、AI を活用した LINE ステッカー制作サービ
 
 #### 💳 プランと利用枠
 
-| プラン | 料金 | 月間画像生成 | AIアイデア／日 | クラウド作品 |
+| 制作パック | 単発料金 | 画像生成 | AIアイデア／日 | クラウド作品 |
 | --- | ---: | ---: | ---: | ---: |
-| ベーシック | NT$99／月 | 20回 | 15回 | 20組 |
-| スタンダード | NT$149／月 | 30回 | 20回 | 30組 |
-| アドバンス | NT$199／月 | 45回 | 25回 | 40組 |
-| 単発パック | NT$49／パック | 7回 | 7回 | 7組 |
+| ベーシック制作パック | NT$99 | 20回／30日 | 15回 | 20組 |
+| スタンダード制作パック | NT$149 | 30回／30日 | 20回 | 30組 |
+| アドバンス制作パック | NT$199 | 45回／30日 | 25回 | 40組 |
+| 7回生成パック | NT$49 | 7回／30日 | 上限アップなし | 上限アップなし |
 
 #### ✨ 画像生成と利用方法
 
@@ -3619,7 +3600,7 @@ def _beta_create_newebpay_checkout(session, product_code):
     checkout_id = str(response.get("checkout_id", "") or "")
     order_id = str(response.get("order_id", "") or "")
     payment_flow = str(response.get("payment_flow", "") or "")
-    if not checkout_id or not order_id or payment_flow not in {"mpg", "periodic"}:
+    if not checkout_id or not order_id or payment_flow != "mpg":
         raise RuntimeError("newebpay_checkout_invalid")
     return {
         "checkout_id": checkout_id,
@@ -3670,7 +3651,7 @@ def _beta_payuni_checkout_payload(checkout_id):
 def _beta_newebpay_checkout_payload(checkout_id, payment_flow):
     """Fetch a short-lived, signed NewebPay form without exposing any secret."""
     config = _beta_config()
-    if not config or not checkout_id or payment_flow not in {"mpg", "periodic"}:
+    if not config or not checkout_id or payment_flow != "mpg":
         raise RuntimeError("newebpay_checkout_invalid")
     checkout_url = (
         f"{config['url']}/functions/v1/newebpay-checkout?checkout="
@@ -3684,12 +3665,8 @@ def _beta_newebpay_checkout_payload(checkout_id, payment_flow):
         raise RuntimeError("newebpay_checkout_payload_failed") from exc
     if not isinstance(payload, dict) or not isinstance(payload.get("fields"), dict):
         raise RuntimeError("newebpay_checkout_payload_invalid")
-    if payment_flow == "mpg":
-        expected_action = "https://core.newebpay.com/MPG/mpg_gateway"
-        required = ("MerchantID", "TradeInfo", "TradeSha", "Version", "EncryptType")
-    else:
-        expected_action = "https://core.newebpay.com/MPG/period"
-        required = ("MerchantID_", "PostData_")
+    expected_action = "https://core.newebpay.com/MPG/mpg_gateway"
+    required = ("MerchantID", "TradeInfo", "TradeSha", "Version", "EncryptType")
     fields = payload["fields"]
     if payload.get("action") != expected_action or any(not str(fields.get(name, "") or "") for name in required):
         raise RuntimeError("newebpay_checkout_payload_invalid")
@@ -5115,8 +5092,33 @@ def _beta_credit_balance_breakdown(session):
         raise RuntimeError("beta_invalid_credit_breakdown") from exc
 
 
+def _beta_active_paid_credit_lots(session):
+    """Return each still-spendable paid lot, ordered by expiry."""
+    response = _beta_rpc(
+        "get_my_active_paid_credit_lots", {}, access_token=session["access_token"]
+    )
+    if not isinstance(response, list):
+        raise RuntimeError("beta_invalid_paid_credit_lots")
+    lots = []
+    for item in response:
+        if not isinstance(item, dict):
+            continue
+        try:
+            remaining = max(0, int(item.get("remaining_credits", 0) or 0))
+        except (TypeError, ValueError):
+            continue
+        expires_at = str(item.get("expires_at", "") or "")
+        if remaining and expires_at:
+            lots.append({
+                "name": str(item.get("product_name", "") or item.get("product_code", "")),
+                "remaining": remaining,
+                "expires_at": expires_at,
+            })
+    return lots
+
+
 def _beta_effective_entitlement(session):
-    """Read the member's currently effective subscription or credit-pack rights."""
+    """Read the member's currently effective creator-pack rights."""
     response = _beta_rpc(
         "get_my_effective_entitlement", {}, access_token=session["access_token"]
     )
@@ -5139,7 +5141,7 @@ def _beta_entitlement_label(entitlement):
         str(entitlement.get("product_code", "") or ""), t("entitlement_free")
     )
     if kind == "subscription":
-        key = "entitlement_subscription"
+        key = "entitlement_creator_pack"
     elif kind == "credit_pack":
         key = "entitlement_pack"
     else:
@@ -6206,13 +6208,13 @@ def _beta_render_admin_operations_policy():
             | 類別 | 現行規則 | 效期／優先順序 |
             | --- | --- | --- |
             | 一般會員 | 可使用貼圖生成與膠捲功能；不可使用市集膠卷。 | 依帳號目前可用次數。 |
-            | 7 次生成包 | 圖片生成 7 次、AI 幫想每日 7 次、雲端作品 7 組。 | 購買後 30 天。 |
-            | 基本／標準／進階訂閱 | 每月圖片生成 20／30／45 次；AI 幫想每日 15／20／25 次；雲端作品 20／30／40 組。 | 訂閱額度可保留至下一個帳務週期結束；系統優先使用最早到期的次數。 |
+            | 7 次生成包 | 圖片生成 7 次，不提升 AI 幫想、作品庫、膠卷或市集權益。 | 每筆購買後獨立 30 天。 |
+            | 基本／標準／進階創作包 | 圖片生成 20／30／45 次；AI 幫想每日 15／20／25 次；雲端作品 20／30／40 組。 | 每筆購買後獨立 30 天；同類付費額度優先使用最早到期的一筆。 |
             | 推薦碼獎勵 | 一般推薦碼需先用完前一筆一般獎勵；限已消費會員推薦碼限曾成功購買訂閱或 7 次包者使用，且可與一般推薦碼獎勵併存。同一組碼每帳號限兌換一次。推薦碼可設定名額、獎勵次數、截止日、消費資格與停用狀態。 | 每次兌換後 60 天。 |
             | 市集創作者回饋 | 購買者首次購入膠卷所支付的生成次數，全數回饋原創者。 | 回饋額度 90 天，且最後才消耗。 |
             | 管理員手動補次 | 僅限有明確原因的客服、測試或補償處理。 | 目前核發後 365 天；每筆都需留下原因。 |
 
-            **生成次數扣除優先順序：**基本會員點數（含體驗／管理員補次） → 推薦碼獎勵 → 訂閱方案／7 次生成包 → 市集創作者回饋；同一類別內再優先使用較早到期的額度。
+            **生成次數扣除優先順序：**基本會員點數（含體驗／管理員補次） → 推薦碼獎勵 → 創作包／7 次生成包 → 市集創作者回饋；同一類別內再優先使用較早到期的額度。
 
             ### 2. 推薦碼管理
 
@@ -6225,14 +6227,14 @@ def _beta_render_admin_operations_policy():
             ### 3. 創作膠捲、收藏與市集
 
             - 每完成一張 4×2 原始生成圖，系統自動建立一卷未收藏膠捲；未收藏膠捲保存 10 天，超額時替換最早一卷。
-            - 一般會員未收藏／已收藏上限為 5／5；7 次生成包為 7／7；基本／標準／進階為 20／20、30／30、40／40。已收藏與已購入膠卷共用收藏額度。
-            - 只有訂閱方案與 7 次生成包可以使用市集：7 次生成包可發布 3 組、購入 5 組；基本／標準／進階可發布 10／15／20 組。
+            - 一般會員未收藏／已收藏上限為 5／5；有效的基本／標準／進階創作包為 20／20、30／30、40／40。7 次生成包只補次數，不提高膠卷上限。已收藏與已購入膠卷共用收藏額度。
+            - 只有有效的基本／標準／進階創作包可以使用市集，分別可發布 10／15／20 組。到期後不可新增或編輯，仍可下架既有作品。
             - 公開膠卷複製文字、動作、字型、人物／場景指令、畫風設定與預覽圖；不得包含原始人物照片。
             - 膠卷購入價格限 1～3 次；首次購入才扣次，後續可免費重新載入同一膠卷。
 
             ### 4. 檢舉規則
 
-            - 檢舉功能僅限有效訂閱方案或 7 次生成包會員使用；一般免費會員不可檢舉。
+            - 檢舉功能僅限有效基本／標準／進階創作包會員使用；一般免費會員與 7 次生成包不可檢舉。
             - 每位符合資格的會員每日最多可檢舉 2 卷膠卷，依台灣時間計算；同一會員對同一卷只能成功檢舉一次，不能透過重複點擊累加。
             - 成功檢舉後，該膠卷會立即只對該檢舉者自動遮蔽；其他會員與原創者仍依原本權限看見膠卷，直到管理員作出處置。
             - 累積 **3 位不同符合資格會員** 檢舉後，膠卷才會進入「市集審核中心」待審核；達門檻不代表自動下架，必須由管理員確認。
@@ -6805,10 +6807,10 @@ def _beta_render_admin_console(session):
             f"{test_purchase_target.get('email') or '未提供 Email'}"
         )
         product_options = {
-            "7 次生成包｜圖片生成 7 次／AI幫想每日 7 次／作品集 7 組｜效期 30 天": "credit_pack_7",
-            "基本方案｜圖片生成 20 次／AI幫想每日 15 次／作品集 20 組｜週期 1 個月": "basic_monthly",
-            "標準方案｜圖片生成 30 次／AI幫想每日 20 次／作品集 30 組｜週期 1 個月": "standard_monthly",
-            "進階方案｜圖片生成 45 次／AI幫想每日 25 次／作品集 40 組｜週期 1 個月": "advanced_monthly",
+            "7 次生成包｜圖片生成 7 次｜單次購買・效期 30 天（不提升方案權益）": "credit_pack_7",
+            "基本創作包｜圖片生成 20 次／AI幫想每日 15 次／作品集 20 組｜單次購買・效期 30 天": "basic_monthly",
+            "標準創作包｜圖片生成 30 次／AI幫想每日 20 次／作品集 30 組｜單次購買・效期 30 天": "standard_monthly",
+            "進階創作包｜圖片生成 45 次／AI幫想每日 25 次／作品集 40 組｜單次購買・效期 30 天": "advanced_monthly",
         }
         selected_product_label = st.selectbox(
             "模擬購買方案", list(product_options.keys()), key="beta_admin_test_purchase_product"
@@ -6819,7 +6821,7 @@ def _beta_render_admin_console(session):
             max_chars=160,
             key="beta_admin_test_purchase_note",
         )
-        st.caption("訂閱方案會直接成為該使用者目前有效的測試訂閱權益。")
+        st.caption("每次測試購買都會建立獨立的 30 天創作包額度；不會自動續扣。")
         if st.button("授與指定使用者測試方案", type="primary", key="beta_admin_test_purchase"):
             if len(purchase_note.strip()) < 3:
                 st.warning("請填寫至少 3 個字的測試備註。")
@@ -6922,6 +6924,27 @@ def _beta_render_account_panel():
             )
         except Exception:
             st.caption(t("plan_unavailable"))
+        try:
+            paid_lots = _beta_active_paid_credit_lots(session)
+            if paid_lots:
+                with st.expander(t("account_paid_lots_title"), expanded=False):
+                    rows = []
+                    for lot in paid_lots:
+                        try:
+                            expiry = datetime.fromisoformat(
+                                lot["expires_at"].replace("Z", "+00:00")
+                            ).astimezone(timezone(timedelta(hours=8)))
+                            days = max(0, (expiry - datetime.now(timezone(timedelta(hours=8)))).days + 1)
+                            expiry_label = expiry.strftime("%Y-%m-%d")
+                        except (TypeError, ValueError):
+                            days, expiry_label = "—", "—"
+                        rows.append(
+                            f"- **{html.escape(lot['name'])}：{lot['remaining']} 次**　"
+                            f"{t('account_paid_lot_expiry', date=expiry_label, days=days)}"
+                        )
+                    st.markdown("\n".join(rows))
+        except Exception:
+            pass
         try:
             copy_status = _beta_copy_usage_status_cached(session)
             st.markdown(
@@ -13213,9 +13236,9 @@ def _v12_render_legal_center():
         elif section == "refund":
             st.markdown("""<div class="v12-legal-card">
             <h2>💳 退款與取消政策</h2><p><strong>生效日：</strong>2026 年 10 月 29 日</p>
-            <h3>一、付款與立即提供的數位服務</h3><p>本服務販售的是付款成功後可立即使用的數位生成額度、訂閱權益與雲端功能。付款前會揭示方案內容、價格、期間與適用規則；使用者於付款前應先閱讀本頁及服務條款。</p>
-            <h3>二、數位內容與解除權</h3><p>使用者於付款前同意立即提供數位服務後，已發放或已使用的生成額度、訂閱權益及數位內容，可能屬非以有形媒介提供之數位內容或一經提供即完成的線上服務；其解除權將依適用法令及付款前取得的同意內容辦理。</p>
-            <h3>三、取消訂閱</h3><p>訂閱方案以付款成功日起算 30 天。欲停止下一期續訂，請以客服信箱提出申請；取消後，當期已取得的權益可使用至當期結束。除法令另有規定或服務未依約提供外，已開始的當期費用原則上不按比例退還。</p>
+            <h3>一、付款與立即提供的數位服務</h3><p>本服務販售的是付款成功後可立即使用的數位生成額度、創作包權益與雲端功能。所有創作包均為單次購買；每筆付款成功後各自有效 30 天，不會自動續訂或定期扣款。付款前會揭示方案內容、價格、期間與適用規則；使用者於付款前應先閱讀本頁及服務條款。</p>
+            <h3>二、數位內容與解除權</h3><p>使用者於付款前同意立即提供數位服務後，已發放或已使用的生成額度、創作包權益及數位內容，可能屬非以有形媒介提供之數位內容或一經提供即完成的線上服務；其解除權將依適用法令及付款前取得的同意內容辦理。</p>
+            <h3>三、單次購買與有效期間</h3><p>每筆創作包額度自付款成功日起獨立計算 30 天；後續加購不會延長、取代或覆蓋先前尚未用完的額度。除法令另有規定或服務未依約提供外，已開始的數位服務費用原則上不按比例退還。</p>
             <h3>四、可申請協助的情況</h3><p>如發生重複扣款、付款成功但系統未發放對應權益，或其他依法應處理的情況，請提供帳號 Email、訂單時間與訂單編號聯絡客服。本服務將依交易紀錄查核並處理。</p>
             </div>""", unsafe_allow_html=True)
         else:
@@ -13231,13 +13254,13 @@ def _v12_render_legal_center():
 
 
 def _v12_render_pricing_page():
-    """Render plan selection and the opt-in PAYUNi sandbox checkout."""
+    """Render repeatable one-time creative-pack checkout."""
     products = [
         {
             "code": "basic_monthly",
             "name": t("plan_basic"),
             "price": "NT$99",
-            "period": t("period_monthly"),
+            "period": t("period_creator_pack"),
             "credits": t("benefit_credits", count=20, suffix=_v12_generation_suffix()),
             "copy": t("benefit_copy", count=15),
             "library": t("benefit_library", count=20),
@@ -13249,7 +13272,7 @@ def _v12_render_pricing_page():
             "code": "standard_monthly",
             "name": t("plan_standard"),
             "price": "NT$149",
-            "period": t("period_monthly"),
+            "period": t("period_creator_pack"),
             "credits": t("benefit_credits", count=30, suffix=_v12_generation_suffix()),
             "copy": t("benefit_copy", count=20),
             "library": t("benefit_library", count=30),
@@ -13261,7 +13284,7 @@ def _v12_render_pricing_page():
             "code": "advanced_monthly",
             "name": t("plan_advanced"),
             "price": "NT$199",
-            "period": t("period_monthly"),
+            "period": t("period_creator_pack"),
             "credits": t("benefit_credits", count=45, suffix=_v12_generation_suffix()),
             "copy": t("benefit_copy", count=25),
             "library": t("benefit_library", count=40),
@@ -13275,18 +13298,13 @@ def _v12_render_pricing_page():
             "price": "NT$49",
             "period": t("period_pack"),
             "credits": t("benefit_credits", count=7, suffix=""),
-            "copy": t("benefit_copy", count=7),
-            "library": t("benefit_library", count=7),
-            "reels": t("benefit_reels", count=7),
-            "market_publish": t("benefit_market_publish", count=3),
+            "copy": t("benefit_credit_only"),
+            "library": "",
+            "reels": "",
+            "market_publish": "",
             "button": t("pricing_choose_pack"),
         },
     ]
-    subscription_ranks = {
-        "basic_monthly": 1,
-        "standard_monthly": 2,
-        "advanced_monthly": 3,
-    }
     selected_code = str(st.session_state.get("v12_pending_purchase_product", "") or "")
     session = _beta_current_user() if _beta_config() else None
     current_code = ""
@@ -13298,22 +13316,6 @@ def _v12_render_pricing_page():
             current_label = _beta_entitlement_label(entitlement)
         except Exception:
             pass
-
-    current_subscription_rank = subscription_ranks.get(current_code, 0)
-    selected_subscription_rank = subscription_ranks.get(selected_code, 0)
-    if (
-        current_subscription_rank
-        and selected_subscription_rank
-        and selected_subscription_rank <= current_subscription_rank
-    ):
-        # A stale selection must not keep an ineligible checkout visible after
-        # payment, refresh, or a change of active subscription.
-        st.session_state.pop("v12_pending_purchase_product", None)
-        st.session_state.pop("v12_payuni_checkout", None)
-        st.session_state.pop("v12_payuni_checkout_error", None)
-        st.session_state.pop("v12_newebpay_checkout", None)
-        st.session_state.pop("v12_newebpay_checkout_error", None)
-        selected_code = ""
 
     st.markdown(
         f"""
@@ -13330,12 +13332,6 @@ def _v12_render_pricing_page():
         st.success(f"📋 {current_label}")
     else:
         st.info(t("pricing_login_notice"))
-    if current_subscription_rank:
-        if current_subscription_rank == max(subscription_ranks.values()):
-            st.info(t("pricing_highest_plan_notice"))
-        else:
-            st.info(t("pricing_upgrade_only_notice"))
-
     # The signed PAYUNi return may be opened after the Streamlit session has
     # restarted. Show its compact provider message independently of member
     # session state so a rejected sandbox request is actionable.
@@ -13373,13 +13369,7 @@ def _v12_render_pricing_page():
     plan_cols = st.columns(4, gap="medium")
     for col, product in zip(plan_cols, products):
         is_selected = selected_code == product["code"]
-        product_subscription_rank = subscription_ranks.get(product["code"], 0)
-        is_current = bool(product_subscription_rank and current_code == product["code"])
-        is_subscription_locked = bool(
-            current_subscription_rank
-            and product_subscription_rank
-            and product_subscription_rank <= current_subscription_rank
-        )
+        is_current = bool(current_code == product["code"])
         card_class = " v12-pricing-card-featured" if is_selected else ""
         with col:
             badge = f'<div class="v12-pricing-badge">{t("pricing_selected_badge")}</div>' if is_selected else ""
@@ -13392,24 +13382,20 @@ def _v12_render_pricing_page():
                   <div class="v12-pricing-plan-name">{product['name']}</div>
                   <div class="v12-pricing-price">{product['price']}<span>{product['period']}</span></div>
                   <div class="v12-pricing-benefit">🖼️ {product['credits']}</div>
-                  <div class="v12-pricing-benefit">✨ {product['copy']}</div>
-                  <div class="v12-pricing-benefit">☁️ {product['library']}</div>
-                  <div class="v12-pricing-benefit">⭐ {product['reels']}</div>
-                  <div class="v12-pricing-benefit">🌐 {product['market_publish']}</div>
+                  {f'<div class="v12-pricing-benefit">✨ {product["copy"]}</div>' if product['copy'] else ''}
+                  {f'<div class="v12-pricing-benefit">☁️ {product["library"]}</div>' if product['library'] else ''}
+                  {f'<div class="v12-pricing-benefit">⭐ {product["reels"]}</div>' if product['reels'] else ''}
+                  {f'<div class="v12-pricing-benefit">🌐 {product["market_publish"]}</div>' if product['market_publish'] else ''}
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
             st.button(
-                "✓ " + t("pricing_current") if is_current else (
-                    t("pricing_subscription_locked")
-                    if is_subscription_locked
-                    else product["button"]
-                ),
+                product["button"],
                 key=f"v12_select_product_{product['code']}",
                 type="primary" if is_selected else "secondary",
                 use_container_width=True,
-                disabled=is_current or is_subscription_locked,
+                disabled=False,
                 on_click=_v12_select_purchase_product_callback,
                 args=(product["code"],),
             )
@@ -13440,9 +13426,7 @@ def _v12_render_pricing_page():
                 checkout_error = str(
                     st.session_state.get("v12_newebpay_checkout_error", "") or ""
                 )
-                if checkout_error == "subscription_plan_not_upgrade":
-                    st.error(t("pricing_subscription_not_upgrade_error"))
-                elif checkout_error:
+                if checkout_error:
                     st.error(t("pricing_newebpay_error"))
             elif _beta_payuni_sandbox_enabled():
                 _checkout = st.session_state.get("v12_payuni_checkout")
@@ -13466,9 +13450,7 @@ def _v12_render_pricing_page():
                 checkout_error = str(
                     st.session_state.get("v12_payuni_checkout_error", "") or ""
                 )
-                if checkout_error == "subscription_plan_not_upgrade":
-                    st.error(t("pricing_subscription_not_upgrade_error"))
-                elif checkout_error:
+                if checkout_error:
                     st.error(t("pricing_sandbox_error"))
             else:
                 st.info(t("pricing_pending"))
@@ -13494,7 +13476,7 @@ def _v12_render_pricing_page():
         st.markdown(f"### {t('pricing_rules_heading')}")
         with st.expander(t("pricing_rules_title"), expanded=True):
             st.markdown(_v12_pricing_rules_markdown())
-        with st.expander("🔄 方案升級／續訂／降級說明", expanded=False):
+        with st.expander(t("pricing_pack_rules_title"), expanded=False):
             st.markdown(_v12_plan_change_policy_markdown())
         st.caption(t("pricing_footer"))
         _v12_render_legal_footer()

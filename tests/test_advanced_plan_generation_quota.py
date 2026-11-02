@@ -20,11 +20,11 @@ class AdvancedPlanGenerationQuotaTests(unittest.TestCase):
         self.assertIn("where code = 'advanced_monthly'", MIGRATION)
 
     def test_all_member_facing_advanced_generation_copy_is_forty_five(self):
-        self.assertIn("| 進階方案 | NT$199／月 | 45 次 | 25 次 | 40 組 |", APP)
-        self.assertIn("| Advanced | NT$199/month | 45 | 25 | 40 |", APP)
-        self.assertIn("| アドバンス | NT$199／月 | 45回 | 25回 | 40組 |", APP)
-        self.assertIn("每月圖片生成 20／30／45 次", APP)
-        self.assertIn("進階方案｜圖片生成 45 次", APP)
+        self.assertIn("| 進階創作包 | NT$199／筆 | 45 次／30 天 | 25 次 | 40 組 |", APP)
+        self.assertIn("| Advanced Creative Pack | NT$199 | 45 / 30 days | 25 | 40 |", APP)
+        self.assertIn("| アドバンス制作パック | NT$199 | 45回／30日 | 25回 | 40組 |", APP)
+        self.assertIn("圖片生成 20／30／45 次", APP)
+        self.assertIn("進階創作包｜圖片生成 45 次", APP)
         self.assertIn('t("benefit_credits", count=45', APP)
 
 

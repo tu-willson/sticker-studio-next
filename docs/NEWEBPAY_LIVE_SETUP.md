@@ -4,9 +4,9 @@
 
 ## 已固定的付款規則
 
-- 7 次生成包使用 MPG 單次交易。
-- 訂閱方案使用信用卡定期定額：第一次立即扣完整金額，後續固定每 30 天扣款一次。
-- 非 CAU 狀態下，定期定額會以 `99` 期建立；這是藍新 API 的兩位數期數上限，日後若藍新確認已啟用 CAU，才可將 `NEWEBPAY_CAU_ENABLED` 切為 `true` 使用無限期 `NE`。
+- 基本、標準、進階創作包與 7 次生成包，全部使用 MPG **單次交易**。
+- 每筆付款成功後各自建立一份 30 天權益與額度；後續加購不會延長或覆蓋舊批次，系統在付費額度中優先使用最早到期的一筆。
+- 不建立信用卡定期定額、不會自動續訂，也不使用藍新的定期定額回呼。
 - Apple Pay、Google Pay 的商店資格雖已啟用，程式預設仍帶 `0`，付款頁只開放信用卡。要另行開放時才設定 `NEWEBPAY_WALLETS_ENABLED=true`。
 - 所有點數與會員權益只接受 `NotifyURL` 的加密背景通知；`ReturnURL` 僅將使用者導回方案頁，永不發放權益。
 
@@ -14,7 +14,12 @@
 
 1. 在 Supabase SQL Editor 執行：
 
-   `supabase/migrations/20261102_000068_newebpay_live_checkout_foundation.sql`
+   依序執行：
+
+   ```text
+   supabase/migrations/20261102_000068_newebpay_live_checkout_foundation.sql
+   supabase/migrations/20261102_000069_one_time_creator_packs.sql
+   ```
 
 2. 部署五個 Edge Functions。建議使用本專案新增的 GitHub Actions 工作流程，避免在 Dashboard 逐一貼上有共用模組的五份程式：
 
@@ -29,8 +34,8 @@
    newebpay-checkout
    newebpay-notify
    newebpay-return
-   newebpay-periodic-notify
-   newebpay-periodic-return
+   newebpay-periodic-notify（僅保留舊資料相容，不供新訂單使用）
+   newebpay-periodic-return（僅保留舊資料相容，不供新訂單使用）
    ```
 
 3. 在 Supabase Edge Function Secrets 新增下列值。金鑰只能貼到 Secrets，不可放進 Streamlit secrets、Git 或聊天訊息：
@@ -42,7 +47,6 @@
    NEWEBPAY_SITE_URL=https://sticker-studio-next.streamlit.app
    NEWEBPAY_LIVE_ENABLED=false
    NEWEBPAY_WALLETS_ENABLED=false
-   NEWEBPAY_CAU_ENABLED=false
    ```
 
 4. 到藍新後台的「API 應用 URL」設定以下正式 HTTPS 網址；請勿將 NotifyURL 與 ReturnURL 設成同一網址：
@@ -50,8 +54,6 @@
    ```text
    MPG NotifyURL: https://iffmdhpqbezdrunwoxyh.supabase.co/functions/v1/newebpay-notify
    MPG ReturnURL: https://iffmdhpqbezdrunwoxyh.supabase.co/functions/v1/newebpay-return
-   定期定額 NotifyURL: https://iffmdhpqbezdrunwoxyh.supabase.co/functions/v1/newebpay-periodic-notify
-   定期定額 ReturnURL: https://iffmdhpqbezdrunwoxyh.supabase.co/functions/v1/newebpay-periodic-return
    ```
 
 5. 完成程式部署與管理者真人小額測試後，才將 Supabase 的 `NEWEBPAY_LIVE_ENABLED` 改為 `true`；並在 Streamlit Cloud 的 app secrets 加入同名值：
@@ -64,8 +66,9 @@
 
 ## 測試時必查
 
-- 7 次包成功、回傳頁重整、Notify 重送：同一筆訂單只能增加一次 7 次額度。
-- 訂閱首次付款：立即取得新方案完整額度，並從成功時刻起算 30 天；原方案未用完的額度保留。
-- 訂閱續扣 Notify：每個 `OrderNo`、`TradeNo` 只能延長一次週期與新增一次額度。
-- 付款失敗：不得增加額度；既有訂閱標記為待處理，不能把失敗當作成功。
+- 每一款創作包成功、回傳頁重整、Notify 重送：同一筆訂單只能發放一次對應額度。
+- 同一創作包重複購買：每筆各自新增完整額度與 30 天效期，舊批次到期日不得被延長。
+- 基本包尚餘額度後再買標準包：兩筆明細都要存在；標準權益立即生效，舊基本額度仍依原到期日使用。
+- 標準包到期：若基本包仍有效，權益回落基本；若沒有有效創作包，回落免費權益，既有作品不刪除且市集只能下架既有內容。
+- 付款失敗：不得增加額度，不能把失敗當作成功。
 - Apple Pay／Google Pay：本階段付款頁不應出現，直到另行開啟錢包開關。

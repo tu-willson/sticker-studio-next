@@ -16,10 +16,8 @@ const HASH_KEY = Deno.env.get("NEWEBPAY_HASH_KEY") || "";
 const HASH_IV = Deno.env.get("NEWEBPAY_HASH_IV") || "";
 const LIVE_ENABLED = /^(1|true|yes|on)$/i.test(Deno.env.get("NEWEBPAY_LIVE_ENABLED") || "");
 const WALLETS_ENABLED = /^(1|true|yes|on)$/i.test(Deno.env.get("NEWEBPAY_WALLETS_ENABLED") || "");
-const CAU_ENABLED = /^(1|true|yes|on)$/i.test(Deno.env.get("NEWEBPAY_CAU_ENABLED") || "");
 const SITE_URL = (Deno.env.get("NEWEBPAY_SITE_URL") || "https://sticker-studio-next.streamlit.app").replace(/\/$/, "");
 const MPG_URL = "https://core.newebpay.com/MPG/mpg_gateway";
-const PERIOD_URL = "https://core.newebpay.com/MPG/period";
 
 function problem(message: string, status = 400): Response {
   return Response.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
@@ -54,22 +52,9 @@ Deno.serve(async (request) => {
   if (!String(profile?.email || "").trim()) return problem("會員沒有可用的付款通知信箱。", 409);
   const product = (order.product_snapshot || {}) as Record<string, unknown>;
   const now = Math.floor(Date.now() / 1000);
-  const isPeriodic = session.payment_flow === "periodic";
-  if (isPeriodic) {
-    const postData = await encryptNewebpayCbc({
-      RespondType: "JSON", TimeStamp: now, Version: "1.5", LangType: "zh-Tw",
-      MerOrderNo: String(order.provider_order_reference), ProdDesc: productDescription(product.display_name),
-      PeriodAmt: Number(order.amount_twd), PeriodType: "D", PeriodPoint: "30",
-      PeriodStartType: "2", PeriodTimes: CAU_ENABLED ? "NE" : "99",
-      ReturnURL: `${SUPABASE_URL}/functions/v1/newebpay-periodic-return`,
-      NotifyURL: `${SUPABASE_URL}/functions/v1/newebpay-periodic-notify`,
-      BackURL: `${SITE_URL}/?payment=cancelled`, PayerEmail: String(profile?.email || ""),
-      EmailModify: "0", PaymentInfo: "N", OrderInfo: "N",
-    }, HASH_KEY, HASH_IV);
-    return Response.json({ action: PERIOD_URL, fields: { MerchantID_: MERCHANT_ID, PostData_: postData } }, {
-      headers: { "Cache-Control": "no-store" },
-    });
-  }
+  // All products are deliberately single MPG payments.  The session field is
+  // retained for historic rows, but a new checkout must never create or use a
+  // recurring mandate.
   const tradeInfo = await encryptNewebpayCbc({
     MerchantID: MERCHANT_ID, RespondType: "JSON", TimeStamp: now, Version: "2.3", P3D: "1", LangType: "zh-tw",
     MerchantOrderNo: String(order.provider_order_reference), Amt: Number(order.amount_twd),

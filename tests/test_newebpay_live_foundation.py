@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = (ROOT / "supabase/migrations/20261102_000068_newebpay_live_checkout_foundation.sql").read_text(encoding="utf-8")
+ONE_TIME_MIGRATION = (ROOT / "supabase/migrations/20261102_000069_one_time_creator_packs.sql").read_text(encoding="utf-8")
 CHECKOUT = (ROOT / "supabase/functions/newebpay-checkout/index.ts").read_text(encoding="utf-8")
 NOTIFY = (ROOT / "supabase/functions/newebpay-notify/index.ts").read_text(encoding="utf-8")
 RETURN = (ROOT / "supabase/functions/newebpay-return/index.ts").read_text(encoding="utf-8")
@@ -13,11 +14,12 @@ CONFIG = (ROOT / "supabase/config.toml").read_text(encoding="utf-8")
 
 
 class NewebPayLiveFoundationTests(unittest.TestCase):
-    def test_only_service_role_can_finalize_or_renew(self):
+    def test_only_service_role_can_finalize_and_new_model_has_independent_lots(self):
         self.assertIn("grant execute on function public.finalize_newebpay_initial_payment", MIGRATION)
-        self.assertIn("grant execute on function public.record_newebpay_periodic_renewal", MIGRATION)
-        self.assertIn("to service_role;", MIGRATION)
-        self.assertIn("revoke all on function public.finalize_newebpay_initial_payment", MIGRATION)
+        self.assertIn("grant execute on function public.finalize_newebpay_initial_payment", ONE_TIME_MIGRATION)
+        self.assertIn("'one_time_30_day_pack'", ONE_TIME_MIGRATION)
+        self.assertIn("get_my_active_paid_credit_lots", ONE_TIME_MIGRATION)
+        self.assertIn("v_end timestamptz := now() + interval '30 days'", ONE_TIME_MIGRATION)
 
     def test_checkout_remains_dark_launched_and_wallets_default_off(self):
         self.assertIn("NEWEBPAY_LIVE_ENABLED", CHECKOUT)
@@ -27,11 +29,13 @@ class NewebPayLiveFoundationTests(unittest.TestCase):
         self.assertIn('ANDROIDPAY: WALLETS_ENABLED ? "1" : "0"', CHECKOUT)
         self.assertIn('SAMSUNGPAY: "0"', CHECKOUT)
 
-    def test_payment_types_use_the_correct_live_endpoints(self):
+    def test_all_new_orders_use_the_one_time_mpg_endpoint(self):
         self.assertIn("https://core.newebpay.com/MPG/mpg_gateway", CHECKOUT)
-        self.assertIn("https://core.newebpay.com/MPG/period", CHECKOUT)
-        self.assertIn('PeriodType: "D", PeriodPoint: "30"', CHECKOUT)
-        self.assertIn('PeriodStartType: "2"', CHECKOUT)
+        self.assertNotIn("https://core.newebpay.com/MPG/period", CHECKOUT)
+        self.assertNotIn("PeriodType", CHECKOUT)
+        self.assertNotIn("isPeriodic", CHECKOUT)
+        self.assertIn("'mpg'", ONE_TIME_MIGRATION)
+        self.assertNotIn("subscription_plan_not_upgrade", ONE_TIME_MIGRATION)
 
     def test_callbacks_are_verified_and_return_pages_never_issue_entitlements(self):
         self.assertIn("newebpayTradeSha", NOTIFY)
