@@ -10,6 +10,9 @@ MIGRATION = (
 MEMBERSHIP_MIGRATION = (
     ROOT / "supabase" / "migrations" / "20261024_000058_admin_remove_member_entitlements.sql"
 ).read_text(encoding="utf-8")
+ADMIN_SELF_REMOVAL_MIGRATION = (
+    ROOT / "supabase" / "migrations" / "20261102_000071_allow_admin_self_membership_removal.sql"
+).read_text(encoding="utf-8")
 
 
 class MemberAccountGovernanceTests(unittest.TestCase):
@@ -44,6 +47,12 @@ class MemberAccountGovernanceTests(unittest.TestCase):
         self.assertIn("移除會員資格（回復免費會員）", APP)
         self.assertIn("source_kind in ('subscription', 'credit_pack')", MEMBERSHIP_MIGRATION)
         self.assertIn("推薦碼、基本體驗／管理員補次與市集創作者回饋不受影響", APP)
+
+    def test_admin_can_only_remove_their_own_paid_membership(self):
+        self.assertIn("if p_user_id = v_actor then", ADMIN_SELF_REMOVAL_MIGRATION)
+        self.assertIn("v_action <> 'remove_membership_entitlements'", ADMIN_SELF_REMOVAL_MIGRATION)
+        self.assertIn("elsif exists (select 1 from public.admin_users", ADMIN_SELF_REMOVAL_MIGRATION)
+        self.assertIn("admin_users", ADMIN_SELF_REMOVAL_MIGRATION)
 
 
 if __name__ == "__main__":
