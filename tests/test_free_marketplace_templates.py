@@ -25,7 +25,7 @@ class FreeMarketplaceTemplatesTests(unittest.TestCase):
         source = APP.read_text(encoding="utf-8")
         self.assertIn("https://www.threads.com/share/EzlgQ8CSh/", source)
         self.assertIn("示範連結", source)
-        self.assertIn("width:175px !important", source)
+        self.assertIn("width:140px !important", source)
         self.assertNotIn('key="v12_newebpay_reconcile"', source)
 
 

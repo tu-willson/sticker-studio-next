@@ -1525,18 +1525,21 @@ div[class*="st-key-v12_basket_download_"] button{
 }
 /* 畫風參考的網路文字範例：獨立於粉紅上傳操作的半透明靛藍連結。 */
 .st-key-v12_style_reference_examples{
-  padding-top:2.08rem;
+  /* 兩個連結的底緣對齊畫風參考上傳格，避免整組落在格線下方。 */
+  padding-top:.75rem;
 }
 .v12-style-reference-example-links{
   display:flex;
   flex-direction:column;
-  align-items:flex-start;
+  align-items:center;
   gap:.42rem;
 }
 .v12-style-reference-example-link{
   display:flex;
   flex-direction:column;
-  width:175px !important;
+  align-items:center;
+  justify-content:center;
+  width:140px !important;
   max-width:100%;
   min-height:42px !important;
   box-sizing:border-box;
@@ -1549,14 +1552,15 @@ div[class*="st-key-v12_basket_download_"] button{
   border-radius:.5rem;
   text-decoration:none !important;
   line-height:1.25;
+  text-align:center;
 }
 .v12-style-reference-example-link:hover{
   background:rgba(133, 139, 241, .68) !important;
   border-color:#e0e3ff !important;
   color:#fff !important;
 }
-.v12-style-reference-example-link-title{align-self:flex-start;font-size:.88rem;}
-.v12-style-reference-example-link-source{align-self:flex-end;font-size:.72rem;opacity:.86;}
+.v12-style-reference-example-link-title{align-self:center;font-size:.88rem;}
+.v12-style-reference-example-link-source{align-self:center;font-size:.72rem;opacity:.86;}
 .v12-style-reference-caption{
   width:min(1050px,100%);
   box-sizing:border-box;
