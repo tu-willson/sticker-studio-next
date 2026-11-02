@@ -266,7 +266,7 @@ def _v12_pricing_rules_markdown():
         - The AI Ideas allowance resets daily in Taiwan time and is separate from image generations.
         - Every creative pack is a **one-time payment**. It never renews automatically. Each purchase creates its own **30-day** credit lot beginning when payment succeeds.
         - Later purchases add a new lot; they never extend or replace unused credits in an earlier lot. Eligible paid credits are used by their earliest expiry.
-        - AI Ideas, cloud-library, reel, and marketplace limits follow the highest active Basic, Standard, or Advanced creative pack. The 7-generation pack adds credits only.
+        - AI Ideas, cloud-library, reel, and marketplace limits follow the highest active creative pack. The 7-generation pack provides its own 7 AI Ideas/day, 7 cloud works, 7 collected reels, and 3 marketplace publications.
         - When a paid tier expires, saved work is not deleted. You can still view, load, download, or delete it; if you exceed the current limit, save new work only after reducing it. Marketplace publishing and editing are unavailable without an active tier, but existing listings can be delisted.
         - Each creative project can save up to 40 selected stickers into My Works; MAIN/TAB export images do not count toward the 40-sticker limit. Load it back into the studio to download it again later.
         """).strip()
@@ -276,7 +276,7 @@ def _v12_pricing_rules_markdown():
         - AIアイデアの利用枠は台湾時間で毎日計算され、画像生成回数とは別に管理されます。
         - すべての制作パックは**単発決済**で、自動更新されません。決済成功時から各購入分ごとに **30日間** 有効です。
         - 後から購入しても、以前の未使用回数の期限は延長されません。対象となる有料回数は期限の早い順に使用されます。
-        - AIアイデア、作品庫、リール、マーケット上限は、有効なベーシック／スタンダード／アドバンスのうち最上位パックに従います。7回パックは回数追加のみです。
+        - AIアイデア、作品庫、リール、マーケット上限は、有効な制作パックのうち最上位パックに従います。7回パックはAIアイデア毎日7回、作品7組、收藏リール7巻、マーケット公開3組を提供します。
         - 有料パックの期限後も保存済み作品は削除されません。閲覧・読み込み・ダウンロード・削除はできますが、上限超過時は整理するまで新規保存できません。マーケットの新規公開・編集は利用できず、既存公開の取り下げのみ可能です。
         - 1つの作品につき選択したステッカーを最大40枚「マイ作品」へ保存できます。MAIN／TABの書き出し画像は40枚の上限に含まれません。後から制作ページに読み戻して、再ダウンロードできます。
         """).strip()
@@ -285,7 +285,7 @@ def _v12_pricing_rules_markdown():
     - AI幫想額度按台灣時間每日計算，與圖片生成次數分開計算。
     - 所有創作包皆為**單次購買**，不會自動續訂；每一筆付款成功後各自建立一份 **30 天**有效的額度。
     - 後續加購只會新增新的額度批次，**不會延長、取代或覆蓋**舊批次的剩餘次數；付費額度會優先使用最早到期的批次。
-    - AI幫想、雲端作品庫、膠卷與市集上限，採目前仍有效的基本／標準／進階創作包中最高的一級；**7 次生成包只補充圖片生成次數，不提升方案權益。**
+    - AI幫想、雲端作品庫、膠卷與市集上限，採目前仍有效的創作包中最高的一級；**7 次生成包提供 AI幫想每日 7 次、雲端作品庫 7 組、可保留膠卷 7 卷及市集發布 3 組。**
     - 付費創作包到期後，既有作品不會被刪除，仍可查看、載回、下載或刪除；若作品數超過目前上限，需先整理至上限內才能新增。沒有有效創作包時，市集不可新發布或編輯，但可將既有作品下架。
     - 每組創作的作品最多保存 40 張已選貼圖進入作品集；MAIN／TAB 規格圖不計入 40 張上限。日後可載回創作頁後重新下載。
     """).strip()
@@ -299,7 +299,7 @@ def _v12_plan_change_policy_markdown():
 
 - **Repeat purchases are allowed:** purchase any creative pack again whenever you need it. No purchase creates recurring billing.
 - **Independent expiry:** every purchase keeps its own 30-day expiry. A new pack never extends an earlier pack's remaining credits.
-- **Tier benefits:** the highest still-active Basic, Standard, or Advanced pack controls AI Ideas, cloud library, reels, and marketplace limits. The 7-generation pack is credit-only.
+- **Tier benefits:** the highest still-active pack controls AI Ideas, cloud library, reels, and marketplace limits. The 7-generation pack supplies a compact 7 / 7 / 7 / 3 tier.
 
 > **Example:** If 7 Basic credits have 10 days left and you buy Standard, the Basic lot still expires in 10 days and the new 30 Standard credits expire in 30 days. The Standard tier applies while it remains active."""
     if locale == "ja":
@@ -307,7 +307,7 @@ def _v12_plan_change_policy_markdown():
 
 - **再購入可能：** 必要な時にどのパックも再購入できます。定期課金は発生しません。
 - **期限は購入ごとに独立：** 各購入分は30日間有効で、後から購入しても以前の残回数の期限は延長されません。
-- **プラン特典：** 有効なベーシック／スタンダード／アドバンスのうち最上位パックが上限を決めます。7回パックは回数追加のみです。"""
+- **プラン特典：** 有効な制作パックのうち最上位パックが上限を決めます。7回パックはAIアイデア7回、作品7組、收藏リール7巻、公開3組の特典です。"""
     return """#### 🧾 單次創作包與到期規則
 
 > **正式金流啟用後適用：** 價格與付款金額均由伺服器鎖定；所有商品皆為單次付款，**不會自動續訂或定期扣款**。
@@ -316,7 +316,7 @@ def _v12_plan_change_policy_markdown():
 | --- | --- |
 | **重複購買** | 基本、標準、進階與 7 次生成包都可隨時再次購買。每筆付款成功後各自新增一份 30 天額度。 |
 | **額度效期** | 新購買不會延長舊批次；每筆剩餘次數依自己的到期日保留，付費額度優先使用最早到期的一筆。 |
-| **方案權益** | AI幫想、作品庫、膠卷與市集上限採目前有效的最高創作包；7 次生成包只增加生成次數。 |
+| **方案權益** | AI幫想、作品庫、膠卷與市集上限採目前有效的最高創作包；7 次生成包提供每日 AI幫想 7 次、作品庫 7 組、可保留膠卷 7 卷與市集發布 3 組。 |
 | **到期後** | 已保存內容不刪除。超出目前上限時可查看、載回、下載、刪除，但整理至上限內前不可新增；沒有有效創作包時不可新發布或編輯市集，仍可下架既有公開作品。 |
 
 #### 🧮 額度範例
@@ -340,12 +340,15 @@ def _v12_member_rules_markdown():
 
 <div class="v12-member-rules-callout v12-member-rules-callout-free"><strong>免費會員權益：</strong>可使用基礎貼圖創作、首次登入 <strong>2 次</strong>圖片生成體驗額度、每日 <strong>2 次</strong> AI 幫想，以及雲端作品庫 <strong>2 組</strong>。</div>
 
-| 創作包 | 單次售價 | 圖片生成次數 | AI幫想每日額度 | 雲端作品庫上限 |
-| --- | ---: | ---: | ---: | ---: |
-| 基本創作包 | NT$99／筆 | 20 次／30 天 | 15 次 | 20 組 |
-| 標準創作包 | NT$149／筆 | 30 次／30 天 | 20 次 | 30 組 |
-| 進階創作包 | NT$199／筆 | 45 次／30 天 | 25 次 | 40 組 |
-| 7 次生成包 | NT$49／筆 | 7 次／30 天 | 不提升 | 不提升 |
+| 創作包 | 單次售價 | 圖片生成次數 | AI幫想每日額度 | 雲端作品庫上限 | 可保留膠卷 | 可發布市集 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 免費會員 | 免費 | 首次登入 2 次體驗額度 | 2 次 | 2 組 | 5 卷 | 0 組 |
+| 基本創作包 | NT$99／筆 | 20 次／30 天 | 15 次 | 20 組 | 20 卷 | 10 組 |
+| 標準創作包 | NT$149／筆 | 30 次／30 天 | 20 次 | 30 組 | 30 卷 | 15 組 |
+| 進階創作包 | NT$199／筆 | 45 次／30 天 | 25 次 | 40 組 | 40 卷 | 20 組 |
+| 7 次生成包 | NT$49／筆 | 7 次／30 天 | 7 次 | 7 組 | 7 卷 | 3 組 |
+
+> **未收藏膠卷：**所有會員最多暫存 20 卷；每卷生成後保存 15 天，到期自動清除。超過 20 卷時，系統直接覆蓋最早的未收藏膠卷。
 
 膠捲與市集規則請至「作品｜市集」頁面查看。
 
@@ -357,7 +360,7 @@ def _v12_member_rules_markdown():
 
 - 每組作品可保存原始人物照片、已上傳的畫風參考與使用者選取的貼圖成品；單組最多保存 **40 張貼圖**，**MAIN／TAB** 規格圖不計入此上限。
 - 未勾選保存的裁切貼圖不會寫入作品庫；ZIP 壓縮檔不會另行保存，可在日後將作品載回創作頁後重新下載。
-- 作品庫容量依目前有效的最高創作包計算；免費會員預設可保存 2 組作品。7 次生成包只增加圖片生成次數，不提升容量。
+- 作品庫容量依目前有效的最高創作包計算；免費會員預設可保存 2 組作品。7 次生成包有效期間可保存 7 組作品。
 
 #### 📌 重要提醒
 
@@ -6838,7 +6841,7 @@ def _beta_render_admin_console(session):
             f"{test_purchase_target.get('email') or '未提供 Email'}"
         )
         product_options = {
-            "7 次生成包｜圖片生成 7 次｜單次購買・效期 30 天（不提升方案權益）": "credit_pack_7",
+            "7 次生成包｜圖片生成 7 次／AI幫想每日 7 次／作品庫 7 組／膠卷 7 卷／市集 3 組｜單次購買・效期 30 天": "credit_pack_7",
             "基本創作包｜圖片生成 20 次／AI幫想每日 15 次／作品集 20 組｜單次購買・效期 30 天": "basic_monthly",
             "標準創作包｜圖片生成 30 次／AI幫想每日 20 次／作品集 30 組｜單次購買・效期 30 天": "standard_monthly",
             "進階創作包｜圖片生成 45 次／AI幫想每日 25 次／作品集 40 組｜單次購買・效期 30 天": "advanced_monthly",
@@ -6879,6 +6882,25 @@ def _beta_render_admin_console(session):
                 except Exception:
                     st.error("測試購買建立失敗，請確認資料庫遷移已完成後再試。")
     return True
+
+
+def _v12_render_member_rules_expander():
+    """Keep the public allowance rules readable before and after sign-in."""
+    if _v12_ui_locale() != "zh-TW":
+        with st.expander(t("rules_title"), expanded=False):
+            st.markdown(_v12_member_rules_markdown())
+        return
+
+    with st.container(key="v12_member_rules_expander"):
+        with st.expander("📜 生成次數與雲端作品庫規則", expanded=False):
+            with st.container(key="v12_member_rules"):
+                st.markdown(_v12_member_rules_markdown(), unsafe_allow_html=True)
+                st.button(
+                    "📚 前往作品｜市集了解膠捲與市集規則",
+                    key="beta_rules_go_library",
+                    on_click=_v12_navigate_callback,
+                    kwargs={"view": "library", "library_section": "home", "preserve_creation": True},
+                )
 
 
 def _beta_image_uploader(label, *, session, **kwargs):
@@ -6994,20 +7016,7 @@ def _beta_render_account_panel():
             _beta_render_referral_redemption(session)
         if not _beta_site_openai_key():
             st.info("會員登入與生成次數帳本已啟用；站方生成 API 正在進行最後設定。")
-        if _v12_ui_locale() != "zh-TW":
-            with st.expander(t("rules_title"), expanded=False):
-                st.markdown(_v12_member_rules_markdown())
-            return session
-        with st.container(key="v12_member_rules_expander"):
-            with st.expander("📜 生成次數與雲端作品庫規則", expanded=False):
-                with st.container(key="v12_member_rules"):
-                    st.markdown(_v12_member_rules_markdown(), unsafe_allow_html=True)
-                    st.button(
-                        "📚 前往作品｜市集了解膠捲與市集規則",
-                        key="beta_rules_go_library",
-                        on_click=_v12_navigate_callback,
-                        kwargs={"view": "library", "library_section": "home", "preserve_creation": True},
-                    )
+        _v12_render_member_rules_expander()
         return session
 
     login_error = st.session_state.pop("beta_login_error", "")
@@ -7050,6 +7059,7 @@ def _beta_render_account_panel():
             f'<div class="v12-beta-login-copy">{t("login_expiry")}</div>',
             unsafe_allow_html=True,
         )
+    _v12_render_member_rules_expander()
     return None
 
 
@@ -13327,12 +13337,12 @@ def _v12_render_pricing_page():
             "code": "credit_pack_7",
             "name": t("plan_pack"),
             "price": "NT$49",
-            "period": t("period_pack"),
-            "credits": t("benefit_credits", count=7, suffix=""),
-            "copy": t("benefit_credit_only"),
-            "library": "",
-            "reels": "",
-            "market_publish": "",
+            "period": t("period_creator_pack"),
+            "credits": t("benefit_credits", count=7, suffix=_v12_generation_suffix()),
+            "copy": t("benefit_copy", count=7),
+            "library": t("benefit_library", count=7),
+            "reels": t("benefit_reels", count=7),
+            "market_publish": t("benefit_market_publish", count=3),
             "button": t("pricing_choose_pack"),
         },
     ]
