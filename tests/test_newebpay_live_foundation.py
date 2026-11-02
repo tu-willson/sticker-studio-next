@@ -47,6 +47,8 @@ class NewebPayLiveFoundationTests(unittest.TestCase):
 
     def test_payment_return_popup_closes_without_recreating_member_session(self):
         self.assertIn("def _v12_close_payment_return_popup", APP)
+        self.assertIn('target="newebpay_checkout"', APP)
+        self.assertIn("popup.name !== 'newebpay_checkout'", APP)
         self.assertIn("popup.opener.focus()", APP)
         self.assertIn("popup.close()", APP)
         self.assertIn("_v12_close_payment_return_popup()", APP)

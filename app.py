@@ -3773,7 +3773,7 @@ def _v12_render_newebpay_form(checkout):
                     background: #ff5579; color: white; font-size: 1rem; font-weight: 700; cursor: pointer; }}
           button:hover {{ background: #e94069; }}
         </style>
-        <form action="{html.escape(payload['action'])}" method="post" target="_blank">
+        <form action="{html.escape(payload['action'])}" method="post" target="newebpay_checkout">
           {hidden_fields}<button type="submit">{label}</button>
         </form>
         """,
@@ -3785,24 +3785,18 @@ def _v12_render_newebpay_form(checkout):
 def _v12_close_payment_return_popup():
     """Close the hosted-payment popup and preserve the original app session.
 
-    The payment POST has to leave Streamlit's sandboxed component in a new
+    The payment POST has to leave Streamlit's sandboxed component in a named
     tab. Authentication deliberately remains only in the original Streamlit
-    session, so the return tab should close instead of asking the member to
-    sign in again.
+    session, so only that named return tab should close instead of asking the
+    member to sign in again.
     """
     components.html(
         """
-        <div id="payment-return-popup-note" style="display:none"></div>
         <script>
         (() => {
           const popup = window.top;
           try {
-            if (!popup || !popup.opener || popup.opener.closed) return;
-            const note = document.getElementById('payment-return-popup-note');
-            if (note) {
-              note.style.cssText = 'display:block;padding:8px 10px;color:#f8fafc;font:14px sans-serif;';
-              note.textContent = '付款已完成，正在回到原付款頁…';
-            }
+            if (!popup || popup.name !== 'newebpay_checkout' || !popup.opener || popup.opener.closed) return;
             window.setTimeout(() => {
               try { popup.opener.focus(); } catch (_) {}
               try { popup.close(); } catch (_) {}
@@ -3814,7 +3808,7 @@ def _v12_close_payment_return_popup():
         })();
         </script>
         """,
-        height=38,
+        height=0,
         scrolling=False,
     )
 
@@ -13652,6 +13646,7 @@ st.markdown("""<style>
 # first clean page render after signing in.
 if _beta_config():
     _beta_complete_oauth_callback()
+    _v12_close_payment_return_popup()
 
 # PAYUNi sends the member back with an opaque order id only.  Show the safe,
 # member-owned status on the pricing page; entitlement issuance remains solely
@@ -13661,7 +13656,6 @@ if re.fullmatch(
     str(st.query_params.get("payment_order", "") or ""),
 ):
     st.session_state["v12_view"] = "pricing"
-    _v12_close_payment_return_popup()
 
 
 # ============================================================
