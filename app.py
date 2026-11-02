@@ -2364,6 +2364,7 @@ div[class*="st-key-v12_shared_template_apply_own_"] button,
 div[class*="st-key-v12_shared_template_apply_unlocked_"] button,
 div[class*="st-key-v12_unlocked_template_apply_"] button,
 div[class*="st-key-v12_creator_reel_apply_"] button,
+div[class*="st-key-v12_creator_reel_purchased_shelf"] button,
 div[class*="st-key-v12_market_unlocked_tab"] button{
   background:linear-gradient(145deg,#4aa8ec,#247fbd) !important;
   border-color:#63b8f3 !important;
@@ -10443,7 +10444,25 @@ def _v12_render_creator_reels(session, shelf="active"):
         and str(reel.get("status", "") or "") == desired_status
     ]
     shelf_title = "⭐ 已收藏的膠卷" if desired_status == "collected" else "🎞️ 未收藏的膠卷"
-    st.markdown(f"#### {shelf_title}")
+    if desired_status == "collected":
+        # Keep purchased templates one clear click away from the collection
+        # shelf; they share the same capacity but live in the marketplace view.
+        collected_title_col, purchased_shelf_col, _shelf_spacer = st.columns(
+            [1, 1, 1]
+        )
+        with collected_title_col:
+            st.markdown(f"#### {shelf_title}")
+        with purchased_shelf_col:
+            st.button(
+                "🛍️ 已購入膠卷區",
+                key="v12_creator_reel_purchased_shelf",
+                type="primary",
+                use_container_width=True,
+                on_click=_v12_navigate_callback,
+                kwargs={"view": "marketplace", "marketplace_shelf": "purchased"},
+            )
+    else:
+        st.markdown(f"#### {shelf_title}")
     if desired_status == "collected":
         # 發布提醒仍保留在分頁上方，並且稍後會同步顯示於被操作膠卷左側。
         if isinstance(template_feedback, dict):
