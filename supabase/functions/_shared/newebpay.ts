@@ -51,6 +51,18 @@ export async function newebpayTradeSha(tradeInfo: string, hashKey: string, hashI
   return hexEncode(new Uint8Array(digest)).toUpperCase();
 }
 
+export async function newebpayCheckValue(
+  merchantId: string, merchantOrderNo: string, amount: number, hashKey: string, hashIv: string,
+): Promise<string> {
+  // NewebPay QueryTradeInfo signs these three fields in alphabetical order.
+  const sourceData = new URLSearchParams({
+    Amt: String(amount), MerchantID: merchantId, MerchantOrderNo: merchantOrderNo,
+  }).toString();
+  const source = `IV=${hashIv}&${sourceData}&Key=${hashKey}`;
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(source));
+  return hexEncode(new Uint8Array(digest)).toUpperCase();
+}
+
 export function constantTimeEqual(first: string, second: string): boolean {
   if (first.length !== second.length) return false;
   let difference = 0;

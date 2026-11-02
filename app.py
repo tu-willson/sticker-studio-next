@@ -3707,6 +3707,24 @@ def _beta_newebpay_checkout_payload(checkout_id, payment_flow):
     return {"action": payload["action"], "fields": {name: str(fields[name]) for name in required}}
 
 
+def _beta_newebpay_reconcile(checkout_id):
+    """Ask our server to verify a pending checkout directly with NewebPay."""
+    config = _beta_config()
+    if not config or not checkout_id:
+        raise RuntimeError("newebpay_reconcile_invalid")
+    url = (
+        f"{config['url']}/functions/v1/newebpay-reconcile?checkout="
+        f"{urllib.parse.quote(str(checkout_id), safe='')}"
+    )
+    request = urllib.request.Request(url, headers={"Accept": "application/json"}, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8") or "{}")
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError) as exc:
+        raise RuntimeError("newebpay_reconcile_failed") from exc
+    return payload if isinstance(payload, dict) else {}
+
+
 def _v12_render_payuni_sandbox_form(checkout):
     """Show a user-clicked signed POST form without exposing PAYUNi secrets."""
     payload = _beta_payuni_checkout_payload(checkout.get("checkout_id"))
@@ -12992,6 +13010,17 @@ def _v12_create_newebpay_checkout_callback(session, product_code):
         st.session_state["v12_newebpay_checkout_error"] = "unknown"
 
 
+def _v12_reconcile_newebpay_checkout_callback(checkout_id):
+    """Reconcile only through NewebPay's signed server-to-server query API."""
+    try:
+        status = str(_beta_newebpay_reconcile(checkout_id).get("status", "") or "")
+        st.session_state["v12_newebpay_reconcile_status"] = status
+        if status == "paid":
+            st.session_state.pop("v12_newebpay_checkout", None)
+    except Exception:
+        st.session_state["v12_newebpay_reconcile_status"] = "retry"
+
+
 def _v12_load_workspace_project_callback(project):
     """Restore a browser-only project before its single navigation rerun."""
     _v12_load_history_record(project)
@@ -13478,6 +13507,8 @@ def _v12_render_pricing_page():
     chosen = next((item for item in products if item["code"] == selected_code), None)
     if chosen:
         st.markdown(f"### {t('pricing_selected', name=chosen['name'], price=chosen['price'])}")
+        if str(st.session_state.get("v12_newebpay_reconcile_status", "") or "") == "paid":
+            st.success(t("pricing_newebpay_reconciled"))
         if session:
             if _beta_newebpay_live_enabled():
                 _checkout = st.session_state.get("v12_newebpay_checkout")
@@ -13488,6 +13519,16 @@ def _v12_render_pricing_page():
                     except Exception:
                         st.error(t("pricing_newebpay_error"))
                     st.caption(t("pricing_newebpay_scope"))
+                    st.button(
+                        t("pricing_newebpay_reconcile"),
+                        key="v12_newebpay_reconcile",
+                        use_container_width=True,
+                        on_click=_v12_reconcile_newebpay_checkout_callback,
+                        args=(_checkout.get("checkout_id"),),
+                    )
+                    reconcile_status = str(st.session_state.get("v12_newebpay_reconcile_status", "") or "")
+                    if reconcile_status in {"pending", "retry"}:
+                        st.info(t("pricing_newebpay_reconcile_pending"))
                 else:
                     st.info(t("pricing_newebpay_intro"))
                     st.button(

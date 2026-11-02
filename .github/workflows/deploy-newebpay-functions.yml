@@ -29,5 +29,6 @@ jobs:
           supabase functions deploy newebpay-checkout --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api --yes
           supabase functions deploy newebpay-notify --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api --yes
           supabase functions deploy newebpay-return --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api --yes
+          supabase functions deploy newebpay-reconcile --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api --yes
           supabase functions deploy newebpay-periodic-notify --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api --yes
           supabase functions deploy newebpay-periodic-return --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api --yes
