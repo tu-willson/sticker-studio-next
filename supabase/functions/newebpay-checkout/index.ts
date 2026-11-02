@@ -11,7 +11,9 @@ function supabaseAdminKey(): string {
 }
 
 const SERVICE_ROLE_KEY = supabaseAdminKey();
-const MERCHANT_ID = Deno.env.get("NEWEBPAY_MERCHANT_ID") || "";
+// Secret values are commonly pasted from a portal.  Normalise the identifier
+// once so a trailing newline cannot make the outer and encrypted IDs differ.
+const MERCHANT_ID = (Deno.env.get("NEWEBPAY_MERCHANT_ID") || "").trim();
 const HASH_KEY = Deno.env.get("NEWEBPAY_HASH_KEY") || "";
 const HASH_IV = Deno.env.get("NEWEBPAY_HASH_IV") || "";
 const LIVE_ENABLED = /^(1|true|yes|on)$/i.test(Deno.env.get("NEWEBPAY_LIVE_ENABLED") || "");

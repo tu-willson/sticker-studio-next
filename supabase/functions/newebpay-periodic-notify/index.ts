@@ -10,7 +10,7 @@ function supabaseAdminKey(): string {
   return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 }
 const SERVICE_ROLE_KEY = supabaseAdminKey();
-const MERCHANT_ID = Deno.env.get("NEWEBPAY_MERCHANT_ID") || "";
+const MERCHANT_ID = (Deno.env.get("NEWEBPAY_MERCHANT_ID") || "").trim();
 const HASH_KEY = Deno.env.get("NEWEBPAY_HASH_KEY") || "";
 const HASH_IV = Deno.env.get("NEWEBPAY_HASH_IV") || "";
 
