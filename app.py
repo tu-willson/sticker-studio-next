@@ -13515,13 +13515,13 @@ def _v12_render_pricing_page():
 
     with st.container(key="v12_pricing_rules_guide"):
         st.markdown(f"### {t('pricing_rules_heading')}")
+        with st.expander(t("rules_title"), expanded=False):
+            with st.container(key="v12_pricing_member_rules"):
+                st.markdown(_v12_member_rules_markdown(), unsafe_allow_html=True)
         with st.expander(t("pricing_rules_title"), expanded=True):
             st.markdown(_v12_pricing_rules_markdown())
         with st.expander(t("pricing_pack_rules_title"), expanded=False):
             st.markdown(_v12_plan_change_policy_markdown())
-        with st.expander(t("rules_title"), expanded=False):
-            with st.container(key="v12_pricing_member_rules"):
-                st.markdown(_v12_member_rules_markdown(), unsafe_allow_html=True)
         st.caption(t("pricing_footer"))
         _v12_render_legal_footer()
 
