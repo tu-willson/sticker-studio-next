@@ -7001,7 +7001,7 @@ def _beta_render_account_panel():
         try:
             copy_status = _beta_copy_usage_status_cached(session)
             st.markdown(
-                '<div class="v12-account-emphasis">'
+                '<div class="v12-credit-breakdown">'
                 + t(
                     "copy_quota",
                     remaining=copy_status["remaining_count"],
