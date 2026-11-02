@@ -1527,10 +1527,16 @@ div[class*="st-key-v12_basket_download_"] button{
 .st-key-v12_style_reference_examples{
   padding-top:2.08rem;
 }
+.v12-style-reference-example-links{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:.42rem;
+}
 .v12-style-reference-example-link{
   display:flex;
   flex-direction:column;
-  width:210px !important;
+  width:175px !important;
   max-width:100%;
   min-height:42px !important;
   box-sizing:border-box;
@@ -10100,7 +10106,7 @@ def _v12_render_shared_template_manager(session):
                     st.caption(
                         _v12_management_t(
                             "shared_template_management_stats",
-                            cost=max(1, int(template.get("apply_cost", 1) or 1)),
+                            cost=max(0, int(template.get("apply_cost", 0) or 0)),
                         )
                     )
                     st.caption(
@@ -10531,7 +10537,7 @@ def _v12_render_creator_reels(session, shelf="active"):
                             )
                             template_cost = st.selectbox(
                                 t("shared_template_apply_cost"),
-                                options=[1, 2, 3],
+                                options=[0, 1, 2, 3],
                                 index=0,
                                 key=f"v12_shared_template_cost_{reel_id}",
                             )
@@ -11160,7 +11166,7 @@ def _v12_render_shared_template_marketplace(session):
         template_id = str(template["template_id"])
         title = str(template.get("title", "") or "").strip()
         description = str(template.get("description", "") or "").strip()
-        cost = max(1, int(template.get("apply_cost", 1) or 1))
+        cost = max(0, int(template.get("apply_cost", 0) or 0))
         is_owner = bool(template.get("is_owner", False))
         is_unlocked = bool(template.get("is_unlocked", False))
         is_favorited = bool(template.get("is_favorited", False))
@@ -11239,9 +11245,17 @@ def _v12_render_shared_template_marketplace(session):
                 button_label = t("shared_template_apply_unlocked")
                 button_key = f"v12_shared_template_apply_unlocked_{template_id}"
             else:
-                button_label = t("shared_template_apply_cost_button", cost=cost)
+                button_label = (
+                    "🛍️ 免費套用膠卷"
+                    if cost == 0
+                    else t("shared_template_apply_cost_button", cost=cost)
+                )
                 button_key = f"v12_shared_template_apply_purchase_{template_id}"
-                st.info(t("shared_template_cost_explainer", cost=cost))
+                st.info(
+                    "此膠卷可免費套用；首次套用後，會加入已購入膠卷區供日後免費再次載入。"
+                    if cost == 0
+                    else t("shared_template_cost_explainer", cost=cost)
+                )
             apply_col, _apply_spacer = st.columns([1.35, 2.65])
             with apply_col:
                 if not is_owner and not is_unlocked and not marketplace_rights["marketplace_eligible"]:
@@ -13538,8 +13552,6 @@ def _v12_render_pricing_page():
     chosen = next((item for item in products if item["code"] == selected_code), None)
     if chosen:
         st.markdown(f"### {t('pricing_selected', name=chosen['name'], price=chosen['price'])}")
-        if str(st.session_state.get("v12_newebpay_reconcile_status", "") or "") == "paid":
-            st.success(t("pricing_newebpay_reconciled"))
         if session:
             if _beta_newebpay_live_enabled():
                 _checkout = st.session_state.get("v12_newebpay_checkout")
@@ -13550,16 +13562,6 @@ def _v12_render_pricing_page():
                     except Exception:
                         st.error(t("pricing_newebpay_error"))
                     st.caption(t("pricing_newebpay_scope"))
-                    st.button(
-                        t("pricing_newebpay_reconcile"),
-                        key="v12_newebpay_reconcile",
-                        use_container_width=True,
-                        on_click=_v12_reconcile_newebpay_checkout_callback,
-                        args=(_checkout.get("checkout_id"),),
-                    )
-                    reconcile_status = str(st.session_state.get("v12_newebpay_reconcile_status", "") or "")
-                    if reconcile_status in {"pending", "retry"}:
-                        st.info(t("pricing_newebpay_reconcile_pending"))
                 else:
                     st.info(t("pricing_newebpay_intro"))
                     st.button(
@@ -14924,12 +14926,19 @@ else:
     with _style_reference_right:
         with st.container(key="v12_style_reference_examples"):
             st.markdown(
+                '<div class="v12-style-reference-example-links">'
+                '<a class="v12-style-reference-example-link" '
+                'href="https://www.threads.com/share/EzlgQ8CSh/" '
+                'target="_blank" rel="noopener noreferrer">'
+                '<span class="v12-style-reference-example-link-title">示範連結</span>'
+                '</a>'
                 '<a class="v12-style-reference-example-link" '
                 'href="https://huaban.com/boards/44417392?source_file_id=339054540" '
                 'target="_blank" rel="noopener noreferrer">'
                 '<span class="v12-style-reference-example-link-title">文字參考範例連結</span>'
                 '<span class="v12-style-reference-example-link-source">（出處：花瓣）</span>'
-                '</a>',
+                '</a>'
+                '</div>',
                 unsafe_allow_html=True,
             )
     if _style_reference_upload is not None:
