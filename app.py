@@ -29,8 +29,39 @@ def _v12_ui_locale():
     return locale if locale in LANGUAGES else "zh-TW"
 
 
+_V12_BILLING_TRANSLATION_OVERRIDES = {
+    "zh-TW": {
+        "plan_basic": "基本創作包",
+        "plan_standard": "標準創作包",
+        "plan_advanced": "進階創作包",
+        "plan_pack": "7 次生成包",
+        "period_creator_pack": "單次購買・30 天效期",
+        "benefit_credit_only": "只增加圖片生成次數，不提升方案權益",
+    },
+    "en": {
+        "plan_basic": "Basic Creative Pack",
+        "plan_standard": "Standard Creative Pack",
+        "plan_advanced": "Advanced Creative Pack",
+        "plan_pack": "7-Generation Pack",
+        "period_creator_pack": "One-time purchase · valid for 30 days",
+        "benefit_credit_only": "Adds image generations only; no tier upgrade",
+    },
+    "ja": {
+        "plan_basic": "ベーシック制作パック",
+        "plan_standard": "スタンダード制作パック",
+        "plan_advanced": "アドバンス制作パック",
+        "plan_pack": "7回生成パック",
+        "period_creator_pack": "単発購入・30日間有効",
+        "benefit_credit_only": "画像生成回数のみ追加。プラン特典は上がりません。",
+    },
+}
+
+
 def t(key, **kwargs):
     """Translate an explicit public UI key; unknown keys safely fall back to Chinese."""
+    value = _V12_BILLING_TRANSLATION_OVERRIDES.get(_v12_ui_locale(), {}).get(key)
+    if value is not None:
+        return value.format(**kwargs) if kwargs else value
     return tr(_v12_ui_locale(), key, **kwargs)
 
 
@@ -173,7 +204,7 @@ def _v12_font_choice_display(option):
 
 def _v12_generation_suffix():
     """Keep compact generation-plan wording natural in each public language."""
-    return {"zh-TW": "／月", "en": " / month", "ja": "／月"}[_v12_ui_locale()]
+    return {"zh-TW": "／30 天", "en": " / 30 days", "ja": "／30日"}[_v12_ui_locale()]
 
 
 def _v12_crop_canvas_translations():
