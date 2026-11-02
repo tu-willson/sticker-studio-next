@@ -16,7 +16,14 @@
 
    `supabase/migrations/20261102_000068_newebpay_live_checkout_foundation.sql`
 
-2. 部署五個 Edge Functions：
+2. 部署五個 Edge Functions。建議使用本專案新增的 GitHub Actions 工作流程，避免在 Dashboard 逐一貼上有共用模組的五份程式：
+
+   - 在 Supabase 帳號的 Access Tokens 建立一組僅供部署使用的 Token。
+   - 到 GitHub repository 的 **Settings → Secrets and variables → Actions**，新增名稱為 `SUPABASE_ACCESS_TOKEN` 的 Repository secret，值為剛建立的 Token。
+   - 到 **Actions → Deploy NewebPay Edge Functions → Run workflow** 手動執行。
+   - 此 workflow 只有手動觸發，不會因日後 push 自動部署。
+
+   執行後會部署以下五個 Functions：
 
    ```text
    newebpay-checkout
