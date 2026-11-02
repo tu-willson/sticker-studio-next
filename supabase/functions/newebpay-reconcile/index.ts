@@ -72,7 +72,14 @@ Deno.serve(async (request) => {
       && String(details?.MerchantOrderNo || "") === order.provider_order_reference
       && Number(details?.Amt) === order.amount_twd
       && String(details?.TradeStatus || "") === "1";
-    if (!paid) return result({ status: "pending" });
+    if (!paid) {
+      // Log only provider state codes; never log payment payloads, card data, or secrets.
+      console.warn(
+        "NEWEBPAY_RECONCILE_UNPAID",
+        `http=${providerResponse.status} status=${String(providerJson?.Status || "").slice(0, 24)} trade_status=${String(details?.TradeStatus || "").slice(0, 8)}`,
+      );
+      return result({ status: "pending" });
+    }
 
     const { error } = await admin.rpc("finalize_newebpay_initial_payment", {
       p_provider_order_reference: order.provider_order_reference,
