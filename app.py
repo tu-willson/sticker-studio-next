@@ -3602,6 +3602,7 @@ def _beta_http(method, path, payload=None, access_token=None):
             "referral_code_expired",
             "referral_code_limit_reached",
             "referral_paid_member_required",
+            "referral_code_must_be_inactive",
             "marketplace_report_membership_required",
             "marketplace_report_daily_limit_reached",
             "subscription_plan_not_upgrade",
@@ -5702,6 +5703,18 @@ def _beta_admin_set_referral_code_active(session, code_id, is_active):
     return response if isinstance(response, dict) else {}
 
 
+def _beta_admin_archive_referral_code(session, code_id):
+    """Remove an already-disabled referral code from the admin list."""
+    response = _beta_rpc(
+        "admin_archive_referral_code",
+        {"p_code_id": str(code_id)},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    return response if isinstance(response, dict) else {}
+
+
 _BETA_MARKETPLACE_MODERATION_ACTIONS = {
     "確認無違規，結束本次審核": "dismiss_reports",
     "下架這卷膠卷": "withdraw_listing",
@@ -5842,6 +5855,31 @@ def _beta_admin_toggle_referral_code_callback(session, code_id, code, next_activ
         )
     except Exception:
         st.session_state["beta_admin_referral_error"] = "推薦碼狀態暫時無法更新，請稍後再試。"
+
+
+def _beta_admin_request_referral_code_delete_callback(code_id):
+    """Require a separate confirmation click before hiding a referral code."""
+    st.session_state["beta_admin_referral_delete_confirm"] = str(code_id)
+
+
+def _beta_admin_cancel_referral_code_delete_callback():
+    st.session_state.pop("beta_admin_referral_delete_confirm", None)
+
+
+def _beta_admin_archive_referral_code_callback(session, code_id, code):
+    try:
+        _beta_admin_archive_referral_code(session, code_id)
+        st.session_state["beta_admin_referral_notice"] = (
+            f"推薦碼「{code}」已從管理清單移除；既有兌換紀錄與已核發次數會保留。"
+        )
+        st.session_state.pop("beta_admin_referral_delete_confirm", None)
+    except Exception as exc:
+        st.session_state.pop("beta_admin_referral_delete_confirm", None)
+        if "must_be_inactive" in str(exc).lower():
+            message = "請先取消使用此推薦碼，才能刪除。"
+        else:
+            message = "推薦碼暫時無法刪除，請稍後再試。"
+        st.session_state["beta_admin_referral_error"] = message
 
 
 def _beta_admin_create_referral_code_callback(session):
@@ -6424,7 +6462,7 @@ def _beta_render_admin_operations_policy():
             - 僅管理員能建立或停用。代碼僅允許 4～24 位英文字母與數字，系統會統一轉為大寫。
             - 每組碼的可兌換名額為 1～100,000 人；每人獎勵 1～100 次。
             - 每組碼每個帳號限成功兌換一次。一般推薦碼須先用完前一筆一般推薦碼獎勵；限已消費會員推薦碼僅限至少有一筆成功訂閱或 7 次生成包付款紀錄者兌換，並可與一般推薦碼獎勵併存。使用者、名額、資格、推薦碼有效期與獎勵額度會在同一筆資料庫交易中確認；連點或多人同時操作不得重複核發。
-            - 停用只阻止新的兌換，不會追回已成功核發的次數。不得刪除有兌換紀錄的推薦碼。
+            - 取消使用只阻止新的兌換，不會追回已成功核發的次數。取消使用後可刪除推薦碼；刪除只會從管理清單移除，既有兌換紀錄會保留。
             - 管理者應保留活動來源、對外文案與停用原因於「內部備註」。
 
             ### 3. 創作膠捲、收藏與市集
@@ -6576,7 +6614,7 @@ def _beta_render_admin_console(session):
                 requires_paid_membership = bool(referral.get("requires_paid_membership", False))
                 expiry = str(referral.get("expires_at", "") or "")[:10]
                 status = "🟢 開放中" if active else "⚪ 已停用"
-                left, middle, right = st.columns([3, 4, 2])
+                left, middle, right = st.columns([3, 4, 3])
                 with left:
                     st.markdown(f"**{code_label}**  ")
                     st.caption(status + (f"｜截止 {expiry}" if expiry else "｜無截止日"))
@@ -6593,13 +6631,63 @@ def _beta_render_admin_console(session):
                     if referral.get("note"):
                         st.caption(f"備註：{referral['note']}")
                 with right:
-                    st.button(
-                        "🗑️ 取消使用" if active else "恢復使用",
-                        key=f"beta_admin_referral_toggle_{code_id}",
-                        use_container_width=True,
-                        on_click=_beta_admin_toggle_referral_code_callback,
-                        args=(session, code_id, code_label, not active),
-                    )
+                    if active:
+                        toggle_col, delete_col = st.columns(2)
+                        with toggle_col:
+                            st.button(
+                                "🗑️ 取消使用",
+                                key=f"beta_admin_referral_toggle_{code_id}",
+                                use_container_width=True,
+                                on_click=_beta_admin_toggle_referral_code_callback,
+                                args=(session, code_id, code_label, False),
+                            )
+                        with delete_col:
+                            st.button(
+                                "刪除",
+                                key=f"beta_admin_referral_delete_{code_id}",
+                                use_container_width=True,
+                                disabled=True,
+                                help="請先取消使用此推薦碼，才能刪除。",
+                            )
+                    else:
+                        restore_col, delete_col = st.columns(2)
+                        with restore_col:
+                            st.button(
+                                "恢復使用",
+                                key=f"beta_admin_referral_toggle_{code_id}",
+                                use_container_width=True,
+                                on_click=_beta_admin_toggle_referral_code_callback,
+                                args=(session, code_id, code_label, True),
+                            )
+                        with delete_col:
+                            st.button(
+                                "🗑️ 刪除",
+                                key=f"beta_admin_referral_delete_{code_id}",
+                                use_container_width=True,
+                                on_click=_beta_admin_request_referral_code_delete_callback,
+                                args=(code_id,),
+                            )
+
+                    if st.session_state.get("beta_admin_referral_delete_confirm") == code_id:
+                        st.warning(f"確定要刪除推薦碼「{code_label}」嗎？")
+                        st.caption("它會從管理清單移除，但既有兌換紀錄與已核發次數仍會保留。")
+                        confirm_col, cancel_col = st.columns(2)
+                        with confirm_col:
+                            st.button(
+                                "確認刪除",
+                                type="primary",
+                                key=f"beta_admin_referral_delete_confirm_{code_id}",
+                                use_container_width=True,
+                                on_click=_beta_admin_archive_referral_code_callback,
+                                args=(session, code_id, code_label),
+                            )
+                        with cancel_col:
+                            st.button(
+                                "返回",
+                                key=f"beta_admin_referral_delete_cancel_{code_id}",
+                                use_container_width=True,
+                                on_click=_beta_admin_cancel_referral_code_delete_callback,
+                            )
 
             with st.expander("查看兌換紀錄", expanded=False):
                 code_filters = {"全部推薦碼": None}
