@@ -1044,7 +1044,7 @@ _V12_CROP_GUIDES_COMPONENT = components_v2.component(
     html='<div class="v12-crop-guides-root"><iframe title="Sticker crop guides"></iframe></div>',
     css=(
         ':host,.v12-crop-guides-root,.v12-crop-guides-root iframe'
-        '{display:block;width:100%;height:100%;margin:0;border:0;overflow:hidden}'
+        '{display:block;width:100%;height:100%;margin:0;border:0;overflow:hidden;background:transparent}'
     ),
     js=r'''
 export default function(component) {
@@ -17511,11 +17511,11 @@ if st.session_state.generated_4x2_bytes:
     # white guidance/status text becomes unreadable in the inline component.
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
         'body{margin:0;font-family:Arial,"Microsoft JhengHei",sans-serif;color:#333}',
-        'html,body{min-height:100%;background:#172538}'
-        'body{margin:0;padding:10px;font-family:Arial,"Microsoft JhengHei",sans-serif;color:#eef6ff}',
+        'html,body{min-height:100%;background:transparent}'
+        'body{margin:0;padding:10px;font-family:Arial,"Microsoft JhengHei",sans-serif;color:#eef6ff;background:transparent}',
     ).replace(
         '.help{font-size:14px;line-height:1.6;background:#f5f7fa;padding:10px;border-radius:8px}',
-        '.help{font-size:14px;line-height:1.6;background:rgba(40,74,108,.86);'
+        '.help{font-size:14px;line-height:1.6;background:rgba(40,74,108,.58);'
         'border:1px solid rgba(135,207,255,.38);color:#f3f9ff;padding:10px;border-radius:8px}',
     ).replace(
         '.viewer{position:relative;width:720px;max-width:100%;margin:10px auto 0;border:1px solid #bbb;border-radius:8px;overflow:hidden;background:#eee}',
