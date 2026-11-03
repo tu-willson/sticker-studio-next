@@ -5985,7 +5985,10 @@ def _beta_render_referral_redemption(session):
     st.markdown(
         '<div class="v12-referral-announcement">'
         '<span class="v12-referral-announcement-line">'
-        '🎁 兌換｜推薦碼　公告：購買方案會員專屬兌換碼「HAPPYTOJOIN100」額外 <strong>5 次生成</strong>。'
+        '<strong>公告：</strong>'
+        '</span>'
+        '<span class="v12-referral-announcement-line">'
+        '購買方案會員專屬兌換碼「HAPPYTOJOIN100」額外 <strong>5 次生成</strong>。'
         '</span>'
         '<span class="v12-referral-announcement-line">'
         '新加入的朋友（免費會員）「FREEFORTWO」額外 <strong>2 次生成</strong>。'
