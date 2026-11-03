@@ -5837,7 +5837,7 @@ def _beta_admin_toggle_referral_code_callback(session, code_id, code, next_activ
     try:
         _beta_admin_set_referral_code_active(session, code_id, next_active)
         st.session_state["beta_admin_referral_notice"] = (
-            f"推薦碼「{code}」已{'重新啟用' if next_active else '停用'}。"
+            f"推薦碼「{code}」已{'恢復使用' if next_active else '取消使用'}。"
         )
     except Exception:
         st.session_state["beta_admin_referral_error"] = "推薦碼狀態暫時無法更新，請稍後再試。"
@@ -6593,7 +6593,7 @@ def _beta_render_admin_console(session):
                         st.caption(f"備註：{referral['note']}")
                 with right:
                     st.button(
-                        "停用推薦碼" if active else "重新啟用",
+                        "🗑️ 取消使用" if active else "恢復使用",
                         key=f"beta_admin_referral_toggle_{code_id}",
                         use_container_width=True,
                         on_click=_beta_admin_toggle_referral_code_callback,
