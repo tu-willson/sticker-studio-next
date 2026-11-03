@@ -17528,7 +17528,10 @@ if st.session_state.generated_4x2_bytes:
     # white guidance/status text becomes unreadable in the inline component.
     _CROP_HTML_TEMPLATE = _CROP_HTML_TEMPLATE.replace(
         'body{margin:0;font-family:Arial,"Microsoft JhengHei",sans-serif;color:#333}',
-        'html,body{min-height:100%;background:transparent}'
+        'html,body{min-height:100%;background-color:#151d2b;'
+        'background-image:linear-gradient(180deg,rgba(10,16,28,.30),rgba(13,19,31,.56)),'
+        'url("https://raw.githubusercontent.com/tu-willson/sticker-studio-next/main/static/backgrounds/sakura-fuji-dusk-v1.png");'
+        'background-position:center center;background-size:cover}'
         'body{margin:0;padding:10px;font-family:Arial,"Microsoft JhengHei",sans-serif;color:#eef6ff;background:transparent}',
     ).replace(
         '.help{font-size:14px;line-height:1.6;background:#f5f7fa;padding:10px;border-radius:8px}',
