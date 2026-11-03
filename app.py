@@ -336,6 +336,8 @@ def _v12_member_rules_markdown():
 
 **LINE 貼圖創作室**是一項 AI 輔助 LINE 貼圖創作服務。會員可上傳人物照片、選擇貼圖風格或上傳畫風參考，設定貼圖文字與動作後，產生 4×2 貼圖總圖；完成裁切後，可挑選單張貼圖下載或保存至雲端作品庫。
 
+<div class="v12-member-rules-callout v12-member-rules-callout-generation-note">※ 圖片生成均參考指令下的隨機產生，無法完全每次達到統一性的生成。（可藉由畫風參考加強其效果）※</div>
+
 #### 💳 方案與提供額度
 
 <div class="v12-member-rules-callout v12-member-rules-callout-free"><strong>免費會員權益：</strong>可使用基礎貼圖創作、首次登入 <strong>2 次</strong>圖片生成體驗額度、每日 <strong>2 次</strong> AI 幫想，以及雲端作品庫 <strong>2 組</strong>。</div>
@@ -2612,6 +2614,13 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
   border:1px solid rgba(103,229,157,.56);
   border-left:4px solid #4fdb8b;
   background:rgba(35,133,81,.2);
+}
+.v12-member-rules-callout-generation-note{
+  color:#fff0b8;
+  border:1px solid rgba(255,194,83,.7);
+  border-left:4px solid #ffbd4d;
+  background:rgba(130,78,10,.28);
+  text-shadow:0 1px 2px rgba(0,0,0,.45);
 }
 .v12-credit-breakdown{
   margin:.46rem 0 .08rem;
