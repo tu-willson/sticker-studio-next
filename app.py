@@ -3601,6 +3601,7 @@ def _beta_http(method, path, payload=None, access_token=None):
             "referral_code_inactive",
             "referral_code_expired",
             "referral_code_limit_reached",
+            "referral_paid_member_required",
             "marketplace_report_membership_required",
             "marketplace_report_daily_limit_reached",
             "subscription_plan_not_upgrade",
@@ -5892,7 +5893,7 @@ def _beta_redeem_referral_code_callback(session):
         if "previous_reward_remaining" in error_text:
             message = "請先使用完目前的一般推薦碼獎勵次數，才能兌換下一組一般推薦碼。"
         elif "paid_member_required" in error_text:
-            message = "此推薦碼僅限已成功購買訂閱方案或 7 次生成包的會員使用。"
+            message = "此推薦碼僅限曾成功購買任一創作包或 7 次生成包的會員使用。"
         elif "code_already_redeemed" in error_text:
             message = "這組推薦碼已由此帳號兌換過，請改用不同的推薦碼。"
         elif "already_redeemed" in error_text:

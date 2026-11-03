@@ -25,6 +25,7 @@ class PaidMemberReferralCodeTests(unittest.TestCase):
 
     def test_admin_ui_exposes_the_requirement_and_specific_error(self):
         self.assertIn("beta_admin_referral_requires_paid_membership", APP)
+        self.assertIn('"referral_paid_member_required"', APP)
         self.assertIn('"paid_member_required"', APP)
         self.assertIn("可與一般推薦碼獎勵併存", APP)
 
