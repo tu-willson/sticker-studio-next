@@ -1459,6 +1459,23 @@ st.markdown("""
 [class*="st-key-v12_basket_item_"] [data-testid="stImage"]{
   margin-bottom:-.38rem !important;
 }
+[class*="st-key-v12_basket_item_"] .v12-inline-basket-thumbnail{
+  width:100%;
+  aspect-ratio:37 / 32;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border:1px solid rgba(210,225,244,.22);
+  border-radius:9px;
+  background:rgba(8,15,28,.42);
+}
+[class*="st-key-v12_basket_item_"] .v12-inline-basket-thumbnail img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
 [class*="st-key-v12_basket_item_"] [data-testid="stCaptionContainer"]{
   margin:0 0 -.18rem !important;
 }
@@ -4796,6 +4813,30 @@ def _v12_webp_bytes(image_or_bytes, quality=86, method=6):
     buf = BytesIO()
     image.save(buf, "WEBP", quality=quality, method=max(0, min(6, int(method))))
     return buf.getvalue()
+
+
+def _v12_inline_basket_thumbnail_html(image_or_bytes, alt_text=""):
+    """Render a compact basket preview without Streamlit's temporary media URL.
+
+    The original PNG stays in session state for downloads and cloud saves.  This
+    preview is deliberately small and embedded in the page so a transient
+    hosted-media failure cannot leave an otherwise intact basket blank.
+    """
+    image = image_or_bytes
+    if not isinstance(image, Image.Image):
+        image = Image.open(BytesIO(bytes(image_or_bytes)))
+    image = image.convert("RGBA")
+    resampling = getattr(Image, "Resampling", Image)
+    image.thumbnail((300, 260), resampling.LANCZOS)
+    preview_b64 = base64.b64encode(
+        _v12_webp_bytes(image, quality=72, method=4)
+    ).decode("ascii")
+    safe_alt_text = html.escape(str(alt_text or "貼圖暫存區縮圖"), quote=True)
+    return (
+        '<div class="v12-inline-basket-thumbnail">'
+        f'<img src="data:image/webp;base64,{preview_b64}" alt="{safe_alt_text}" />'
+        '</div>'
+    )
 
 
 def _v12_jpeg_bytes(image_or_bytes, quality=90):
@@ -9229,15 +9270,18 @@ def _v12_render_sticker_basket_workspace():
             item_id = item["id"]
             with column:
                 with st.container(key=f"v12_basket_item_{item_id}"):
-                    st.image(
-                        item["image_bytes"],
-                        caption=t(
-                            "basket_source",
-                            batch=_v12_basket_batch_display(item["batch_label"]),
-                            slot=item["source_slot"],
-                        ),
-                        use_container_width=True,
+                    _basket_caption = t(
+                        "basket_source",
+                        batch=_v12_basket_batch_display(item["batch_label"]),
+                        slot=item["source_slot"],
                     )
+                    st.markdown(
+                        _v12_inline_basket_thumbnail_html(
+                            item["image_bytes"], _basket_caption
+                        ),
+                        unsafe_allow_html=True,
+                    )
+                    st.caption(_basket_caption)
                     st.session_state.setdefault(f"v12_basket_select_{item_id}", True)
                     st.checkbox(t("basket_keep"), key=f"v12_basket_select_{item_id}")
                     # 操作列對準圖片中心；下載較大、粉紅刪除較小且保持安全距離。
