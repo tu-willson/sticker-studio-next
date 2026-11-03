@@ -5922,7 +5922,10 @@ def _beta_render_referral_redemption(session):
     except Exception:
         breakdown = None
 
-    with st.expander("🎁 兌換推薦碼", expanded=False):
+    with st.expander(
+        "🎁 兌換｜推薦碼　公告：購買方案會員專屬兌換碼「HAPPYTOJOIN100」額外 5 次生成。",
+        expanded=False,
+    ):
         if breakdown is None:
             # The earlier one-code policy stays usable until the new database
             # migration is applied; do not make the redemption entry vanish.
