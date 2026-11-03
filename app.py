@@ -1041,7 +1041,7 @@ import streamlit.components.v2 as components_v2
 # left STEP 08 unavailable even though a generation had succeeded.
 _V12_CROP_GUIDES_COMPONENT = components_v2.component(
     "v12_crop_guides_inline",
-    html='<div class="v12-crop-guides-root"><iframe title="Sticker crop guides"></iframe></div>',
+    html='<div class="v12-crop-guides-root"><iframe title="Sticker crop guides" scrolling="no"></iframe></div>',
     css=(
         ':host,.v12-crop-guides-root,.v12-crop-guides-root iframe'
         '{display:block;width:100%;height:100%;margin:0;border:0;overflow:hidden;background:transparent}'
@@ -1054,8 +1054,10 @@ export default function(component) {
   if (!frame) {
     frame = document.createElement('iframe');
     frame.title = 'Sticker crop guides';
+    frame.scrolling = 'no';
     root.replaceChildren(frame);
   }
+  frame.scrolling = 'no';
 
   const height = Math.max(420, Number(data.frameHeight) || 760);
   root.style.height = `${height}px`;
@@ -1080,6 +1082,21 @@ export default function(component) {
 
   root._v12CropFrame = frame;
   root._v12CropSetTrigger = setTriggerValue;
+  if (!root._v12CropFrameSizerAttached) {
+    root._v12CropFrameSizerAttached = true;
+    frame.addEventListener('load', () => {
+      const doc = frame.contentDocument;
+      const body = doc?.body;
+      const html = doc?.documentElement;
+      if (!body || !html) return;
+      const contentHeight = Math.ceil(Math.max(
+        body.scrollHeight, body.offsetHeight, html.scrollHeight, html.offsetHeight
+      )) + 12;
+      const fittedHeight = Math.max(760, contentHeight);
+      root.style.height = `${fittedHeight}px`;
+      frame.style.height = `${fittedHeight}px`;
+    });
+  }
   const markup = String(data.html || '');
   if (markup && markup !== root._v12CropLatestHtml) {
     root._v12CropLatestHtml = markup;
