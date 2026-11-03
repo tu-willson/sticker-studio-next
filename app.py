@@ -2656,6 +2656,27 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
   text-shadow:0 1px 3px rgba(0,0,0,.68);
 }
 .v12-referral-guidance strong{color:#ffffff;font-weight:950;}
+.v12-referral-announcement{
+  width:min(920px,100%);
+  margin:.4rem auto .12rem;
+  padding:.7rem 1rem;
+  border:1px solid rgba(255,212,119,.68);
+  border-radius:12px;
+  background:linear-gradient(135deg,rgba(183,106,28,.30),rgba(113,76,202,.28));
+  box-shadow:0 5px 14px rgba(0,0,0,.16);
+  color:#fffaf0;
+  font-size:1.12rem;
+  font-weight:900;
+  line-height:1.72;
+  text-shadow:0 1px 3px rgba(0,0,0,.62);
+}
+.v12-referral-announcement-line{display:block;}
+.v12-referral-announcement-line + .v12-referral-announcement-line{
+  margin-top:.12rem;
+  color:#e9f4ff;
+}
+.v12-referral-announcement strong{color:#fff;font-weight:950;}
+@media (max-width:640px){.v12-referral-announcement{padding:.62rem .75rem;font-size:1rem;line-height:1.62;}}
 div.st-key-beta_refresh_credit_balance button{
   background:linear-gradient(135deg,rgba(74,159,232,.92),rgba(67,118,214,.92)) !important;
   border:1px solid rgba(184,225,255,.72) !important;
@@ -5961,10 +5982,18 @@ def _beta_render_referral_redemption(session):
     except Exception:
         breakdown = None
 
-    with st.expander(
-        "🎁 兌換｜推薦碼　公告：購買方案會員專屬兌換碼「HAPPYTOJOIN100」額外 5 次生成。",
-        expanded=False,
-    ):
+    st.markdown(
+        '<div class="v12-referral-announcement">'
+        '<span class="v12-referral-announcement-line">'
+        '🎁 兌換｜推薦碼　公告：購買方案會員專屬兌換碼「HAPPYTOJOIN100」額外 <strong>5 次生成</strong>。'
+        '</span>'
+        '<span class="v12-referral-announcement-line">'
+        '新加入的朋友（免費會員）「FREEFORTWO」額外 <strong>2 次生成</strong>。'
+        '</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    with st.expander("🎁 兌換｜推薦碼", expanded=False):
         if breakdown is None:
             # The earlier one-code policy stays usable until the new database
             # migration is applied; do not make the redemption entry vanish.

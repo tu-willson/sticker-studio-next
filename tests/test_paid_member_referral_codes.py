@@ -29,6 +29,11 @@ class PaidMemberReferralCodeTests(unittest.TestCase):
         self.assertIn('"paid_member_required"', APP)
         self.assertIn("可與一般推薦碼獎勵併存", APP)
 
+    def test_referral_announcements_are_prominent_and_include_both_codes(self):
+        self.assertIn("v12-referral-announcement", APP)
+        self.assertIn("HAPPYTOJOIN100", APP)
+        self.assertIn("FREEFORTWO", APP)
+
 
 if __name__ == "__main__":
     unittest.main()
