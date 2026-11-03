@@ -408,7 +408,10 @@ export default function(component) {
     if (button.dataset.mode) {
       state.mode = button.dataset.mode;
       save();
-      render();
+      // Mode controls more than this browser editor: the server decides which
+      // downstream creation tools should exist.  Notify it immediately so
+      // expression-only stickers do not leave the text/font controls visible.
+      setTriggerValue('event', {kind:'mode-change', state});
       return;
     }
     if (button.dataset.action === 'generate-ai') {
