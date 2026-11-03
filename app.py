@@ -2668,14 +2668,19 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
   font-size:1.12rem;
   font-weight:900;
   line-height:1.72;
+  text-align:center;
   text-shadow:0 1px 3px rgba(0,0,0,.62);
 }
 .v12-referral-announcement-line{display:block;}
 .v12-referral-announcement-line + .v12-referral-announcement-line{
   margin-top:.12rem;
-  color:#e9f4ff;
 }
+.v12-referral-announcement-title{color:#ffe3a0;font-size:1.18em;}
+.v12-referral-announcement-paid{color:#ffd56e;}
+.v12-referral-announcement-free{color:#9ce6ff;}
 .v12-referral-announcement strong{color:#fff;font-weight:950;}
+.v12-referral-announcement-paid strong{color:#fff2b5;}
+.v12-referral-announcement-free strong{color:#d7f5ff;}
 @media (max-width:640px){.v12-referral-announcement{padding:.62rem .75rem;font-size:1rem;line-height:1.62;}}
 div.st-key-beta_refresh_credit_balance button{
   background:linear-gradient(135deg,rgba(74,159,232,.92),rgba(67,118,214,.92)) !important;
@@ -5984,13 +5989,13 @@ def _beta_render_referral_redemption(session):
 
     st.markdown(
         '<div class="v12-referral-announcement">'
-        '<span class="v12-referral-announcement-line">'
+        '<span class="v12-referral-announcement-line v12-referral-announcement-title">'
         '<strong>公告：</strong>'
         '</span>'
-        '<span class="v12-referral-announcement-line">'
+        '<span class="v12-referral-announcement-line v12-referral-announcement-paid">'
         '購買方案會員專屬兌換碼「HAPPYTOJOIN100」額外 <strong>5 次生成</strong>。'
         '</span>'
-        '<span class="v12-referral-announcement-line">'
+        '<span class="v12-referral-announcement-line v12-referral-announcement-free">'
         '新加入的朋友（免費會員）「FREEFORTWO」額外 <strong>2 次生成</strong>。'
         '</span>'
         '</div>',
