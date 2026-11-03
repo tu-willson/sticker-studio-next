@@ -2682,7 +2682,8 @@ div[class*="st-key-v12_shared_template_report_"] button:hover{
 .v12-referral-announcement-paid strong{color:#fff2b5;}
 .v12-referral-announcement-free strong{color:#d7f5ff;}
 @media (max-width:640px){.v12-referral-announcement{padding:.62rem .75rem;font-size:1rem;line-height:1.62;}}
-div.st-key-beta_refresh_credit_balance button{
+div.st-key-beta_refresh_credit_balance button,
+div.st-key-v12_refresh_sticker_basket button{
   background:linear-gradient(135deg,rgba(74,159,232,.92),rgba(67,118,214,.92)) !important;
   border:1px solid rgba(184,225,255,.72) !important;
   color:#fff !important;
@@ -2690,7 +2691,8 @@ div.st-key-beta_refresh_credit_balance button{
   box-shadow:0 5px 13px rgba(14,71,142,.24);
   transition:transform .16s ease,filter .16s ease,background .16s ease;
 }
-div.st-key-beta_refresh_credit_balance button:hover{
+div.st-key-beta_refresh_credit_balance button:hover,
+div.st-key-v12_refresh_sticker_basket button:hover{
   background:linear-gradient(135deg,rgba(104,193,250,.98),rgba(91,137,239,.98)) !important;
   filter:brightness(1.08);
   transform:translateY(-1px);
@@ -9294,6 +9296,14 @@ def _v12_render_sticker_basket_workspace():
             _basket_clear_pending = bool(
                 st.session_state.get("v12_basket_clear_confirmation_pending", False)
             )
+            if st.button(
+                "🔄 刷新暫存區",
+                key="v12_refresh_sticker_basket",
+                help="重新讀取暫存區的貼圖顯示；不會刪除任何暫存圖片。",
+                disabled=not bool(_v12_get_sticker_basket()),
+                use_container_width=True,
+            ):
+                st.rerun(scope="fragment")
             st.button(
                 t("basket_clear_confirm") if _basket_clear_pending else t("basket_clear"),
                 key=(
