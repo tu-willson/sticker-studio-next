@@ -1033,13 +1033,79 @@ def _save_v10_presets():
 # 舊版 v10_data/ 仍保留在專案中，作為備份資料，不由公開版讀寫。
 
 import streamlit.components.v1 as components
+import streamlit.components.v2 as components_v2
 
-# The crop editor needs to return the final guide coordinates to Python.
-# `components.html` is display-only, so use a small first-party Streamlit
-# component as a bridge instead of trying to navigate the enclosing page.
-_V12_CROP_GUIDES_COMPONENT = components.declare_component(
-    "v12_crop_guides",
-    path=str(Path(__file__).with_name("crop_guides_component")),
+# The crop editor needs to send its final guide coordinates back to Python.
+# Keep this bridge inline: the former v1, path-based component intermittently
+# failed to fetch its separately-served frontend file on the hosted app, which
+# left STEP 08 unavailable even though a generation had succeeded.
+_V12_CROP_GUIDES_COMPONENT = components_v2.component(
+    "v12_crop_guides_inline",
+    html='<div class="v12-crop-guides-root"><iframe title="Sticker crop guides"></iframe></div>',
+    css=(
+        ':host,.v12-crop-guides-root,.v12-crop-guides-root iframe'
+        '{display:block;width:100%;height:100%;margin:0;border:0;overflow:hidden}'
+    ),
+    js=r'''
+export default function(component) {
+  const { parentElement, data, setTriggerValue } = component;
+  const root = parentElement.querySelector('.v12-crop-guides-root') || parentElement;
+  let frame = root.querySelector('iframe');
+  if (!frame) {
+    frame = document.createElement('iframe');
+    frame.title = 'Sticker crop guides';
+    root.replaceChildren(frame);
+  }
+
+  const height = Math.max(420, Number(data.frameHeight) || 760);
+  root.style.height = `${height}px`;
+  frame.style.height = `${height}px`;
+
+  if (!root._v12CropBridgeReady) {
+    root._v12CropBridgeReady = true;
+    root._v12CropLatestHtml = '';
+    root._v12CropLastApplyToken = '';
+    root._v12CropOnMessage = event => {
+      const message = event.data || {};
+      if (
+        message.type === 'v12-crop-save'
+        && event.source === root._v12CropFrame?.contentWindow
+        && typeof message.value === 'string'
+      ) {
+        root._v12CropSetTrigger?.('save', message.value);
+      }
+    };
+    window.addEventListener('message', root._v12CropOnMessage);
+  }
+
+  root._v12CropFrame = frame;
+  root._v12CropSetTrigger = setTriggerValue;
+  const markup = String(data.html || '');
+  if (markup && markup !== root._v12CropLatestHtml) {
+    root._v12CropLatestHtml = markup;
+    frame.srcdoc = markup;
+  }
+
+  const applyToken = String(data.applyRequestToken || '');
+  if (applyToken && applyToken !== root._v12CropLastApplyToken) {
+    root._v12CropLastApplyToken = applyToken;
+    const deliver = () => frame.contentWindow?.postMessage(
+      { type: 'v12-crop-apply-current' }, '*'
+    );
+    deliver();
+    setTimeout(deliver, 120);
+    setTimeout(deliver, 450);
+  }
+
+  return () => {
+    if (root._v12CropOnMessage) {
+      window.removeEventListener('message', root._v12CropOnMessage);
+    }
+    root._v12CropBridgeReady = false;
+  };
+}
+''',
+    isolate_styles=False,
 )
 
 def _v11_clear_generation_state() -> None:
@@ -17538,15 +17604,17 @@ function saveBlob(blob,name){''',
         "__GRID_HASH__",
         hashlib.sha256(st.session_state.generated_4x2_bytes).hexdigest(),
     )
-    _crop_saved_value = _V12_CROP_GUIDES_COMPONENT(
-        html=_crop_html,
-        frame_height=760,
-        apply_request_token=str(
-            st.session_state.get("v12_crop_apply_request_token", "") or ""
-        ),
+    _crop_component_result = _V12_CROP_GUIDES_COMPONENT(
+        data={
+            "html": _crop_html,
+            "frameHeight": 760,
+            "applyRequestToken": str(
+                st.session_state.get("v12_crop_apply_request_token", "") or ""
+            ),
+        },
         key="v12_crop_guides_component",
-        default=None,
     )
+    _crop_saved_value = getattr(_crop_component_result, "save", None)
     if _crop_saved_value:
         try:
             _crop_saved_payload = (
