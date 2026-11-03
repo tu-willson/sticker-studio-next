@@ -16,6 +16,11 @@ class ExpressionModeTextToolsTests(unittest.TestCase):
             FRONTEND,
         )
 
+    def test_mode_choices_lock_during_server_handoff(self):
+        self.assertIn("let modeSwitching = false;", FRONTEND)
+        self.assertIn("if (modeSwitching || button.disabled) return;", FRONTEND)
+        self.assertIn("正在切換模式，請稍候", FRONTEND)
+
     def test_server_snapshot_maps_expression_mode(self):
         self.assertIn('payload.get("mode") == "expression"', APP)
         self.assertIn("V12_STICKER_EXPRESSION_MODE", APP)

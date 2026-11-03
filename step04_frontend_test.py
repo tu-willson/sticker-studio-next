@@ -23,6 +23,8 @@ EDITOR_CSS = r"""
 .s4-mode { min-height:40px; border:1px solid #526a86; border-radius:8px; cursor:pointer;
   background:rgba(29,43,64,.82); color:#d8e6f6; font-size:15px; font-weight:760; }
 .s4-mode.active { background:#ff5878; border-color:#ff7893; color:white; box-shadow:none; }
+.s4-mode:disabled { cursor:wait; opacity:.7; }
+.s4-mode-sync-notice { margin:-20px 16px 18px; color:#a9ddff; font-size:13px; font-weight:800; text-align:center; }
 .s4-heading { max-width:900px; margin:0 auto; padding:10px 16px; border:2px solid #279fe7; border-radius:11px; color:#f0f8ff;
   background:rgba(21,52,79,.46); font-size:20px; font-weight:850; text-align:center; }
 .s4-caption { color:#a9b9cd; margin:10px 0 22px; line-height:1.55; font-size:14px; }
@@ -158,6 +160,10 @@ export default function(component) {
     return base;
   };
   let state;
+  // Mode switching requires one Streamlit rerun because downstream controls
+  // are server-rendered. Keep both choices locked until that rerun replaces
+  // this component, so a quick second click cannot queue a conflicting mode.
+  let modeSwitching = false;
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
     // A loaded project (or a completed server action such as AI copywriting)
@@ -310,11 +316,12 @@ export default function(component) {
     root.innerHTML = `
       <div class="s4-shell">
         <div class="s4-mode-row">
-          <button class="s4-mode ${textMode ? 'active' : ''}" data-mode="text">${textMode ? '✓ ' : ''}💬 使用文字貼圖</button>
-          <button class="s4-mode ${!textMode ? 'active' : ''}" data-mode="expression">${!textMode ? '✓ ' : ''}😶 使用表情貼圖（無文字）</button>
+          <button class="s4-mode ${textMode ? 'active' : ''}" data-mode="text" ${modeSwitching ? 'disabled' : ''}>${textMode ? '✓ ' : ''}💬 使用文字貼圖</button>
+          <button class="s4-mode ${!textMode ? 'active' : ''}" data-mode="expression" ${modeSwitching ? 'disabled' : ''}>${!textMode ? '✓ ' : ''}😶 使用表情貼圖（無文字）</button>
         </div>
+        ${modeSwitching ? '<div class="s4-mode-sync-notice">⌛ 正在切換模式，請稍候…</div>' : ''}
         <div class="s4-heading">${textMode ? '💬 使用文字貼圖' : '😶 使用表情貼圖（無文字）'}</div>
-        ${textMode ? sourcePanel() : '<p class="s4-caption">切換模式與設定表情不會讀取頁面。回到文字模式後，先前的 01～08 文字仍會保留。</p>'}
+        ${textMode ? sourcePanel() : '<p class="s4-caption">切換模式時會短暫同步；設定表情不會讀取頁面。回到文字模式後，先前的 01～08 文字仍會保留。</p>'}
         <div class="s4-grid">${firstRow}</div>
         <div class="s4-row-divider"></div>
         <div class="s4-grid">${secondRow}</div>
@@ -406,12 +413,22 @@ export default function(component) {
       return;
     }
     if (button.dataset.mode) {
+      if (modeSwitching || button.disabled) return;
+      modeSwitching = true;
       state.mode = button.dataset.mode;
       save();
       // Mode controls more than this browser editor: the server decides which
       // downstream creation tools should exist.  Notify it immediately so
       // expression-only stickers do not leave the text/font controls visible.
+      render();
       setTriggerValue('event', {kind:'mode-change', state});
+      // A failed browser-to-server handoff should not leave both controls
+      // permanently locked. Successful handoffs replace this component first.
+      setTimeout(() => {
+        if (!modeSwitching) return;
+        modeSwitching = false;
+        render();
+      }, 8000);
       return;
     }
     if (button.dataset.action === 'generate-ai') {
