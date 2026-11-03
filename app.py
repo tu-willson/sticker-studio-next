@@ -7277,6 +7277,23 @@ def _beta_render_account_panel():
                 if credit_breakdown["marketplace_creator_reward_credits"]
                 else ""
             )
+            try:
+                copy_status = _beta_copy_usage_status_cached(session)
+                copy_quota_html = (
+                    '<div class="v12-credit-breakdown">✨ '
+                    + t(
+                        "copy_quota",
+                        remaining=copy_status["remaining_count"],
+                        limit=copy_status["daily_limit"],
+                    )
+                    + "</div>"
+                )
+            except Exception:
+                copy_quota_html = (
+                    '<p class="v12-credit-priority">✨ '
+                    + t("copy_quota_unavailable")
+                    + "</p>"
+                )
             st.markdown(
                 "<div class=\"v12-credit-breakdown\">"
                 + t(
@@ -7287,7 +7304,8 @@ def _beta_render_account_panel():
                 )
                 + marketplace_reward
                 + "</div>"
-                + f"<p class=\"v12-credit-priority\">{t('account_credit_priority')}</p>",
+                + f"<p class=\"v12-credit-priority\">{t('account_credit_priority')}</p>"
+                + copy_quota_html,
                 unsafe_allow_html=True,
             )
         except Exception:
@@ -7321,20 +7339,6 @@ def _beta_render_account_panel():
                     st.markdown("\n".join(rows))
         except Exception:
             pass
-        try:
-            copy_status = _beta_copy_usage_status_cached(session)
-            st.markdown(
-                '<div class="v12-credit-breakdown">'
-                + t(
-                    "copy_quota",
-                    remaining=copy_status["remaining_count"],
-                    limit=copy_status["daily_limit"],
-                )
-                + "</div>",
-                unsafe_allow_html=True,
-            )
-        except Exception:
-            st.caption(t("copy_quota_unavailable"))
         with st.container(key="v12_referral_redeem"):
             _beta_render_referral_redemption(session)
         if not _beta_site_openai_key():
