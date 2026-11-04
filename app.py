@@ -5208,7 +5208,10 @@ def _beta_new_login_url():
         {"p_state_digest": state_digest, "p_code_verifier": code_verifier},
     )
 
-    redirect_to = f"{_beta_site_url()}?{urllib.parse.urlencode({'oauth_state': state})}"
+    # Keep an explicit root slash before the query string.  Supabase matches
+    # redirect URLs against its allow-list path rules; using `/?...` works for
+    # both the production hostname and Cloud Run's `/**` test-site rule.
+    redirect_to = f"{_beta_site_url()}/?{urllib.parse.urlencode({'oauth_state': state})}"
     params = urllib.parse.urlencode(
         {
             "provider": "google",
