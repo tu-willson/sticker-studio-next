@@ -1481,16 +1481,26 @@ st.markdown("""
 .v12-inline-cloud-preview{
   width:100%;
   margin:0;
+  aspect-ratio:1 / 1;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
   line-height:0;
-  background:transparent;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
 }
 .v12-inline-cloud-preview img{
   display:block;
-  width:100%;
-  height:auto;
-  border:0;
-  border-radius:0;
-  background:transparent;
+  width:auto !important;
+  height:auto !important;
+  max-width:100% !important;
+  max-height:100% !important;
+  margin:0 auto !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
 }
 [class*="st-key-v12_basket_item_"] [data-testid="stCaptionContainer"]{
   margin:0 0 -.18rem !important;
