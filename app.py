@@ -3643,7 +3643,16 @@ def v12_mode_panel_heading(title, accent="#3498db"):
 # 由站方 API 服務已登入的會員。
 # ============================================================
 BETA_API_MODE = "✨ 會員登入（登入享 2 次）"
-BETA_SITE_URL = "https://sticker-studio-next.streamlit.app"
+BETA_DEFAULT_SITE_URL = "https://sticker-studio-next.streamlit.app"
+
+
+def _beta_site_url():
+    """Use the deployed origin for OAuth while preserving Community Cloud by default."""
+    try:
+        configured = str(st.secrets.get("SITE_URL", "") or "").strip().rstrip("/")
+    except Exception:
+        configured = ""
+    return configured or BETA_DEFAULT_SITE_URL
 
 
 def _beta_config():
@@ -5199,7 +5208,7 @@ def _beta_new_login_url():
         {"p_state_digest": state_digest, "p_code_verifier": code_verifier},
     )
 
-    redirect_to = f"{BETA_SITE_URL}?{urllib.parse.urlencode({'oauth_state': state})}"
+    redirect_to = f"{_beta_site_url()}?{urllib.parse.urlencode({'oauth_state': state})}"
     params = urllib.parse.urlencode(
         {
             "provider": "google",

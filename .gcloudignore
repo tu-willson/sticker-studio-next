@@ -1,0 +1,15 @@
+# Keep Cloud Build uploads small and never include local credentials or media.
+.gcloudignore
+.git
+.gitignore
+.streamlit/secrets.toml
+__pycache__/
+*.py[cod]
+*.mp4
+*.zip
+documents/
+output/
+promo_*/
+tmp/
+tools/
+video_review_*.jpg
