@@ -1136,23 +1136,36 @@ def _v11_clear_generation_state() -> None:
 
 
 def _v12_recover_generation_ui_callback() -> None:
-    """Recover the local STEP 06 button if validation stopped a browser submit.
-
-    This never cancels a server-side generation or removes any creation input.
-    Its purpose is to remount the browser-side submit control after an early
-    validation stop (for example, missing photo or all text slots empty).
-    """
-    # 生成中的作業由本機鎖與後端 reservation 管理；此按鈕只能修復
-    # 未真正建立作業時遺留的前端 disabled，絕不能中斷有效生成。
+    """Recover a local submit state or a safely stale server reservation."""
+    # 同一頁仍在執行 AI 時，絕不能讓使用者中斷真正有效的作業。
     if bool(st.session_state.get("v11_generation_pending", False)) or bool(
         st.session_state.get("v11_generation_in_progress", False)
     ):
         st.session_state["v12_generation_recovery_blocked"] = True
         return
+
+    recovery_feedback = "local"
+    session = _beta_current_user()
+    if session:
+        try:
+            recovery = _beta_recover_stale_generation(session)
+        except Exception:
+            st.session_state["v12_generation_recovery_error"] = True
+            return
+        reason = str(recovery.get("reason", "") or "")
+        if reason == "too_recent":
+            st.session_state["v12_generation_recovery_wait_seconds"] = max(
+                1, int(recovery.get("seconds_remaining", 0) or 0)
+            )
+            return
+        if bool(recovery.get("recovered", False)):
+            recovery_feedback = "stale_released"
+
     _v11_clear_generation_state()
     for _key in (
         "v11_generation_started_at",
         "v11_generation_release_feedback",
+        "beta_generation_job_id",
         "v12_generation_creator_reel_project_snapshot",
         "v12_generation_creator_reel_prompt",
     ):
@@ -1160,7 +1173,7 @@ def _v12_recover_generation_ui_callback() -> None:
     st.session_state["v12_frontend_generate_reset_revision"] = (
         int(st.session_state.get("v12_frontend_generate_reset_revision", 0) or 0) + 1
     )
-    st.session_state["v12_generation_recovery_feedback"] = True
+    st.session_state["v12_generation_recovery_feedback"] = recovery_feedback
 
 
 def _v11_user_error_message(exc: Exception) -> str:
@@ -1853,6 +1866,13 @@ div[class*="st-key-v12_basket_download_"] button{
   background:color-mix(in srgb,#64748b 7%, transparent);
   font-size:.96rem;
   line-height:1.55;
+}
+.v12-generation-recovery-tip{
+  display:block;
+  margin-top:.28rem;
+  color:#ffd38b;
+  font-size:.91em;
+  font-weight:780;
 }
 .v12-text-generation-reminder{
   border-color:rgba(255,209,102,.72);
@@ -5628,6 +5648,47 @@ def _beta_finish_generation(session, job_id, failure_code=None):
     if failure_code:
         payload["p_failure_code"] = str(failure_code)[:80]
     return _beta_rpc(function_name, payload, access_token=session["access_token"])
+
+
+def _beta_get_generation_recovery_status(session):
+    """Read whether this member has a server-side generation lock to recover."""
+    response = _beta_rpc(
+        "get_my_generation_recovery_status",
+        {},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("generation_recovery_status_invalid")
+    return {
+        "has_reserved": bool(response.get("has_reserved", False)),
+        "can_recover": bool(response.get("can_recover", False)),
+        "seconds_remaining": max(
+            0, int(response.get("seconds_remaining", 0) or 0)
+        ),
+    }
+
+
+def _beta_recover_stale_generation(session):
+    """Release only the caller's own reservation after the five-minute grace."""
+    response = _beta_rpc(
+        "recover_my_stale_generation",
+        {},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    if not isinstance(response, dict):
+        raise RuntimeError("generation_recovery_invalid")
+    return {
+        "recovered": bool(response.get("recovered", False)),
+        "reason": str(response.get("reason", "") or ""),
+        "seconds_remaining": max(
+            0, int(response.get("seconds_remaining", 0) or 0)
+        ),
+        "balance": max(0, int(response.get("balance", 0) or 0)),
+    }
 
 
 def _beta_record_operational_event(session, event_type, outcome="succeeded",
@@ -17180,11 +17241,37 @@ st.session_state.setdefault("v12_frontend_generate_reset_revision", 0)
 
 _generation_pending = bool(st.session_state.get("v11_generation_pending", False))
 _generation_in_progress = bool(st.session_state.get("v11_generation_in_progress", False))
-_generation_locked = _generation_pending or _generation_in_progress
+_generation_local_locked = _generation_pending or _generation_in_progress
+_generation_recovery_status = {
+    "has_reserved": False,
+    "can_recover": False,
+    "seconds_remaining": 0,
+}
+if not _generation_local_locked:
+    try:
+        _recovery_status_session = _beta_current_user()
+        if _recovery_status_session:
+            _generation_recovery_status = _beta_get_generation_recovery_status(
+                _recovery_status_session
+            )
+    except Exception:
+        # A temporary status lookup failure must never block a normal creation.
+        pass
+_generation_backend_locked = bool(_generation_recovery_status["has_reserved"])
+_generation_locked = _generation_local_locked or _generation_backend_locked
 _generation_feedback = st.session_state.pop("v11_generation_release_feedback", None)
-_generation_recovered = bool(st.session_state.pop("v12_generation_recovery_feedback", False))
+_generation_recovery_feedback = str(
+    st.session_state.pop("v12_generation_recovery_feedback", "") or ""
+)
 _generation_recovery_blocked = bool(
     st.session_state.pop("v12_generation_recovery_blocked", False)
+)
+_generation_recovery_error = bool(
+    st.session_state.pop("v12_generation_recovery_error", False)
+)
+_generation_recovery_wait_seconds = max(
+    0,
+    int(st.session_state.pop("v12_generation_recovery_wait_seconds", 0) or 0),
 )
 
 # ------------------------------------------------------------
@@ -17225,19 +17312,40 @@ else:
         key="v11_generate_4x2",
     )
 
-# 一律保留此按鈕，因為前端送出元件可能在缺少必要資料時自行停在 disabled；
-# 已建立的生成作業則必須維持鎖定，不能讓它介入。
+# 此按鈕預設保持鎖定。只有系統查到本人確實有一筆超過五分鐘、
+# 仍未完成的後端生成作業時才開放，以免被用作任意退點工具。
 with st.container(key="v12_recover_generate_state"):
     _recover_left, _recover_center, _recover_right = st.columns([2.2, 1.6, 2.2])
     with _recover_center:
+        _recovery_wait_seconds = int(
+            _generation_recovery_status.get("seconds_remaining", 0) or 0
+        )
+        _recovery_has_waiting_job = bool(
+            _generation_recovery_status.get("has_reserved", False)
+        ) and not bool(_generation_recovery_status.get("can_recover", False))
+        _recovery_can_release = bool(
+            _generation_recovery_status.get("has_reserved", False)
+        ) and bool(_generation_recovery_status.get("can_recover", False))
+        _recovery_help = (
+            "只有系統確認存在超過 5 分鐘未完成的生成時，才可解除鎖定並退回本次生成點數。"
+        )
+        if _generation_local_locked:
+            _recovery_help = "此頁正在生成中，為避免中斷有效作業，暫時不能回復。"
+        elif _recovery_has_waiting_job:
+            _recovery_help = "生成開始未滿 5 分鐘，為避免中斷有效作業，暫時不能回復。"
         st.button(
             "↩️ 回復未生成狀態",
             key="v12_recover_generate_state_button",
-            help="只解除卡住的「正在準備生成」按鈕；不會清除照片、文字或其他設定。",
+            help=_recovery_help,
             on_click=_v12_recover_generation_ui_callback,
             use_container_width=True,
-            disabled=_generation_locked,
+            disabled=not _recovery_can_release,
         )
+        if _recovery_has_waiting_job:
+            _wait_minutes, _wait_seconds = divmod(_recovery_wait_seconds, 60)
+            st.caption(
+                f"⏳ 正在生成中，約 {_wait_minutes} 分 {_wait_seconds:02d} 秒後可回復。"
+            )
 
 if _generate_clicked:
     if not _text_only_generation and not st.session_state.uploaded_image_bytes:
@@ -17309,10 +17417,19 @@ if isinstance(_generation_feedback, dict):
         st.success("🎉 生成完成，現在可以再次生成，或前往下方確認成果。")
     else:
         st.error("❌ 這次生成未完成，現在可以立即重新嘗試。")
-if _generation_recovered:
+if _generation_recovery_feedback == "stale_released":
+    st.success("↩️ 已解除超過 5 分鐘未完成的生成作業，已退回本次生成點數；照片、文字與其他創作設定都已保留。")
+elif _generation_recovery_feedback == "local":
     st.info("↩️ 已回復未生成狀態；照片、文字與其他創作設定都已保留。")
 if _generation_recovery_blocked:
     st.info("🔒 圖片仍在生成中，為避免影響本次作業，暫時不能回復未生成狀態。")
+if _generation_recovery_wait_seconds:
+    _wait_minutes, _wait_seconds = divmod(_generation_recovery_wait_seconds, 60)
+    st.info(
+        f"🔒 圖片仍在生成中，請在 {_wait_minutes} 分 {_wait_seconds:02d} 秒後再回復。"
+    )
+if _generation_recovery_error:
+    st.warning("目前無法確認逾時生成作業，為避免誤退點，請稍後再試。")
 
 # ------------------------------------------------------------
 # 第二階段：只有 pending lock 存在時才進入真正生成。
