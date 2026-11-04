@@ -1480,20 +1480,17 @@ st.markdown("""
    /media 網址在重新整理或切換執行個體後失效。 */
 .v12-inline-cloud-preview{
   width:100%;
-  aspect-ratio:1 / 1;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  overflow:hidden;
-  border:1px solid rgba(210,225,244,.22);
-  border-radius:11px;
-  background:rgba(8,15,28,.42);
+  margin:0;
+  line-height:0;
+  background:transparent;
 }
 .v12-inline-cloud-preview img{
   display:block;
   width:100%;
-  height:100%;
-  object-fit:contain;
+  height:auto;
+  border:0;
+  border-radius:0;
+  background:transparent;
 }
 [class*="st-key-v12_basket_item_"] [data-testid="stCaptionContainer"]{
   margin:0 0 -.18rem !important;
