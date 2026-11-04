@@ -1476,8 +1476,8 @@ st.markdown("""
   height:100%;
   object-fit:contain;
 }
-/* 雲端作品預覽也直接嵌入頁面資料，避免 Cloud Run / Streamlit 的暫存
-   /media 網址在重新整理或切換執行個體後失效。 */
+/* 雲端作品、創作膠卷與市集預覽直接嵌入頁面資料，避免 Cloud Run /
+   Streamlit 的暫存 /media 網址在重新整理或切換執行個體後失效。 */
 .v12-inline-cloud-preview{
   width:100%;
   margin:0;
@@ -4875,7 +4875,7 @@ def _v12_inline_basket_thumbnail_html(image_or_bytes, alt_text=""):
 
 
 def _v12_inline_cloud_preview_html(image_or_bytes, alt_text=""):
-    """Render a cloud-project preview from persistent bytes, not /media URLs."""
+    """Render a persistent cloud/reel preview from bytes, not /media URLs."""
     image = image_or_bytes
     if not isinstance(image, Image.Image):
         image = Image.open(BytesIO(bytes(image_or_bytes)))
@@ -10574,13 +10574,16 @@ def _v12_render_shared_template_manager(session):
                     preview_path = str(template.get("preview_path", "") or "")
                     if preview_path:
                         try:
-                            st.image(
-                                _beta_storage_download(
-                                    session,
-                                    preview_path,
-                                    bucket="shared-template-assets",
-                                ),
-                                width=200,
+                                st.markdown(
+                                    _v12_inline_cloud_preview_html(
+                                        _beta_storage_download(
+                                            session,
+                                            preview_path,
+                                            bucket="shared-template-assets",
+                                        ),
+                                        t("shared_template_preview_caption"),
+                                    ),
+                                    unsafe_allow_html=True,
                             )
                         except Exception:
                             st.caption(t("shared_template_preview_unavailable"))
@@ -10974,14 +10977,17 @@ def _v12_render_creator_reels(session, shelf="active"):
         left, right = st.columns([1.1, 2.2], vertical_alignment="top")
         with left:
             try:
-                st.image(
-                    _beta_storage_download(
-                        session, str(reel.get("grid_path", "") or ""),
-                        bucket="creator-reels",
+                st.markdown(
+                    _v12_inline_cloud_preview_html(
+                        _beta_storage_download(
+                            session, str(reel.get("grid_path", "") or ""),
+                            bucket="creator-reels",
+                        ),
+                        t("creator_reel_grid_caption"),
                     ),
-                    caption=t("creator_reel_grid_caption"),
-                    use_container_width=True,
+                    unsafe_allow_html=True,
                 )
+                st.caption(t("creator_reel_grid_caption"))
             except Exception:
                 st.info(t("creator_reel_preview_unavailable"))
             if (
@@ -11495,13 +11501,18 @@ def _v12_render_unlocked_template_shelf(session):
         with left:
             try:
                 if preview_path:
-                    st.image(
-                        _beta_storage_download(
-                            session, preview_path, bucket="shared-template-assets"
+                    st.markdown(
+                        _v12_inline_cloud_preview_html(
+                            _beta_storage_download(
+                                session,
+                                preview_path,
+                                bucket="shared-template-assets",
+                            ),
+                            t("shared_template_preview_caption"),
                         ),
-                        caption=t("shared_template_preview_caption"),
-                        use_container_width=True,
+                        unsafe_allow_html=True,
                     )
+                    st.caption(t("shared_template_preview_caption"))
             except Exception:
                 st.caption(t("shared_template_preview_unavailable"))
         with right:
@@ -11738,13 +11749,18 @@ def _v12_render_shared_template_marketplace(session):
         with left:
             try:
                 if preview_path:
-                    st.image(
-                        _beta_storage_download(
-                            session, preview_path, bucket="shared-template-assets"
+                    st.markdown(
+                        _v12_inline_cloud_preview_html(
+                            _beta_storage_download(
+                                session,
+                                preview_path,
+                                bucket="shared-template-assets",
+                            ),
+                            t("shared_template_preview_caption"),
                         ),
-                        caption=t("shared_template_preview_caption"),
-                        use_container_width=True,
+                        unsafe_allow_html=True,
                     )
+                    st.caption(t("shared_template_preview_caption"))
             except Exception:
                 st.info(t("shared_template_preview_unavailable"))
         with right:
