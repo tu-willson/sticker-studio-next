@@ -1476,6 +1476,25 @@ st.markdown("""
   height:100%;
   object-fit:contain;
 }
+/* 雲端作品預覽也直接嵌入頁面資料，避免 Cloud Run / Streamlit 的暫存
+   /media 網址在重新整理或切換執行個體後失效。 */
+.v12-inline-cloud-preview{
+  width:100%;
+  aspect-ratio:1 / 1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border:1px solid rgba(210,225,244,.22);
+  border-radius:11px;
+  background:rgba(8,15,28,.42);
+}
+.v12-inline-cloud-preview img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
 [class*="st-key-v12_basket_item_"] [data-testid="stCaptionContainer"]{
   margin:0 0 -.18rem !important;
 }
@@ -4843,6 +4862,25 @@ def _v12_inline_basket_thumbnail_html(image_or_bytes, alt_text=""):
     safe_alt_text = html.escape(str(alt_text or "貼圖暫存區縮圖"), quote=True)
     return (
         '<div class="v12-inline-basket-thumbnail">'
+        f'<img src="data:image/webp;base64,{preview_b64}" alt="{safe_alt_text}" />'
+        '</div>'
+    )
+
+
+def _v12_inline_cloud_preview_html(image_or_bytes, alt_text=""):
+    """Render a cloud-project preview from persistent bytes, not /media URLs."""
+    image = image_or_bytes
+    if not isinstance(image, Image.Image):
+        image = Image.open(BytesIO(bytes(image_or_bytes)))
+    image = image.convert("RGBA")
+    resampling = getattr(Image, "Resampling", Image)
+    image.thumbnail((480, 480), resampling.LANCZOS)
+    preview_b64 = base64.b64encode(
+        _v12_webp_bytes(image, quality=76, method=4)
+    ).decode("ascii")
+    safe_alt_text = html.escape(str(alt_text or "雲端預覽圖"), quote=True)
+    return (
+        '<div class="v12-inline-cloud-preview">'
         f'<img src="data:image/webp;base64,{preview_b64}" alt="{safe_alt_text}" />'
         '</div>'
     )
@@ -14762,10 +14800,14 @@ if st.session_state["v12_view"] == "library":
                 _cloud_left, _cloud_right = st.columns([1, 2.4], vertical_alignment="top")
                 with _cloud_left:
                     try:
-                        st.image(
-                            _beta_storage_download(_cloud_session, _cloud_project.get("preview_path", "")),
-                            caption=t("cloud_preview"),
-                            use_container_width=True,
+                        _cloud_preview_bytes = _beta_storage_download(
+                            _cloud_session, _cloud_project.get("preview_path", "")
+                        )
+                        st.markdown(
+                            _v12_inline_cloud_preview_html(
+                                _cloud_preview_bytes, t("cloud_preview")
+                            ),
+                            unsafe_allow_html=True,
                         )
                     except Exception:
                         st.info(t("preview_unavailable"))
