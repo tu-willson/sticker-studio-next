@@ -1502,6 +1502,31 @@ st.markdown("""
   border-radius:0 !important;
   background:transparent !important;
 }
+/* STEP 07 的 4×2 原始總圖必須維持原始比例；不要沿用上方正方形卡片
+   的預覽容器，否則會產生不必要的留白。 */
+.v12-inline-generated-grid-preview{
+  width:100%;
+  margin:0;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  line-height:0;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+}
+.v12-inline-generated-grid-preview img{
+  display:block;
+  width:auto !important;
+  height:auto !important;
+  max-width:100% !important;
+  max-height:800px !important;
+  margin:0 auto !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+}
 [class*="st-key-v12_basket_item_"] [data-testid="stCaptionContainer"]{
   margin:0 0 -.18rem !important;
 }
@@ -4888,6 +4913,25 @@ def _v12_inline_cloud_preview_html(image_or_bytes, alt_text=""):
     safe_alt_text = html.escape(str(alt_text or "雲端預覽圖"), quote=True)
     return (
         '<div class="v12-inline-cloud-preview">'
+        f'<img src="data:image/webp;base64,{preview_b64}" alt="{safe_alt_text}" />'
+        '</div>'
+    )
+
+
+def _v12_inline_generated_grid_preview_html(image_or_bytes, alt_text=""):
+    """Render the current 4×2 output inline so it survives /media URL loss."""
+    image = image_or_bytes
+    if not isinstance(image, Image.Image):
+        image = Image.open(BytesIO(bytes(image_or_bytes)))
+    image = image.convert("RGBA")
+    resampling = getattr(Image, "Resampling", Image)
+    image.thumbnail((1200, 800), resampling.LANCZOS)
+    preview_b64 = base64.b64encode(
+        _v12_webp_bytes(image, quality=84, method=4)
+    ).decode("ascii")
+    safe_alt_text = html.escape(str(alt_text or "原始 4×2 圖片"), quote=True)
+    return (
+        '<div class="v12-inline-generated-grid-preview">'
         f'<img src="data:image/webp;base64,{preview_b64}" alt="{safe_alt_text}" />'
         '</div>'
     )
@@ -17644,11 +17688,14 @@ if st.session_state.generated_4x2_bytes:
     v10_subsection(t("crop_original"), "#32c6c0")
     _orig_left, _orig_center, _orig_right = st.columns([1, 5, 1])
     with _orig_center:
-        st.image(
-            st.session_state.generated_4x2_bytes,
-            caption=t("crop_original_caption", width=w, height=h),
-            use_container_width=True,
+        st.markdown(
+            _v12_inline_generated_grid_preview_html(
+                st.session_state.generated_4x2_bytes,
+                t("crop_original_caption", width=w, height=h),
+            ),
+            unsafe_allow_html=True,
         )
+        st.caption(t("crop_original_caption", width=w, height=h))
 
     st.divider()
     v10_section(t("section_crop"), "#e74c3c")
