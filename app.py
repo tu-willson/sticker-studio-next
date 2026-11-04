@@ -7500,6 +7500,21 @@ def _beta_render_account_panel():
     )
 
     login_url = str(st.session_state.get("beta_pending_login_url", "") or "")
+    # A Streamlit browser session can survive a Cloud Run revision rollout.
+    # Do not reuse an OAuth URL made by an earlier revision if its redirect
+    # origin/path does not match the currently running site.
+    expected_redirect_prefix = f"{_beta_site_url()}/?oauth_state="
+    if login_url:
+        try:
+            stored_redirect = str(
+                urllib.parse.parse_qs(urllib.parse.urlparse(login_url).query)
+                .get("redirect_to", [""])[0]
+            )
+        except Exception:
+            stored_redirect = ""
+        if not stored_redirect.startswith(expected_redirect_prefix):
+            st.session_state.pop("beta_pending_login_url", None)
+            login_url = ""
     if not login_url:
         try:
             login_url = _beta_new_login_url()
