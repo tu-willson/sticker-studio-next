@@ -51,6 +51,13 @@ jobs:
               exit 1
               ;;
           esac
+          if [[ "$PERF_LAB_DB_URL" == *"sslmode="* ]]; then
+            echo "PERF_LAB_REMOTE_URL=$PERF_LAB_DB_URL" >> "$GITHUB_ENV"
+          elif [[ "$PERF_LAB_DB_URL" == *"?"* ]]; then
+            echo "PERF_LAB_REMOTE_URL=${PERF_LAB_DB_URL}&sslmode=require" >> "$GITHUB_ENV"
+          else
+            echo "PERF_LAB_REMOTE_URL=${PERF_LAB_DB_URL}?sslmode=require" >> "$GITHUB_ENV"
+          fi
 
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v3
@@ -58,7 +65,7 @@ jobs:
           version: latest
 
       - name: Preview pending migrations
-        run: supabase db push --yes --remote="$PERF_LAB_DB_URL" --dry-run
+        run: supabase db push --yes --remote="$PERF_LAB_REMOTE_URL" --dry-run
 
       - name: Apply pending migrations
-        run: supabase db push --yes --remote="$PERF_LAB_DB_URL"
+        run: supabase db push --yes --remote="$PERF_LAB_REMOTE_URL"
