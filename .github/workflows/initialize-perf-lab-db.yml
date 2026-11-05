@@ -24,7 +24,7 @@ jobs:
       (github.event_name == 'push' && github.ref == 'refs/heads/perf-lab')
     runs-on: ubuntu-latest
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PERF_LAB_DB_URL: ${{ secrets.PERF_LAB_DB_URL }}
       SUPABASE_DB_PASSWORD: ${{ secrets.PERF_LAB_DB_PASSWORD }}
       PERF_LAB_PROJECT_REF: kvistqhcphsalxdlnhxw
     steps:
@@ -36,14 +36,21 @@ jobs:
       - name: Validate isolated target
         shell: bash
         run: |
-          test -n "$SUPABASE_ACCESS_TOKEN" || {
-            echo "Missing SUPABASE_ACCESS_TOKEN repository secret." >&2
+          test -n "$PERF_LAB_DB_URL" || {
+            echo "Missing PERF_LAB_DB_URL repository secret." >&2
             exit 1
           }
           test -n "$SUPABASE_DB_PASSWORD" || {
             echo "Missing PERF_LAB_DB_PASSWORD repository secret." >&2
             exit 1
           }
+          case "$PERF_LAB_DB_URL" in
+            *"$PERF_LAB_PROJECT_REF"*) ;;
+            *)
+              echo "The pooler URL does not point to the isolated Performance Lab project." >&2
+              exit 1
+              ;;
+          esac
 
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v3
@@ -51,7 +58,7 @@ jobs:
           version: latest
 
       - name: Preview pending migrations
-        run: supabase db push --yes --remote="$PERF_LAB_PROJECT_REF" --dry-run
+        run: supabase db push --yes --remote="$PERF_LAB_DB_URL" --dry-run
 
       - name: Apply pending migrations
-        run: supabase db push --yes --remote="$PERF_LAB_PROJECT_REF"
+        run: supabase db push --yes --remote="$PERF_LAB_DB_URL"
