@@ -14989,6 +14989,47 @@ def _v12_capture_style_reference_details_draft():
     )
 
 
+def _v12_creation_readiness_messages():
+    """Return the user-facing checks that remain after one full settings apply."""
+    messages = []
+    text_only = bool(st.session_state.get("v12_use_text_only_style", False))
+    sticker_mode = _v12_sticker_mode_value()
+    has_person_photo = bool(st.session_state.get("uploaded_image_bytes"))
+    uses_style_reference = (
+        str(st.session_state.get("v12_style_source_mode", "") or "")
+        == V12_STYLE_REFERENCE_MODE
+    )
+    has_style_reference = bool(
+        st.session_state.get("v12_style_reference_image_bytes")
+    )
+    texts = [str(item or "").strip() for item in get_texts()]
+
+    if not text_only and not has_person_photo:
+        messages.append("尚未上傳人物照片：請先回到 STEP 01 上傳人物照片。")
+
+    # Pure-text mode forces this source internally but keeps the reference
+    # image optional.  Only warn when the member explicitly selected
+    # 「畫風參考上傳」 for a photo-based creation.
+    if not text_only and uses_style_reference and not has_style_reference:
+        messages.append(
+            "已選擇「畫風參考上傳」，但尚未上傳參考圖：請上傳畫風圖片，或改用「貼圖風格快選」。"
+        )
+
+    if text_only:
+        missing_slots = [str(index + 1).zfill(2) for index, value in enumerate(texts) if not value]
+        if missing_slots:
+            messages.append(
+                "已啟用「純文字設計（無人物）」：請填滿 8 格文字後再生成"
+                f"（尚未填寫：{'、'.join(missing_slots)}）。"
+            )
+    elif sticker_mode == "text" and not any(texts):
+        messages.append(
+            "目前是一般照片文字貼圖模式：請至少填寫 1 格貼圖文字後再生成。"
+        )
+
+    return messages
+
+
 def _v12_commit_all_creation_settings():
     """Atomically commit the deferred STEP 02, 03 and 05 settings."""
     _v12_capture_style_reference_details_draft()
@@ -16854,6 +16895,9 @@ if isinstance(_v12_apply_all_settings_result, dict):
         if isinstance(_v12_apply_state, dict):
             _v12_apply_step04_frontend_snapshot(_v12_apply_state)
         _v12_apply_saved = _v12_commit_all_creation_settings()
+        st.session_state["v12_apply_all_settings_readiness_messages"] = (
+            _v12_creation_readiness_messages()
+        )
         st.session_state["v12_apply_all_settings_notice"] = (
             "success" if _v12_apply_saved else "local_only"
         )
@@ -16871,6 +16915,18 @@ elif _v12_apply_notice == "local_only":
     st.warning("設定已套用到本次生成，但雲端偏好同步未完成；請稍後再試。")
 elif _v12_apply_notice == "locked_generation":
     st.info("🔒 圖片生成中，設定已鎖定；請等本次生成結束後再修改並套用。")
+_v12_apply_readiness_messages = st.session_state.pop(
+    "v12_apply_all_settings_readiness_messages", []
+)
+if isinstance(_v12_apply_readiness_messages, list) and _v12_apply_readiness_messages:
+    st.warning(
+        "⚠️ 生成前請完成下列項目：\n\n"
+        + "\n".join(
+            f"- {str(message)}" for message in _v12_apply_readiness_messages
+        )
+    )
+elif _v12_apply_notice == "success":
+    st.caption("✅ 生成前檢查完成：可前往 STEP 06 生成貼圖。")
 
 with st.container(key="v12_project_name_top"):
     _v12_project_name_initial = _v12_normalize_project_name(
