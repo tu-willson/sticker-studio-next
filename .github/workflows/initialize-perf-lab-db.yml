@@ -24,7 +24,6 @@ jobs:
       (github.event_name == 'push' && github.ref == 'refs/heads/perf-lab')
     runs-on: ubuntu-latest
     env:
-      PERF_LAB_DB_URL: ${{ secrets.PERF_LAB_DB_URL }}
       SUPABASE_DB_PASSWORD: ${{ secrets.PERF_LAB_DB_PASSWORD }}
       PERF_LAB_PROJECT_REF: kvistqhcphsalxdlnhxw
     steps:
@@ -36,35 +35,22 @@ jobs:
       - name: Validate isolated target
         shell: bash
         run: |
-          test -n "$PERF_LAB_DB_URL" || {
-            echo "Missing PERF_LAB_DB_URL repository secret." >&2
-            exit 1
-          }
           test -n "$SUPABASE_DB_PASSWORD" || {
             echo "Missing PERF_LAB_DB_PASSWORD repository secret." >&2
             exit 1
           }
-          case "$PERF_LAB_DB_URL" in
-            *"$PERF_LAB_PROJECT_REF"*) ;;
-            *)
-              echo "The pooler URL does not point to the isolated Performance Lab project." >&2
-              exit 1
-              ;;
-          esac
           python - <<'PY'
           import os
           from urllib.parse import quote
 
-          url = os.environ["PERF_LAB_DB_URL"]
           password = os.environ["SUPABASE_DB_PASSWORD"]
-          placeholder = "[YOUR-PASSWORD]"
-          if placeholder not in url:
-              raise SystemExit(
-                  "PERF_LAB_DB_URL must retain the [YOUR-PASSWORD] placeholder."
-              )
-          remote_url = url.replace(placeholder, quote(password, safe=""))
-          if "sslmode=" not in remote_url:
-              remote_url += "&sslmode=require" if "?" in remote_url else "?sslmode=require"
+          project_ref = os.environ["PERF_LAB_PROJECT_REF"]
+          # This project is in ap-southeast-2. Construct the Session pooler
+          # URI here so user-entered connection strings cannot be malformed.
+          remote_url = (
+              f"postgresql://postgres.{project_ref}:{quote(password, safe='')}"
+              "@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres?sslmode=require"
+          )
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
               env_file.write(f"PERF_LAB_REMOTE_URL={remote_url}\\n")
           PY
