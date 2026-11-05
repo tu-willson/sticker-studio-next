@@ -15606,6 +15606,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                             st.image(str(path), use_container_width=True)
                         else:
                             st.info("縮圖準備中")
+                        st.caption(("✅ " if active_style == name else "") + name)
                         if st.button(("✅ " if active_style == name else "") + name,
                             key=f"v12_style_card_pick_{name}", use_container_width=True,
                             type="primary" if active_style == name else "secondary"):
@@ -16796,6 +16797,7 @@ def _v12_render_deferred_outline_gallery():
                             st.image(str(path), use_container_width=True)
                         else:
                             st.info("縮圖準備中")
+                    st.caption(("✅ " if active_outline == name else "") + _v12_localized_option(name, V12_TEXT_OUTLINE_LABELS))
                     if st.button(("✅ " if active_outline == name else "") + _v12_localized_option(name, V12_TEXT_OUTLINE_LABELS),
                         key=f"v12_outline_card_pick_{name}", use_container_width=True,
                         type="primary" if active_outline == name else "secondary"):
@@ -16930,6 +16932,7 @@ if _v12_deferred_font_gallery:
                     continue
                 with cols[index % 4]:
                     st.image(str(path), use_container_width=True)
+                    st.caption(f"{font_no:03d}")
                     if st.button(f"{font_no:03d}", key=f"font_card_pick_{font_no}",
                         use_container_width=True):
                         st.session_state["v12_font_gallery_pending_pick"] = font_no
