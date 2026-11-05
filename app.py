@@ -3334,6 +3334,22 @@ div[data-testid="stExpander"]{
   margin-left:auto !important;
   margin-right:auto !important;
 }
+
+/* 效能測試版｜手機模式使用同一份創作設定，只改為單欄與大觸控目標。 */
+.st-key-v12_layout_mode_switch{width:min(720px,100%);margin:.45rem auto .25rem !important;padding:.7rem .85rem .6rem;border:1px solid rgba(112,185,237,.44);border-radius:14px;background:rgba(17,39,66,.52);box-shadow:0 8px 20px rgba(3,11,29,.13);}
+.v12-layout-mode-title{color:#d9efff;font-size:.95rem;font-weight:850;text-align:center;letter-spacing:.04em;margin:0 0 .35rem;}
+.st-key-v12_layout_mode_switch [role="radiogroup"]{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem;}
+.st-key-v12_layout_mode_switch [role="radiogroup"] label{min-height:42px;justify-content:center;margin:0 !important;padding:.5rem .75rem;border:1px solid rgba(137,194,239,.42);border-radius:10px;background:rgba(41,79,115,.38);color:#e9f6ff;font-weight:800;}
+.v12-mobile-layout-notice{width:min(720px,100%);margin:.15rem auto .6rem;padding:.56rem .8rem;box-sizing:border-box;border:1px solid rgba(133,219,203,.48);border-radius:10px;color:#d8fff4;background:rgba(33,116,104,.28);font-size:.88rem;font-weight:720;text-align:center;}
+body:has(.v12-mobile-layout-marker) .block-container{max-width:720px !important;padding-left:clamp(.75rem,3vw,1.2rem) !important;padding-right:clamp(.75rem,3vw,1.2rem) !important;}
+body:has(.v12-mobile-layout-marker) .v12-journey-steps{grid-template-columns:repeat(2,minmax(0,1fr));gap:.48rem;}
+body:has(.v12-mobile-layout-marker) .v12-journey-step{padding:.52rem .3rem;}
+body:has(.v12-mobile-layout-marker) div[data-testid="stButton"] button{min-height:48px !important;font-size:1rem !important;}
+body:has(.v12-mobile-layout-marker) div[data-testid="stTextInput"] input,body:has(.v12-mobile-layout-marker) div[data-testid="stTextArea"] textarea,body:has(.v12-mobile-layout-marker) div[data-testid="stSelectbox"] [data-baseweb="select"]{min-height:46px;font-size:1rem;}
+body:has(.v12-mobile-layout-marker) .st-key-v12_style_mode_toggles [data-testid="stHorizontalBlock"],body:has(.v12-mobile-layout-marker) .st-key-v12_style_source_mode_switch [data-testid="stHorizontalBlock"],body:has(.v12-mobile-layout-marker) .st-key-v12_style_reference_layout [data-testid="stHorizontalBlock"]{flex-direction:column !important;gap:.65rem !important;}
+body:has(.v12-mobile-layout-marker) .st-key-v12_style_mode_toggles [data-testid="stColumn"],body:has(.v12-mobile-layout-marker) .st-key-v12_style_source_mode_switch [data-testid="stColumn"],body:has(.v12-mobile-layout-marker) .st-key-v12_style_reference_layout [data-testid="stColumn"]{flex:1 1 100% !important;width:100% !important;min-width:0 !important;}
+body:has(.v12-mobile-layout-marker) .st-key-v12_style_card_grid [data-testid="stHorizontalBlock"],body:has(.v12-mobile-layout-marker) .st-key-v12_outline_card_grid [data-testid="stHorizontalBlock"],body:has(.v12-mobile-layout-marker) .st-key-v12_font_card_grid [data-testid="stHorizontalBlock"]{flex-direction:row !important;flex-wrap:wrap !important;gap:9px !important;align-items:flex-start !important;}
+body:has(.v12-mobile-layout-marker) .st-key-v12_style_card_grid [data-testid="stColumn"],body:has(.v12-mobile-layout-marker) .st-key-v12_outline_card_grid [data-testid="stColumn"],body:has(.v12-mobile-layout-marker) .st-key-v12_font_card_grid [data-testid="stColumn"]{flex:0 0 calc(50% - 4.5px) !important;width:calc(50% - 4.5px) !important;min-width:0 !important;}
 @media (max-width:800px){
   .block-container{
     padding-left:.75rem !important;
@@ -12695,6 +12711,7 @@ def _v12_step04_frontend_component_state():
             ai_quota_text = "AI幫想 今日額度（台灣時間）：暫時無法確認"
     return {
         "mode": snapshot["mode"],
+        "compactLayout": str(st.session_state.get("v12_layout_mode", "desktop")) == "mobile",
         "forceTextMode": bool(
             st.session_state.get("v12_use_text_only_style", False)
         ),
@@ -15251,6 +15268,20 @@ _beta_session = _beta_render_account_panel()
 if not _beta_session:
     st.warning(t("login_required"))
 
+st.session_state.setdefault("v12_layout_mode", "desktop")
+with st.container(key="v12_layout_mode_switch"):
+    st.markdown('<div class="v12-layout-mode-title">🖼️ 創作版面</div>', unsafe_allow_html=True)
+    _v12_layout_mode = st.radio(
+        "創作版面",
+        options=("desktop", "mobile"),
+        format_func=lambda mode: "🖥️ 電腦創作模式" if mode == "desktop" else "📱 手機友善模式",
+        horizontal=True,
+        key="v12_layout_mode",
+        label_visibility="collapsed",
+    )
+if _v12_layout_mode == "mobile":
+    st.markdown('<div class="v12-mobile-layout-marker"></div><div class="v12-mobile-layout-notice">📱 手機友善模式：主要設定改為單欄與大按鈕；裁切微調仍建議使用電腦。</div>', unsafe_allow_html=True)
+
 
 st.markdown(f"""
 <div class="v12-journey">
@@ -15397,27 +15428,28 @@ if st.session_state.pop("v12_style_reference_clear_upload_control", False):
 if _use_text_only_style:
     st.info("📝 純文字設計不使用人物照片、內建貼圖風格或自定義風格；可在下方上傳畫風參考，讓文字沿用想要的視覺語言。")
 else:
-    _style_preset_col, _style_reference_col = st.columns(2)
-    with _style_preset_col:
-        st.button(
-            ("✓ " if _style_source_mode == V12_STYLE_PRESET_MODE else "")
-            + t("style_preset_mode"),
-            key="v12_select_style_preset_mode",
-            use_container_width=True,
-            type="primary" if _style_source_mode == V12_STYLE_PRESET_MODE else "secondary",
-            on_click=_v12_set_style_source_mode,
-            args=(V12_STYLE_PRESET_MODE,),
-        )
-    with _style_reference_col:
-        st.button(
-            ("✓ " if _style_source_mode == V12_STYLE_REFERENCE_MODE else "")
-            + t("style_reference_mode"),
-            key="v12_select_style_reference_mode",
-            use_container_width=True,
-            type="primary" if _style_source_mode == V12_STYLE_REFERENCE_MODE else "secondary",
-            on_click=_v12_set_style_source_mode,
-            args=(V12_STYLE_REFERENCE_MODE,),
-        )
+    with st.container(key="v12_style_source_mode_switch"):
+        _style_preset_col, _style_reference_col = st.columns(2)
+        with _style_preset_col:
+            st.button(
+                ("✓ " if _style_source_mode == V12_STYLE_PRESET_MODE else "")
+                + t("style_preset_mode"),
+                key="v12_select_style_preset_mode",
+                use_container_width=True,
+                type="primary" if _style_source_mode == V12_STYLE_PRESET_MODE else "secondary",
+                on_click=_v12_set_style_source_mode,
+                args=(V12_STYLE_PRESET_MODE,),
+            )
+        with _style_reference_col:
+            st.button(
+                ("✓ " if _style_source_mode == V12_STYLE_REFERENCE_MODE else "")
+                + t("style_reference_mode"),
+                key="v12_select_style_reference_mode",
+                use_container_width=True,
+                type="primary" if _style_source_mode == V12_STYLE_REFERENCE_MODE else "secondary",
+                on_click=_v12_set_style_source_mode,
+                args=(V12_STYLE_REFERENCE_MODE,),
+            )
 
 # 自定義風格改由獨立勾選啟用，預設風格下拉只保留預設選項。
 _v8_style_items = [x for x in V8_STYLES if not x.startswith("⭐ 自訂")]
@@ -15735,34 +15767,35 @@ else:
         f'<div class="v12-style-reference-caption">{html.escape(t("style_reference_caption"))}</div>',
         unsafe_allow_html=True,
     )
-    _style_reference_left, _style_reference_center, _style_reference_right = st.columns([1, 2, 1])
-    with _style_reference_center:
-        _style_reference_upload = _beta_image_uploader(
-            t("style_reference_upload"),
-            session=_beta_session,
-            type=["jpg", "jpeg", "png", "webp"],
-            key="v12_style_reference_upload",
-            on_change=_v12_style_reference_upload_changed,
-            help=t("style_reference_help"),
-        )
-    with _style_reference_right:
-        with st.container(key="v12_style_reference_examples"):
-            st.markdown(
-                '<div class="v12-style-reference-example-links">'
-                '<a class="v12-style-reference-example-link" '
-                'href="https://www.threads.com/share/EzlgQ8CSh/" '
-                'target="_blank" rel="noopener noreferrer">'
-                '<span class="v12-style-reference-example-link-title">示範連結</span>'
-                '</a>'
-                '<a class="v12-style-reference-example-link" '
-                'href="https://huaban.com/boards/44417392?source_file_id=339054540" '
-                'target="_blank" rel="noopener noreferrer">'
-                '<span class="v12-style-reference-example-link-title">文字參考範例連結</span>'
-                '<span class="v12-style-reference-example-link-source">（出處：花瓣）</span>'
-                '</a>'
-                '</div>',
-                unsafe_allow_html=True,
+    with st.container(key="v12_style_reference_layout"):
+        _style_reference_left, _style_reference_center, _style_reference_right = st.columns([1, 2, 1])
+        with _style_reference_center:
+            _style_reference_upload = _beta_image_uploader(
+                t("style_reference_upload"),
+                session=_beta_session,
+                type=["jpg", "jpeg", "png", "webp"],
+                key="v12_style_reference_upload",
+                on_change=_v12_style_reference_upload_changed,
+                help=t("style_reference_help"),
             )
+        with _style_reference_right:
+            with st.container(key="v12_style_reference_examples"):
+                st.markdown(
+                    '<div class="v12-style-reference-example-links">'
+                    '<a class="v12-style-reference-example-link" '
+                    'href="https://www.threads.com/share/EzlgQ8CSh/" '
+                    'target="_blank" rel="noopener noreferrer">'
+                    '<span class="v12-style-reference-example-link-title">示範連結</span>'
+                    '</a>'
+                    '<a class="v12-style-reference-example-link" '
+                    'href="https://huaban.com/boards/44417392?source_file_id=339054540" '
+                    'target="_blank" rel="noopener noreferrer">'
+                    '<span class="v12-style-reference-example-link-title">文字參考範例連結</span>'
+                    '<span class="v12-style-reference-example-link-source">（出處：花瓣）</span>'
+                    '</a>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
     if _style_reference_upload is not None:
         try:
             _v12_set_style_reference_from_upload(_style_reference_upload)
