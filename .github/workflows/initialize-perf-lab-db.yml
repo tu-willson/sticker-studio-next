@@ -12,6 +12,8 @@ on:
       - perf-lab
     paths:
       - .perf-lab/initialize-database
+      - supabase/migrations/**
+      - .github/workflows/initialize-perf-lab-db.yml
 
 permissions:
   contents: read
