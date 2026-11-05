@@ -149,6 +149,7 @@ export default function(component) {
     base.randomCustomDraft = String(raw.randomCustomDraft || '');
     base.randomCustomPhrases = Array.isArray(raw.randomCustomPhrases) ? raw.randomCustomPhrases.map(value => String(value).trim()).filter(Boolean).slice(0, 50) : [];
     base.message = String(raw.message || '');
+    base.settingsAppliedFingerprint = String(raw.settingsAppliedFingerprint || '');
     if (Array.isArray(raw.slots)) base.slots = base.slots.map((slot, i) => {
       const saved = raw.slots[i] || {};
       const colorSegments = Array.isArray(saved.colorSegments) ? saved.colorSegments.slice(0, 3).map(segment => {
@@ -174,11 +175,13 @@ export default function(component) {
       : normalize(data.initial || null);
   }
   catch (_) { state = normalize(data.initial || null); }
-  const save = () => {
+  const save = (dirty = true) => {
+    if (dirty) delete state.settingsAppliedFingerprint;
     state.__revision = revision;
     localStorage.setItem(storageKey, JSON.stringify(state));
   };
-  save();
+  // Hydrating an existing browser draft must preserve a prior global Apply.
+  save(false);
   const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const checked = value => value ? 'checked' : '';
 
@@ -633,6 +636,10 @@ export default function(component) {
     try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
     catch (_) { return null; }
   };
+  const fingerprint = (state) => JSON.stringify({
+    mode: state?.mode || '',
+    slots: Array.isArray(state?.slots) ? state.slots : [],
+  });
   const isTextModeEmpty = (state) => Boolean(
     state
     && state.mode === 'text'
@@ -640,9 +647,12 @@ export default function(component) {
       slot => String(slot?.text || '').trim()
     ))
   );
-  const disabled = Boolean(data.disabled);
+  const needsSettingsApply = !readDraft() || readDraft()?.settingsAppliedFingerprint !== fingerprint(readDraft());
+  const disabled = Boolean(data.disabled) || needsSettingsApply;
   const label = data.disabled
     ? '🔄 AI 正在生成，請稍候……'
+    : needsSettingsApply
+      ? '🧩 請先套用所有設定'
     : '✨ 生成 4×2 八格總圖';
   root.innerHTML = `<button ${disabled ? 'disabled' : ''}>${label}</button>`;
   const button = root.querySelector('button');
@@ -674,6 +684,64 @@ def render_frontend_generate_button(*, data, key):
     )
     result = generator(data=data, key=key)
     return getattr(result, "request", None)
+
+
+# The STEP 02/03/05 controls intentionally keep their changes in the browser
+# until the member confirms one final apply action.  STEP 04 is already stored
+# in localStorage, so this companion component reads that same draft and sends
+# it together with the one deliberate full-page update.
+APPLY_SETTINGS_HTML = '<div class="step04-apply-settings-root"></div>'
+APPLY_SETTINGS_CSS = r"""
+:host { display:block; width:100%; }
+.step04-apply-settings-root button { width:100%; min-height:48px; border:1px solid rgba(167,139,250,.9);
+  border-radius:11px; background:linear-gradient(100deg,rgba(92,198,255,.66),rgba(160,110,255,.66),rgba(255,104,157,.62));
+  color:#fff; font:inherit; font-size:17px; font-weight:900; letter-spacing:.02em; cursor:pointer;
+  box-shadow:0 5px 18px rgba(103,119,255,.24); }
+.step04-apply-settings-root button:hover { filter:brightness(1.1); transform:translateY(-1px); }
+.step04-apply-settings-root button:disabled { opacity:.62; cursor:wait; transform:none; }
+"""
+APPLY_SETTINGS_JS = r"""
+export default function(component) {
+  const { parentElement, data, setTriggerValue } = component;
+  const root = parentElement.querySelector('.step04-apply-settings-root') || parentElement;
+  const readDraft = () => {
+    try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
+    catch (_) { return null; }
+  };
+  const fingerprint = (state) => JSON.stringify({
+    mode: state?.mode || '',
+    slots: Array.isArray(state?.slots) ? state.slots : [],
+  });
+  root.innerHTML = `<button>${String(data.label || '🧩 套用所有設定（才能進行生成）')}</button>`;
+  const button = root.querySelector('button');
+  button.addEventListener('click', () => {
+    const state = readDraft();
+    if (state && typeof state === 'object') {
+      state.settingsAppliedFingerprint = fingerprint(state);
+      localStorage.setItem(data.storageKey, JSON.stringify(state));
+    }
+    button.disabled = true;
+    button.textContent = '🔄 正在套用所有設定…';
+    setTriggerValue('apply', {
+      state,
+      token: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    });
+  });
+}
+"""
+
+
+def render_frontend_apply_button(*, data, key):
+    """Render the one deliberate STEP 02–05 apply action."""
+    apply_button = components.component(
+        "v12_step04_frontend_apply_button",
+        html=APPLY_SETTINGS_HTML,
+        css=APPLY_SETTINGS_CSS,
+        js=APPLY_SETTINGS_JS,
+        isolate_styles=False,
+    )
+    result = apply_button(data=data, key=key)
+    return getattr(result, "apply", None)
 
 
 def run_test_page():

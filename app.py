@@ -20,7 +20,11 @@ import textwrap
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 from i18n import LANGUAGES, tr
-from step04_frontend_test import render_frontend_editor, render_frontend_generate_button
+from step04_frontend_test import (
+    render_frontend_apply_button,
+    render_frontend_editor,
+    render_frontend_generate_button,
+)
 
 
 def _v12_ui_locale():
@@ -717,6 +721,11 @@ def _v12_text_person_style_toggle_changed():
         st.session_state["v12_sticker_content_mode"] = V12_STICKER_TEXT_MODE
 
 
+def _v12_mark_settings_pending():
+    """Mark a deferred STEP 02/03/05 edit without triggering a full rerun."""
+    st.session_state["v12_settings_pending_apply"] = True
+
+
 def _v12_style_reference_influence_changed(mode):
     """Treat the three visible checkboxes as one mutually exclusive choice."""
     mode = str(mode or "").strip()
@@ -736,6 +745,7 @@ def _v12_style_reference_influence_changed(mode):
         st.session_state["v12_style_reference_soft_choice"] = False
         st.session_state["v12_style_reference_strong_choice"] = False
         st.session_state["v12_text_reference_priority"] = True
+    _v12_mark_settings_pending()
 
 
 def _v12_sync_saved_style_choice_to_editor(choice):
@@ -14933,7 +14943,7 @@ elif _shared_template_apply_error == "failed":
 
 
 def _v12_capture_style_reference_details_draft():
-    """Persist reference-detail widgets immediately in the durable creation draft."""
+    """Commit reference-detail widgets after the member confirms all settings."""
     _v12_update_navigation_safe_creation_draft(
         v12_style_reference_strength=st.session_state.get(
             "v12_style_reference_strength"
@@ -14948,6 +14958,20 @@ def _v12_capture_style_reference_details_draft():
             st.session_state.get("v12_style_reference_custom_elements", "") or ""
         ).strip()[:1200],
     )
+
+
+def _v12_commit_all_creation_settings():
+    """Atomically commit the deferred STEP 02, 03 and 05 settings."""
+    _v12_capture_style_reference_details_draft()
+    _v12_capture_character_settings_draft()
+    _v12_update_navigation_safe_creation_draft(
+        transparent_png_option=bool(
+            st.session_state.get("transparent_png_option", False)
+        )
+    )
+    _saved = _save_v10_presets()
+    st.session_state["v12_settings_pending_apply"] = False
+    return bool(_saved)
 
 # API 使用模式常數必須在所有 callback / widget 使用前先建立。
 # Streamlit 會由上而下執行整個 script，因此不可放在 AI 文案區之後。
@@ -15204,12 +15228,19 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 if _last_preset_style in _style_options
                 else "↓ 請選擇風格"
             )
-        style_mode = st.selectbox(
-            t("style_label"),
-            _style_options,
-            key="v10_style_mode",
-        )
-        st.session_state["v12_last_preset_style_mode"] = style_mode
+        @st.fragment
+        def _v12_render_deferred_preset_style_select():
+            """Change the preset style without re-running the whole creator."""
+            selected_style = st.selectbox(
+                t("style_label"),
+                _style_options,
+                key="v10_style_mode",
+                on_change=_v12_mark_settings_pending,
+            )
+            st.session_state["v12_last_preset_style_mode"] = selected_style
+            return selected_style
+
+        style_mode = _v12_render_deferred_preset_style_select()
 
         # 縮圖總覽與字型圖卡採相同模式：平常保持精簡，需要時再展開瀏覽。
         st.session_state.setdefault("v12_style_gallery_open", False)
@@ -15269,6 +15300,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 st.session_state["v10_style_mode"] = style_name
                 st.session_state["v12_last_preset_style_mode"] = style_name
                 st.session_state["v12_style_gallery_open"] = False
+                _v12_mark_settings_pending()
 
             with st.container(key="v12_style_card_grid"):
                 _style_card_cols = st.columns(5)
@@ -15557,127 +15589,99 @@ else:
             on_click=_v12_clear_style_reference,
         )
         st.caption(t("style_settings_caption"))
-        _normalized_style_strength = _v12_normalize_style_reference_strength(
-            st.session_state.get("v12_style_reference_strength")
-        )
-        if st.session_state.get("v12_style_reference_strength") != _normalized_style_strength:
-            st.session_state["v12_style_reference_strength"] = _normalized_style_strength
-        _reference_priority_available = bool(
-            st.session_state.get("v12_use_text_only_style", False)
-            or st.session_state.get("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
-            == V12_STICKER_TEXT_MODE
-        )
-        if not _reference_priority_available:
-            # 表情貼圖沒有文字筆畫可轉譯；保留已選字型與外框本身，
-            # 但不要讓這個文字專用開關在表情模式意外生效。
-            st.session_state["v12_text_reference_priority"] = False
-        _reference_strength = _v12_normalize_style_reference_strength(
-            st.session_state.get("v12_style_reference_strength")
-        )
-        st.markdown(f"**{t('style_strength')}{t('style_strength_immediate')}**")
-        _text_reference_priority_selected = bool(
-            st.session_state.get("v12_text_reference_priority", False)
-            and _reference_priority_available
-        )
-        # 三個看似獨立的勾選框實際上代表同一組互斥的畫風影響程度；
-        # 這樣可避免 radio 的圓點外觀，也讓「文字優先」緊接在兩個程度後。
-        st.session_state["v12_style_reference_soft_choice"] = (
-            not _text_reference_priority_selected and _reference_strength == "柔和融入"
-        )
-        st.session_state["v12_style_reference_strong_choice"] = (
-            not _text_reference_priority_selected and _reference_strength == "強烈融入"
-        )
-        _reference_soft_col, _reference_strong_col, _reference_text_col = st.columns(
-            [1, 1, 2.7], vertical_alignment="center"
-        )
-        with _reference_soft_col:
-            st.checkbox(
-                t("style_strength_soft"),
-                key="v12_style_reference_soft_choice",
-                on_change=_v12_style_reference_influence_changed,
-                args=("soft",),
-                help=t("style_strength_help"),
+        @st.fragment
+        def _v12_render_deferred_style_reference_details():
+            """Keep reference-detail edits local until the single final Apply."""
+            _normalized_style_strength = _v12_normalize_style_reference_strength(
+                st.session_state.get("v12_style_reference_strength")
             )
-        with _reference_strong_col:
-            st.checkbox(
-                t("style_strength_strong"),
-                key="v12_style_reference_strong_choice",
-                on_change=_v12_style_reference_influence_changed,
-                args=("strong",),
-                help=t("style_strength_help"),
+            if st.session_state.get("v12_style_reference_strength") != _normalized_style_strength:
+                st.session_state["v12_style_reference_strength"] = _normalized_style_strength
+            _reference_priority_available = bool(
+                st.session_state.get("v12_use_text_only_style", False)
+                or st.session_state.get("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
+                == V12_STICKER_TEXT_MODE
             )
-        with _reference_text_col:
-            st.checkbox(
-                "🖋️ 文字畫風參考優先（使用上傳參考圖的字體意象）",
-                key="v12_text_reference_priority",
-                on_change=_v12_style_reference_influence_changed,
-                args=("text_priority",),
-                disabled=not _reference_priority_available,
-                help=(
-                    "啟用後會暫時不套用 125 種帶圖字型與文字外框，"
-                    "改以這張畫風參考的字體筆觸、材質、配色與留白為最高優先。"
-                ),
+            if not _reference_priority_available:
+                st.session_state["v12_text_reference_priority"] = False
+            _reference_strength = _v12_normalize_style_reference_strength(
+                st.session_state.get("v12_style_reference_strength")
             )
-        if _text_reference_priority_selected and _reference_priority_available:
-            st.caption("🖋️ 已啟用文字畫風參考優先：預設只生成平面文字，優先重現參考圖的筆觸與色系；下方可另外指定要開放的補充效果。")
-        if _text_reference_priority_selected and _reference_priority_available:
-            _dimension_col, _effects_col = st.columns([1.1, 3.4], vertical_alignment="top")
-            with _dimension_col:
+            _text_reference_priority_selected = bool(
+                st.session_state.get("v12_text_reference_priority", False)
+                and _reference_priority_available
+            )
+            # These are a single mutually exclusive choice, but checkboxes are
+            # retained for the existing visual design.
+            st.session_state["v12_style_reference_soft_choice"] = (
+                not _text_reference_priority_selected and _reference_strength == "柔和融入"
+            )
+            st.session_state["v12_style_reference_strong_choice"] = (
+                not _text_reference_priority_selected and _reference_strength == "強烈融入"
+            )
+            st.markdown(f"**{t('style_strength')}（完成後統一套用）**")
+            _reference_soft_col, _reference_strong_col, _reference_text_col = st.columns(
+                [1, 1, 2.7], vertical_alignment="center"
+            )
+            with _reference_soft_col:
+                st.checkbox(t("style_strength_soft"), key="v12_style_reference_soft_choice",
+                    on_change=_v12_style_reference_influence_changed, args=("soft",),
+                    help=t("style_strength_help"))
+            with _reference_strong_col:
+                st.checkbox(t("style_strength_strong"), key="v12_style_reference_strong_choice",
+                    on_change=_v12_style_reference_influence_changed, args=("strong",),
+                    help=t("style_strength_help"))
+            with _reference_text_col:
                 st.checkbox(
-                    "加入立體感",
-                    key="v12_text_reference_dimensional",
-                    on_change=_v12_capture_style_reference_details_draft,
-                    help=(
-                        "依照本次生成文字的筆畫、顏色與外輪廓，隨機產生相容的立體層次。"
-                    ),
+                    "🖋️ 文字畫風參考優先（使用上傳參考圖的字體意象）",
+                    key="v12_text_reference_priority",
+                    on_change=_v12_style_reference_influence_changed,
+                    args=("text_priority",), disabled=not _reference_priority_available,
+                    help="啟用後會暫時不套用 125 種帶圖字型與文字外框，改以這張畫風參考的字體筆觸、材質、配色與留白為最高優先。",
                 )
-            with _effects_col:
-                st.text_area(
-                    "✨ 允許自訂補充效果（選填）",
-                    key="v12_style_reference_custom_elements",
-                    placeholder=(
-                        "例如：強調毛筆筆勢痕跡、文字加入極淡的立體層次與灰黑色短陰影；"
-                        "也可明確指定外框、圖案或彩色特效。"
-                    ),
-                    max_chars=1200,
-                    on_change=_v12_capture_style_reference_details_draft,
-                    help=(
-                        "只有此欄明確寫出的效果才會例外開放；未填寫時，"
-                        "仍維持純文字、無額外特效的畫風參考模式。"
-                    ),
-                )
-            st.caption("勾選或輸入後會自動套用，並隨作品與創作膠卷保存；日後載回時會自動帶回。")
-        else:
-            st.text_area(
-                t("style_elements"),
-                key="v12_style_reference_custom_elements",
-                placeholder=t("style_elements_placeholder"),
-                max_chars=1200,
-                on_change=_v12_capture_style_reference_details_draft,
-            )
-        st.caption(t("style_elements_help"))
-        st.caption(t("style_materials_caption"))
+            if _text_reference_priority_selected and _reference_priority_available:
+                st.caption("🖋️ 已啟用文字畫風參考優先：預設只生成平面文字，優先重現參考圖的筆觸與色系；下方可另外指定要開放的補充效果。")
+                _dimension_col, _effects_col = st.columns([1.1, 3.4], vertical_alignment="top")
+                with _dimension_col:
+                    st.checkbox("加入立體感", key="v12_text_reference_dimensional",
+                        on_change=_v12_mark_settings_pending,
+                        help="依照本次生成文字的筆畫、顏色與外輪廓，隨機產生相容的立體層次。")
+                with _effects_col:
+                    st.text_area(
+                        "✨ 允許自訂補充效果（選填）",
+                        key="v12_style_reference_custom_elements",
+                        placeholder="例如：強調毛筆筆勢痕跡、文字加入極淡的立體層次與灰黑色短陰影；也可明確指定外框、圖案或彩色特效。",
+                        max_chars=1200, on_change=_v12_mark_settings_pending,
+                        help="只有此欄明確寫出的效果才會例外開放；未填寫時，仍維持純文字、無額外特效的畫風參考模式。",
+                    )
+            else:
+                st.text_area(t("style_elements"), key="v12_style_reference_custom_elements",
+                    placeholder=t("style_elements_placeholder"), max_chars=1200,
+                    on_change=_v12_mark_settings_pending)
+            st.caption("這一區的選擇會在 STEP 05 按下「套用所有設定」後，一次寫入這次生成、作品與創作膠卷。")
+            st.caption(t("style_materials_caption"))
+
+        _v12_render_deferred_style_reference_details()
 
 # 檔案上傳控制項已在這次 create rerun 建立完成，換頁保護旗標不再需要。
 st.session_state.pop("v12_style_reference_navigation_guard", None)
 
 _v12_update_navigation_safe_creation_draft(
     v12_style_source_mode=st.session_state.get("v12_style_source_mode"),
+    v12_style_reference_image_bytes=st.session_state.get("v12_style_reference_image_bytes"),
+    v12_style_reference_filename=st.session_state.get("v12_style_reference_filename"),
+    v12_style_reference_fingerprint=st.session_state.get("v12_style_reference_fingerprint"),
+)
+if not bool(st.session_state.get("v12_settings_pending_apply", False)):
+    _v12_update_navigation_safe_creation_draft(
     v10_style_mode=st.session_state.get("v10_style_mode"),
     v12_last_preset_style_mode=st.session_state.get("v12_last_preset_style_mode"),
     v12_use_custom_style=st.session_state.get("v12_use_custom_style"),
     v12_use_text_only_style=st.session_state.get("v12_use_text_only_style"),
     v12_use_text_person_style=st.session_state.get("v12_use_text_person_style"),
-    v12_style_reference_image_bytes=st.session_state.get("v12_style_reference_image_bytes"),
-    v12_style_reference_filename=st.session_state.get("v12_style_reference_filename"),
-    v12_style_reference_fingerprint=st.session_state.get("v12_style_reference_fingerprint"),
     v12_style_reference_strength=st.session_state.get("v12_style_reference_strength"),
-    v12_text_reference_priority=bool(
-        st.session_state.get("v12_text_reference_priority", False)
-    ),
-    v12_text_reference_dimensional=bool(
-        st.session_state.get("v12_text_reference_dimensional", False)
-    ),
+    v12_text_reference_priority=bool(st.session_state.get("v12_text_reference_priority", False)),
+    v12_text_reference_dimensional=bool(st.session_state.get("v12_text_reference_dimensional", False)),
     v12_style_reference_custom_elements=st.session_state.get("v12_style_reference_custom_elements"),
     v12_loaded_project_custom_style=st.session_state.get(
         "v12_loaded_project_custom_style"
@@ -15688,7 +15692,7 @@ _v12_update_navigation_safe_creation_draft(
     v12_applied_template_style_prompt=st.session_state.get(
         "v12_applied_template_style_prompt"
     ),
-)
+    )
 
 v10_section(t("section_features"), "#2ecc71")
 v12_section_caption(t("features_intro"))
@@ -15700,48 +15704,34 @@ if isinstance(_saved_character_options, list):
     st.session_state["v10_character_options"] = [
         option for option in _saved_character_options if option in CHARACTER_OPTIONS
     ]
-# Performance Lab first step: keep ordinary STEP 03 choices in a Streamlit
-# form.  Selecting features or writing a scene note now stays entirely in the
-# browser until the member deliberately applies it.  The form submit itself is
-# the single, expected rerun that updates the durable creation draft used by
-# generation, project loading, and reel loading.
-#
-# This replaces the former per-widget on_change reruns.  We intentionally do
-# not use clear_on_submit: an empty list or empty note is a valid explicit
-# edit and must overwrite the previous draft when the member presses Apply.
-with st.form("v12_character_settings_draft_form", border=False):
+@st.fragment
+def _v12_render_deferred_character_settings():
+    """Let STEP 03 edit locally; the single STEP 05 action commits it."""
     selected_character = st.multiselect(
         t("feature_select"),
         CHARACTER_OPTIONS,
         key="v10_character_options",
+        on_change=_v12_mark_settings_pending,
     )
     st.text_area(
         t("custom_character"),
         key="v10_character_custom_1",
         height=70,
+        on_change=_v12_mark_settings_pending,
     )
-    with st.container(key="v12_character_settings_apply_button"):
-        _save_character_settings = st.form_submit_button(
-            "✅ 套用人物／畫面設定",
-            type="primary",
-            use_container_width=True,
-            help="一次套用這一區的人物／畫面特色與自定義需求；輸入與勾選期間不會重新讀取頁面。",
-        )
+
+
+_v12_render_deferred_character_settings()
 custom_character = str(
     st.session_state.get("v10_character_custom_1", "") or ""
 ).strip()
-if _save_character_settings:
-    _v12_capture_character_settings_draft()
-    if _save_v10_presets():
-        st.success("✅ 人物／畫面設定已套用。")
-    else:
-        st.error(t("save_failed"))
 
-_v12_update_navigation_safe_creation_draft(
-    v10_character_options=list(st.session_state.get("v10_character_options", []) or []),
-    v10_character_custom_1=str(st.session_state.get("v10_character_custom_1", "") or ""),
-    v10_character_enabled_1=bool(st.session_state.get("v10_character_enabled_1", False)),
-)
+if not bool(st.session_state.get("v12_settings_pending_apply", False)):
+    _v12_update_navigation_safe_creation_draft(
+        v10_character_options=list(st.session_state.get("v10_character_options", []) or []),
+        v10_character_custom_1=str(st.session_state.get("v10_character_custom_1", "") or ""),
+        v10_character_enabled_1=bool(st.session_state.get("v10_character_enabled_1", False)),
+    )
 
 if str(st.session_state.get("v10_style_mode", "") or "") == V12_TEXT_ONLY_STYLE:
     # 純文字風格不支援無文字表情模式；在 STEP 04 元件建立前強制回到文字模式，
@@ -16741,25 +16731,45 @@ if _sticker_mode == "text":
 st.divider()
 v10_section(t("section_background"), "#16a085")
 st.markdown(f'<div class="v11-transparent-title">{t("background_transparent")}</div>', unsafe_allow_html=True)
-with st.form("v12_background_settings_draft_form", border=False):
+@st.fragment
+def _v12_render_deferred_background_setting():
+    """Keep the PNG background choice local until the one final Apply."""
     with st.container(key="transparent_png_option_box"):
-        transparent = st.checkbox(
+        return st.checkbox(
             t("transparent_png"),
             key="transparent_png_option",
+            on_change=_v12_mark_settings_pending,
         )
-    _apply_background_settings = st.form_submit_button(
-        "✅ 套用背景設定",
-        type="primary",
-        use_container_width=True,
-        help="勾選期間不會重新讀取頁面；按下後才會同步到這次生成設定。",
-    )
 
-if _apply_background_settings:
-    st.success("✅ 背景設定已套用。")
 
-_v12_update_navigation_safe_creation_draft(
-    transparent_png_option=bool(transparent),
+transparent = _v12_render_deferred_background_setting()
+st.caption("STEP 02～05 完成後，請按一次下方按鈕同步所有設定，再進行生成。")
+_v12_apply_all_settings_result = render_frontend_apply_button(
+    data={
+        "storageKey": "sticker-studio-next.step04-formal.v1",
+        "label": "🧩 套用所有設定（才能進行生成）",
+    },
+    key="v12_step04_frontend_apply_all_settings",
 )
+if isinstance(_v12_apply_all_settings_result, dict):
+    _v12_apply_token = str(_v12_apply_all_settings_result.get("token", "") or "")
+    if _v12_apply_token and _v12_apply_token != str(
+        st.session_state.get("v12_last_apply_all_settings_token", "") or ""
+    ):
+        st.session_state["v12_last_apply_all_settings_token"] = _v12_apply_token
+        _v12_apply_state = _v12_apply_all_settings_result.get("state")
+        if isinstance(_v12_apply_state, dict):
+            _v12_apply_step04_frontend_snapshot(_v12_apply_state)
+        _v12_apply_saved = _v12_commit_all_creation_settings()
+        st.session_state["v12_apply_all_settings_notice"] = (
+            "success" if _v12_apply_saved else "local_only"
+        )
+        st.rerun()
+_v12_apply_notice = st.session_state.pop("v12_apply_all_settings_notice", "")
+if _v12_apply_notice == "success":
+    st.success("✅ 已套用 STEP 02～05 的所有設定，現在可以進行生成。")
+elif _v12_apply_notice == "local_only":
+    st.warning("設定已套用到本次生成，但雲端偏好同步未完成；請稍後再試。")
 
 with st.container(key="v12_project_name_top"):
     _v12_project_name_initial = _v12_normalize_project_name(
@@ -17256,7 +17266,19 @@ with st.container(key="v12_recover_generate_state"):
                 f"⏳ 正在生成中，約 {_wait_minutes} 分 {_wait_seconds:02d} 秒後可回復。"
             )
 
+if st.session_state.pop("v12_settings_apply_required_notice", False):
+    st.warning("請先回到 STEP 05 按「🧩 套用所有設定（才能進行生成）」，再開始生成。")
+
 if _generate_clicked:
+    # This is intentionally checked on the server as well as in the visible
+    # flow.  A stale browser component or a crafted request must never bypass
+    # the member's one deliberate STEP 02–05 apply action and consume credits.
+    if bool(st.session_state.get("v12_settings_pending_apply", False)):
+        st.session_state["v12_settings_apply_required_notice"] = True
+        st.session_state["v12_frontend_generate_reset_revision"] = int(
+            st.session_state.get("v12_frontend_generate_reset_revision", 0) or 0
+        ) + 1
+        st.rerun()
     if not _text_only_generation and not st.session_state.uploaded_image_bytes:
         st.warning(t("upload_first"))
         st.stop()
