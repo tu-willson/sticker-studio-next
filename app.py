@@ -15003,19 +15003,41 @@ v12_section_caption(t("photo_intro"))
 # 文字主導模式屬於素材來源的選擇，放在 STEP 01 的人物照片說明下方，讓
 # 使用者在上傳前就清楚知道本次是否需要人物照片。
 with st.container(key="v12_style_mode_toggles"):
-    _text_only_toggle_col, _text_person_toggle_col = st.columns([1, 1], gap="large")
-    with _text_only_toggle_col:
-        _step01_use_text_only_style = st.checkbox(
-            V12_TEXT_ONLY_STYLE_CHECKBOX_LABEL,
-            key="v12_use_text_only_style",
-            on_change=_v12_text_only_style_toggle_changed,
+    # STEP 01 modes are now drafted together.  Picking either option no longer
+    # immediately rebuilds the whole page; the explicit apply action below is
+    # where we safely clear a person photo or reveal the reference-style path.
+    with st.form("v12_creation_mode_draft_form", border=False):
+        _text_only_toggle_col, _text_person_toggle_col = st.columns([1, 1], gap="large")
+        with _text_only_toggle_col:
+            _step01_use_text_only_style = st.checkbox(
+                V12_TEXT_ONLY_STYLE_CHECKBOX_LABEL,
+                key="v12_use_text_only_style",
+            )
+        with _text_person_toggle_col:
+            _step01_use_text_person_style = st.checkbox(
+                V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL,
+                key="v12_use_text_person_style",
+            )
+        _apply_creation_mode = st.form_submit_button(
+            "✅ 套用創作模式",
+            type="primary",
+            use_container_width=True,
+            help="勾選期間不會重新讀取頁面；按下後才會切換純文字／文字搭人物模式與對應設定區。",
         )
-    with _text_person_toggle_col:
-        _step01_use_text_person_style = st.checkbox(
-            V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL,
-            key="v12_use_text_person_style",
-            on_change=_v12_text_person_style_toggle_changed,
-        )
+if _apply_creation_mode:
+    if _step01_use_text_only_style and _step01_use_text_person_style:
+        # The two choices cannot coexist.  Pure text is safer here because it
+        # guarantees a previously uploaded face will not enter the prompt.
+        st.session_state["v12_use_text_person_style"] = False
+        _step01_use_text_person_style = False
+        st.info("已套用「純文字設計（無人物）」；文字搭人物已自動取消。")
+    if _step01_use_text_only_style:
+        _v12_text_only_style_toggle_changed()
+    elif _step01_use_text_person_style:
+        _v12_text_person_style_toggle_changed()
+    else:
+        _v12_text_only_style_toggle_changed()
+    st.success("✅ 創作模式已套用。")
 st.markdown(
     '<div class="v12-text-led-style-note">'
     '<div>📝 純文字設計與 👤 文字搭人物都以文字為主，可依需求選取~若為初次使用平台也可先不勾選。</div>'
