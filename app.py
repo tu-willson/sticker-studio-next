@@ -1148,7 +1148,9 @@ def _v11_clear_generation_state() -> None:
 def _v12_recover_generation_ui_callback() -> None:
     """Cancel an unstarted job, or recover a safely stale active generation."""
     # 同一頁仍在執行 AI 時，絕不能讓使用者中斷真正有效的作業。
-    if bool(st.session_state.get("v11_generation_in_progress", False)):
+    if bool(st.session_state.get("v11_generation_pending", False)) or bool(
+        st.session_state.get("v11_generation_in_progress", False)
+    ):
         st.session_state["v12_generation_recovery_blocked"] = True
         return
 
@@ -16818,10 +16820,15 @@ def _v12_render_deferred_background_setting():
 
 transparent = _v12_render_deferred_background_setting()
 st.caption("STEP 02～05 完成後，請按一次下方按鈕同步所有設定，再進行生成。")
+_v12_settings_apply_generation_locked = bool(
+    st.session_state.get("v11_generation_pending", False)
+    or st.session_state.get("v11_generation_in_progress", False)
+)
 _v12_apply_all_settings_result = render_frontend_apply_button(
     data={
         "storageKey": "sticker-studio-next.step04-formal.v1",
         "label": "🧩 套用所有設定（才能進行生成）\n※ 修改內容後需再次套用",
+        "generationLocked": _v12_settings_apply_generation_locked,
     },
     key=(
         "v12_step04_frontend_apply_all_settings_"
@@ -16830,6 +16837,15 @@ _v12_apply_all_settings_result = render_frontend_apply_button(
 )
 if isinstance(_v12_apply_all_settings_result, dict):
     _v12_apply_token = str(_v12_apply_all_settings_result.get("token", "") or "")
+    if _v12_settings_apply_generation_locked:
+        # The browser guard prevents this in normal use.  Keep the server-side
+        # check too, so a stale component or crafted event cannot alter the
+        # frozen prompt while an image request is active.
+        st.session_state["v12_apply_all_settings_notice"] = "locked_generation"
+        st.session_state["v12_apply_all_settings_revision"] = int(
+            st.session_state.get("v12_apply_all_settings_revision", 0) or 0
+        ) + 1
+        st.rerun()
     if _v12_apply_token and _v12_apply_token != str(
         st.session_state.get("v12_last_apply_all_settings_token", "") or ""
     ):
@@ -16853,6 +16869,8 @@ if _v12_apply_notice == "success":
     st.success("✅ 已套用 STEP 02～05 的所有設定，現在可以進行生成。")
 elif _v12_apply_notice == "local_only":
     st.warning("設定已套用到本次生成，但雲端偏好同步未完成；請稍後再試。")
+elif _v12_apply_notice == "locked_generation":
+    st.info("🔒 圖片生成中，設定已鎖定；請等本次生成結束後再修改並套用。")
 
 with st.container(key="v12_project_name_top"):
     _v12_project_name_initial = _v12_normalize_project_name(
@@ -17250,11 +17268,11 @@ _generation_recovery_status = {
     "can_recover": False,
     "seconds_remaining": 0,
 }
-# ``pending`` is the short hand-off between accepting a click and beginning
-# the server-side job.  It is not a live AI call yet, so still read the server
-# status; a reserved (not-started) job may safely be cancelled after a broken
-# rerun.  Once ``in_progress`` is true the on-page progress flow owns it.
-if not _generation_in_progress:
+# This page's pending hand-off always proceeds immediately into the provider
+# call.  Do not render an enabled recovery control in that tiny interval; a
+# broken hand-off can be cancelled safely after reopening the page, when the
+# server still reports it as an unstarted ``reserved`` job.
+if not _generation_local_locked:
     try:
         _recovery_status_session = _beta_current_user()
         if _recovery_status_session:
@@ -17340,17 +17358,10 @@ with st.container(key="v12_recover_generate_state"):
         _recovery_can_release = bool(
             _generation_recovery_status.get("has_reserved", False)
         ) and bool(_generation_recovery_status.get("can_recover", False))
-        # A browser-only pending flag with no server job is the harmless
-        # "button looks stuck" case.  It can be cleared immediately because
-        # there is no reserved point to refund and no provider call to stop.
-        _recovery_can_clear_local = (
-            _generation_pending
-            and not bool(_generation_recovery_status.get("has_reserved", False))
-        )
         _recovery_help = (
             "尚未開始送出 AI 的生成可取消；已開始的生成為避免誤退點，需逾時 5 分鐘才可回復。"
         )
-        if _generation_in_progress:
+        if _generation_local_locked:
             _recovery_help = "此頁正在生成中，為避免中斷有效作業，暫時不能回復。"
         elif _recovery_has_waiting_job and not _recovery_can_cancel:
             _recovery_help = "生成開始未滿 5 分鐘，為避免中斷有效作業，暫時不能回復。"
@@ -17360,16 +17371,13 @@ with st.container(key="v12_recover_generate_state"):
             help=_recovery_help,
             on_click=_v12_recover_generation_ui_callback,
             use_container_width=True,
-            disabled=_generation_in_progress or not (
+            disabled=_generation_local_locked or not (
                 _recovery_can_cancel
                 or _recovery_can_release
-                or _recovery_can_clear_local
             ),
         )
         if _recovery_can_cancel:
             st.caption("↩️ 尚未開始生成，可取消本次作業並退回點數。")
-        elif _recovery_can_clear_local:
-            st.caption("↩️ 未偵測到執行中的生成，可解除卡住的按鈕狀態。")
         elif _recovery_has_waiting_job:
             _wait_minutes, _wait_seconds = divmod(_recovery_wait_seconds, 60)
             st.caption(
@@ -17378,6 +17386,34 @@ with st.container(key="v12_recover_generate_state"):
 
 if st.session_state.pop("v12_settings_apply_required_notice", False):
     st.warning("請先回到 STEP 05 按「🧩 套用所有設定（才能進行生成）」，再開始生成。")
+
+_v12_generation_request_feedback = st.session_state.pop(
+    "v12_generation_request_feedback", None
+)
+if isinstance(_v12_generation_request_feedback, dict):
+    _v12_feedback_message = str(
+        _v12_generation_request_feedback.get("message", "") or ""
+    )
+    if _v12_feedback_message:
+        if _v12_generation_request_feedback.get("level") == "error":
+            st.error(_v12_feedback_message)
+        else:
+            st.warning(_v12_feedback_message)
+
+
+def _v12_reject_generation_request(message, level="warning"):
+    """Return the custom generator to a usable state after preflight rejects."""
+    st.session_state["v12_generation_request_feedback"] = {
+        "message": str(message or ""),
+        "level": str(level or "warning"),
+    }
+    # The browser component disables itself immediately on click.  A fresh key
+    # is required after *every* early validation exit, otherwise it remains on
+    # the misleading “正在準備生成” state even though no job was created.
+    st.session_state["v12_frontend_generate_reset_revision"] = int(
+        st.session_state.get("v12_frontend_generate_reset_revision", 0) or 0
+    ) + 1
+    st.rerun()
 
 if _generate_clicked:
     # This is intentionally checked on the server as well as in the visible
@@ -17390,37 +17426,40 @@ if _generate_clicked:
         ) + 1
         st.rerun()
     if not _text_only_generation and not st.session_state.uploaded_image_bytes:
-        st.warning(t("upload_first"))
-        st.stop()
+        _v12_reject_generation_request(t("upload_first"))
 
     # 文字模式至少需要一格文字；無文字表情模式則由每格的表情／特效方向生成，
     # 不應共用「必須填貼圖文字」的驗證。
     if _sticker_mode == "text" and not any(str(text or "").strip() for text in texts):
-        st.stop()
+        _v12_reject_generation_request("請至少填入一格貼圖文字後再生成。")
 
     _click_beta_session = _beta_current_user()
     if not _click_beta_session:
-        st.error("❌ 請先使用 Google 登入會員。")
-        st.stop()
+        _v12_reject_generation_request("❌ 請先使用 Google 登入會員。", "error")
     if not _beta_site_openai_key():
-        st.error("❌ 會員生成服務尚未完成設定，請稍後再試。")
-        st.stop()
+        _v12_reject_generation_request(
+            "❌ 會員生成服務尚未完成設定，請稍後再試。", "error"
+        )
     try:
         _reservation = _beta_reserve_generation(_click_beta_session)
     except Exception:
-        st.error("❌ 目前無法確認會員可用生成次數，請稍後再試。")
-        st.stop()
+        _v12_reject_generation_request(
+            "❌ 目前無法確認會員可用生成次數，請稍後再試。", "error"
+        )
     if not _reservation["granted"]:
-        if _reservation["job_id"]:
-            st.warning("此帳號已有一份圖片正在生成，請等完成後再試。")
-        elif _reservation["balance"] > 0:
-            st.warning("剛完成生成，請等候 60 秒後再使用下一次體驗額度。")
-        else:
-            st.warning("體驗額度已使用完畢。")
-        st.stop()
+        _v12_reject_generation_request(
+            "此帳號已有一份圖片正在生成，請等完成後再試。"
+            if _reservation["job_id"]
+            else (
+                "剛完成生成，請等候 60 秒後再使用下一次體驗額度。"
+                if _reservation["balance"] > 0
+                else "體驗額度已使用完畢。"
+            )
+        )
     if not _reservation["job_id"]:
-        st.error("❌ 無法建立本次生成作業，請稍後再試。")
-        st.stop()
+        _v12_reject_generation_request(
+            "❌ 無法建立本次生成作業，請稍後再試。", "error"
+        )
     st.session_state["beta_generation_job_id"] = _reservation["job_id"]
 
     if _sticker_mode == "expression":

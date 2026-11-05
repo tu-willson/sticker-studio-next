@@ -634,6 +634,7 @@ GENERATOR_JS = r"""
 export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
   const root = parentElement.querySelector('.step04-generator-root') || parentElement;
+  const generationLockKey = `${String(data.storageKey || 'step04')}.generation-requested`;
   const readDraft = () => {
     try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
     catch (_) { return null; }
@@ -669,6 +670,9 @@ export default function(component) {
     // 文字編輯器存在於瀏覽器端；先在此判斷，避免空白請求送到後端後
     // 讓按鈕被短暫鎖住。固定提醒則由 STEP 06 標題下方呈現。
     if (isTextModeEmpty(state)) return;
+    // Lock companion controls before Streamlit has time to start its rerun.
+    // The server remains authoritative; this is only a same-page UX guard.
+    localStorage.setItem(generationLockKey, '1');
     button.disabled = true;
     button.textContent = '🔄 正在準備生成…';
     setTriggerValue('request', {state});
@@ -702,12 +706,13 @@ APPLY_SETTINGS_CSS = r"""
   color:#fff; font:inherit; font-size:16px; font-weight:900; line-height:1.35; white-space:pre-line; letter-spacing:.02em; cursor:pointer;
   box-shadow:0 5px 18px rgba(103,119,255,.24); }
 .step04-apply-settings-root button:hover { filter:brightness(1.1); transform:translateY(-1px); }
-.step04-apply-settings-root button:disabled { opacity:.62; cursor:wait; transform:none; }
+.step04-apply-settings-root button:disabled { opacity:.62; cursor:not-allowed; transform:none; }
 """
 APPLY_SETTINGS_JS = r"""
 export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
   const root = parentElement.querySelector('.step04-apply-settings-root') || parentElement;
+  const generationLockKey = `${String(data.storageKey || 'step04')}.generation-requested`;
   const readDraft = () => {
     try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
     catch (_) { return null; }
@@ -716,9 +721,26 @@ export default function(component) {
     mode: state?.mode || '',
     slots: Array.isArray(state?.slots) ? state.slots : [],
   });
-  root.innerHTML = `<button>${String(data.label || '🧩 套用所有設定（才能進行生成）')}</button>`;
+  const generationLocked = Boolean(data.generationLocked);
+  if (!generationLocked) {
+    // A rejected request (for example, missing a required photo) arrives here
+    // on its fresh render and clears the browser-only click guard.
+    localStorage.removeItem(generationLockKey);
+  }
+  const label = generationLocked
+    ? '🔒 圖片生成中，設定暫時鎖定'
+    : String(data.label || '🧩 套用所有設定（才能進行生成）');
+  root.innerHTML = `<button ${generationLocked ? 'disabled' : ''}>${label}</button>`;
   const button = root.querySelector('button');
   button.addEventListener('click', () => {
+    // The generate component writes this synchronously before Streamlit can
+    // redraw.  It closes the small same-page window in which a second click
+    // could otherwise submit an apply request after generation was accepted.
+    if (generationLocked || localStorage.getItem(generationLockKey)) {
+      button.disabled = true;
+      button.textContent = '🔒 圖片生成中，設定暫時鎖定';
+      return;
+    }
     const state = readDraft();
     if (state && typeof state === 'object') {
       state.settingsAppliedFingerprint = fingerprint(state);
