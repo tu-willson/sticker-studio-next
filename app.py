@@ -1641,13 +1641,17 @@ div[class*="st-key-v12_basket_download_"] button:hover{
 .st-key-v12_font_card_grid [data-testid="stButton"]{position:absolute !important;inset:0 !important;z-index:4;width:100% !important;margin:0 !important;}
 .st-key-v12_style_card_grid [data-testid="stButton"] button,
 .st-key-v12_outline_card_grid [data-testid="stButton"] button,
-.st-key-v12_font_card_grid [data-testid="stButton"] button{width:100% !important;height:100% !important;min-height:0 !important;display:flex !important;align-items:flex-end !important;justify-content:center !important;padding:.35rem !important;border:1px solid transparent !important;border-radius:11px !important;background:linear-gradient(180deg,transparent 54%,rgba(11,30,55,.72)) !important;color:#fff !important;text-shadow:0 1px 3px rgba(0,0,0,.8);box-shadow:none !important;}
+.st-key-v12_font_card_grid [data-testid="stButton"] button{width:100% !important;height:100% !important;min-height:0 !important;display:block !important;padding:0 !important;border:0 !important;border-radius:11px !important;background:transparent !important;color:transparent !important;text-shadow:none !important;box-shadow:none !important;}
+/* 號碼/名稱只是無障礙標籤；整張卡才是實際點選區，避免顯示一條被拉寬的按鈕框。 */
 .st-key-v12_style_card_grid [data-testid="stButton"] button:hover,
 .st-key-v12_outline_card_grid [data-testid="stButton"] button:hover,
-.st-key-v12_font_card_grid [data-testid="stButton"] button:hover{border-color:#66c8ff !important;background:linear-gradient(180deg,rgba(73,180,238,.1),rgba(18,107,173,.82)) !important;}
+.st-key-v12_font_card_grid [data-testid="stButton"] button:hover{border:0 !important;background:transparent !important;}
 .st-key-v12_style_card_grid [data-testid="stButton"] button:focus-visible,
 .st-key-v12_outline_card_grid [data-testid="stButton"] button:focus-visible,
-.st-key-v12_font_card_grid [data-testid="stButton"] button:focus-visible{outline:3px solid #88dcff !important;outline-offset:2px !important;}
+.st-key-v12_font_card_grid [data-testid="stButton"] button:focus-visible{outline:0 !important;box-shadow:none !important;}
+.st-key-v12_style_card_grid [data-testid="stColumn"]:has([data-testid="stButton"] button:focus-visible) [data-testid="stImage"],
+.st-key-v12_outline_card_grid [data-testid="stColumn"]:has([data-testid="stButton"] button:focus-visible) [data-testid="stImage"],
+.st-key-v12_font_card_grid [data-testid="stColumn"]:has([data-testid="stButton"] button:focus-visible) [data-testid="stImage"]{outline:3px solid #88dcff;outline-offset:2px;}
 }
 .v12-project-save-divider{
   height:1px;
