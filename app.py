@@ -14967,7 +14967,10 @@ def _v12_commit_all_creation_settings():
     _v12_update_navigation_safe_creation_draft(
         transparent_png_option=bool(
             st.session_state.get("transparent_png_option", False)
-        )
+        ),
+        v8_text_style=st.session_state.get("v8_text_style"),
+        v8_selected_font=st.session_state.get("v8_selected_font"),
+        v12_font_quick_pick=st.session_state.get("v12_font_quick_pick"),
     )
     _saved = _save_v10_presets()
     st.session_state["v12_settings_pending_apply"] = False
@@ -16456,14 +16459,19 @@ if _sticker_mode == "text":
         st.session_state["v8_text_style"] = V8_TEXT_STYLE_LEGACY_MAP.get(
             _saved_text_style, "不使用外框"
         )
-    text_style = st.selectbox(
-        t("font_label"),
-        V8_TEXT_STYLE_OPTIONS,
-        index=0,
-        key="v8_text_style",
-        format_func=lambda value: _v12_localized_option(value, V12_TEXT_OUTLINE_LABELS),
-        disabled=_text_reference_priority_active,
-    )
+    @st.fragment
+    def _v12_render_deferred_text_outline_select():
+        return st.selectbox(
+            t("font_label"),
+            V8_TEXT_STYLE_OPTIONS,
+            index=0,
+            key="v8_text_style",
+            format_func=lambda value: _v12_localized_option(value, V12_TEXT_OUTLINE_LABELS),
+            disabled=_text_reference_priority_active,
+            on_change=_v12_mark_settings_pending,
+        )
+
+    text_style = _v12_render_deferred_text_outline_select()
     if _text_reference_priority_active:
         st.info("🖋️ 文字畫風參考優先已啟用：本次會保留你的外框選擇，但不會套用外框效果。")
 
@@ -16491,6 +16499,7 @@ if _sticker_mode == "text":
         def _v12_pick_text_outline_from_card(outline_name):
             st.session_state["v8_text_style"] = outline_name
             st.session_state["v12_outline_gallery_open"] = False
+            _v12_mark_settings_pending()
 
         with st.container(key="v12_outline_card_grid"):
             _outline_card_cols = st.columns(4)
@@ -16542,13 +16551,32 @@ _quick_font_choice = "— 快速選擇字型｜可直接輸入數字 —"
 if _sticker_mode == "text":
     v12_font_caption(t("font_pick_caption"))
     st.markdown('<div id="v10-font-result-anchor" style="scroll-margin-top: 72px;"></div>', unsafe_allow_html=True)
-    _quick_font_choice = st.selectbox(
-        t("font_quick_pick"),
-        ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
-        key="v12_font_quick_pick",
-        format_func=_v12_font_choice_display,
-        disabled=_text_reference_priority_active,
-    )
+    def _v12_quick_font_pick_changed():
+        selected_label = str(
+            st.session_state.get("v12_font_quick_pick", "") or ""
+        )
+        if selected_label != "— 快速選擇字型｜可直接輸入數字 —":
+            try:
+                st.session_state["v8_selected_font"] = int(
+                    selected_label.split("｜", 1)[0]
+                )
+                st.session_state["v10_font_gallery_open"] = False
+            except (TypeError, ValueError):
+                pass
+        _v12_mark_settings_pending()
+
+    @st.fragment
+    def _v12_render_deferred_quick_font_pick():
+        return st.selectbox(
+            t("font_quick_pick"),
+            ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
+            key="v12_font_quick_pick",
+            format_func=_v12_font_choice_display,
+            disabled=_text_reference_priority_active,
+            on_change=_v12_quick_font_pick_changed,
+        )
+
+    _quick_font_choice = _v12_render_deferred_quick_font_pick()
     if _quick_font_choice != "— 快速選擇字型｜可直接輸入數字 —":
         _quick_font_no = int(_quick_font_choice.split("｜", 1)[0])
         if st.session_state.get("v8_selected_font") != _quick_font_no:
@@ -16671,6 +16699,7 @@ if (
                     )
                     st.session_state["v10_scroll_to_font_result"] = True
                     st.session_state["v10_font_gallery_open"] = False
+                    _v12_mark_settings_pending()
 
                 st.button(
                     f"{_i:03d}",
