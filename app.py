@@ -1159,6 +1159,60 @@ export default function(component) {
     isolate_styles=False,
 )
 
+
+# Streamlit session_state belongs to one live browser/WebSocket session.  A
+# normal browser refresh therefore starts with an empty session_state even
+# though the member did not actually sign out.  This tiny, invisible component
+# keeps only Supabase's rotating refresh token in the current site's browser
+# storage, then hands it back to Python on the next page load.  The server
+# immediately exchanges it for a short-lived access token; no access token is
+# persisted in the browser storage.  Each deployment origin has separate
+# localStorage, so the production and performance-lab accounts never cross.
+_BETA_AUTH_PERSISTENCE_COMPONENT = components_v2.component(
+    "beta_auth_persistence",
+    html='<div class="beta-auth-persistence-root" aria-hidden="true"></div>',
+    css=(
+        ':host,.beta-auth-persistence-root'
+        '{display:block;width:0;height:0;min-height:0;margin:0;padding:0;overflow:hidden}'
+    ),
+    js=r'''
+export default function(component) {
+  const { parentElement, data, setTriggerValue } = component;
+  const root = parentElement.querySelector('.beta-auth-persistence-root') || parentElement;
+  const storageKey = String(data.storageKey || 'sticker-studio-auth');
+  const refreshToken = String(data.refreshToken || '');
+  const clearRevision = String(data.clearRevision || '0');
+
+  // Explicit sign-out or an invalid/revoked token must remove the browser copy
+  // before a later rerun gets a chance to restore it.
+  if (String(root._betaAuthClearRevision || '') !== clearRevision) {
+    root._betaAuthClearRevision = clearRevision;
+    if (clearRevision !== '0') {
+      try { localStorage.removeItem(storageKey); } catch (_) {}
+    }
+  }
+
+  if (refreshToken) {
+    try {
+      const current = localStorage.getItem(storageKey) || '';
+      if (current !== refreshToken) localStorage.setItem(storageKey, refreshToken);
+    } catch (_) {}
+    // The server has an in-memory session again.  Do not echo the same refresh
+    // token back on every Streamlit rerun.
+    root._betaAuthLastRestoreToken = refreshToken;
+    return;
+  }
+
+  let stored = '';
+  try { stored = String(localStorage.getItem(storageKey) || ''); } catch (_) {}
+  if (!stored || root._betaAuthLastRestoreToken === stored) return;
+  root._betaAuthLastRestoreToken = stored;
+  setTriggerValue('restore', { refreshToken: stored });
+}
+''',
+    isolate_styles=False,
+)
+
 def _v11_clear_generation_state() -> None:
     """Clear only transient generation UI/session flags after a terminal outcome."""
     for _key in (
@@ -5298,6 +5352,81 @@ def _beta_store_auth_session(token_response, user):
     }
 
 
+def _beta_browser_auth_storage_key():
+    """Return an origin-local key that also separates Supabase environments."""
+    config = _beta_config() or {}
+    project_marker = str(config.get("url", "") or "").encode("utf-8")
+    digest = hashlib.sha256(project_marker).hexdigest()[:16]
+    return f"sticker-studio:member-refresh:{digest}"
+
+
+def _beta_clear_browser_auth_storage():
+    """Ask the invisible browser bridge to discard a revoked local session."""
+    st.session_state["beta_auth_browser_clear_revision"] = (
+        int(st.session_state.get("beta_auth_browser_clear_revision", 0) or 0) + 1
+    )
+    st.session_state.pop("beta_auth_restored_refresh_digest", None)
+
+
+def _beta_sync_browser_auth_session():
+    """Persist or restore the signed-in member across a normal page refresh.
+
+    The component is intentionally not an authentication authority: it only
+    returns a locally-held refresh token, which is validated and exchanged by
+    Supabase before Python treats the visitor as signed in.
+    """
+    session = st.session_state.get("beta_auth_session")
+    refresh_token = ""
+    if isinstance(session, dict):
+        refresh_token = str(session.get("refresh_token", "") or "")
+    bridge_result = _BETA_AUTH_PERSISTENCE_COMPONENT(
+        data={
+            "storageKey": _beta_browser_auth_storage_key(),
+            "refreshToken": refresh_token,
+            "clearRevision": int(
+                st.session_state.get("beta_auth_browser_clear_revision", 0) or 0
+            ),
+        },
+        key="beta_auth_persistence_bridge",
+    )
+
+    # An already live Streamlit session wins.  This also prevents the component
+    # from replaying its last trigger during ordinary in-app reruns.
+    if isinstance(session, dict):
+        return False
+
+    restored = getattr(bridge_result, "restore", None)
+    if not isinstance(restored, dict):
+        return False
+    candidate = str(restored.get("refreshToken", "") or "")
+    if not candidate or len(candidate) > 4096 or any(ch.isspace() for ch in candidate):
+        _beta_clear_browser_auth_storage()
+        return False
+    candidate_digest = hashlib.sha256(candidate.encode("utf-8")).hexdigest()
+    if candidate_digest == st.session_state.get("beta_auth_restored_refresh_digest"):
+        return False
+    st.session_state["beta_auth_restored_refresh_digest"] = candidate_digest
+
+    try:
+        token_response = _beta_http(
+            "POST",
+            "/auth/v1/token?grant_type=refresh_token",
+            payload={"refresh_token": candidate},
+        )
+        user = _beta_verify_access_token(
+            str(token_response.get("access_token", "") or "")
+        )
+        _beta_store_auth_session(token_response, user)
+        # Render once more with the (possibly rotated) refresh token so the
+        # browser store is immediately brought up to date.
+        st.rerun()
+    except Exception:
+        # A stale/revoked token is not a login failure message.  Remove it and
+        # let the regular Google sign-in affordance appear quietly.
+        _beta_clear_browser_auth_storage()
+        st.rerun()
+
+
 def _beta_verify_access_token(access_token):
     user = _beta_http("GET", "/auth/v1/user", access_token=access_token)
     if not isinstance(user, dict) or not user.get("id"):
@@ -5369,6 +5498,7 @@ def _beta_current_user():
             )
             st.session_state.pop("beta_auth_session", None)
             st.session_state.pop("beta_account_access_status", None)
+            _beta_clear_browser_auth_storage()
             return None
         _beta_record_login_once(session)
         return session
@@ -5476,6 +5606,7 @@ def _beta_logout_callback():
     st.session_state.pop("v12_member_style_bank_synced_user_id", None)
     st.session_state.pop("v12_member_style_bank_load_error", None)
     st.session_state.pop("beta_operational_login_user_id", None)
+    _beta_clear_browser_auth_storage()
     _beta_clear_cached_copy_usage_status()
 
 
@@ -7498,6 +7629,10 @@ def _beta_render_account_panel():
     _beta_complete_oauth_callback()
     session = _beta_current_user()
     if session:
+        # Keep the browser's rotating refresh token synchronized after a
+        # successful login or token renewal.  This is what lets F5 restore the
+        # same member rather than showing Google login again.
+        _beta_sync_browser_auth_session()
         _v12_sync_member_custom_style_bank(session)
         st.markdown(f"#### {t('login_title')}")
         user = session.get("user", {})
@@ -14297,6 +14432,14 @@ st.markdown("""<style>
 # reading the navigation role so an administrator sees the private entry on the
 # first clean page render after signing in.
 if _beta_config():
+    # A refresh has a new Streamlit session_state.  Restore first only when
+    # there is no OAuth callback to consume; the callback itself wins over any
+    # old browser session and will be mirrored after it succeeds.
+    if (
+        not isinstance(st.session_state.get("beta_auth_session"), dict)
+        and not str(st.query_params.get("code", "") or "")
+    ):
+        _beta_sync_browser_auth_session()
     _beta_complete_oauth_callback()
     _v12_close_payment_return_popup()
 
