@@ -1,1 +1,1 @@
-This one-time marker triggers the isolated Performance Lab database bootstrap (retry 5 after password reset).
+This one-time marker triggers the isolated Performance Lab database bootstrap (retry 6 with required SSL).
