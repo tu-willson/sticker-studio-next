@@ -51,13 +51,23 @@ jobs:
               exit 1
               ;;
           esac
-          if [[ "$PERF_LAB_DB_URL" == *"sslmode="* ]]; then
-            echo "PERF_LAB_REMOTE_URL=$PERF_LAB_DB_URL" >> "$GITHUB_ENV"
-          elif [[ "$PERF_LAB_DB_URL" == *"?"* ]]; then
-            echo "PERF_LAB_REMOTE_URL=${PERF_LAB_DB_URL}&sslmode=require" >> "$GITHUB_ENV"
-          else
-            echo "PERF_LAB_REMOTE_URL=${PERF_LAB_DB_URL}?sslmode=require" >> "$GITHUB_ENV"
-          fi
+          python - <<'PY'
+          import os
+          from urllib.parse import quote
+
+          url = os.environ["PERF_LAB_DB_URL"]
+          password = os.environ["SUPABASE_DB_PASSWORD"]
+          placeholder = "[YOUR-PASSWORD]"
+          if placeholder not in url:
+              raise SystemExit(
+                  "PERF_LAB_DB_URL must retain the [YOUR-PASSWORD] placeholder."
+              )
+          remote_url = url.replace(placeholder, quote(password, safe=""))
+          if "sslmode=" not in remote_url:
+              remote_url += "&sslmode=require" if "?" in remote_url else "?sslmode=require"
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              env_file.write(f"PERF_LAB_REMOTE_URL={remote_url}\\n")
+          PY
 
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v3
