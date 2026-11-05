@@ -1622,6 +1622,32 @@ div[class*="st-key-v12_basket_download_"] button{
   padding-right:.55rem !important;
   font-size:15px !important;
   white-space:nowrap !important;
+  background:#2588d8 !important;
+  border-color:#2588d8 !important;
+  color:#fff !important;
+  font-weight:850 !important;
+}
+div[class*="st-key-v12_basket_download_"] button:hover{
+  background:#1671bb !important;
+  border-color:#1671bb !important;
+}
+/* 三種快速總覽的整張圖卡皆可點選。Streamlit 的 image 元件沒有 on_click，
+   因此讓原生選取按鈕透明覆蓋在圖卡上；鍵盤與螢幕閱讀器仍保有按鈕語意。 */
+.st-key-v12_style_card_grid [data-testid="stColumn"],
+.st-key-v12_outline_card_grid [data-testid="stColumn"],
+.st-key-v12_font_card_grid [data-testid="stColumn"]{position:relative;}
+.st-key-v12_style_card_grid [data-testid="stButton"],
+.st-key-v12_outline_card_grid [data-testid="stButton"],
+.st-key-v12_font_card_grid [data-testid="stButton"]{position:absolute !important;inset:0 !important;z-index:4;width:100% !important;margin:0 !important;}
+.st-key-v12_style_card_grid [data-testid="stButton"] button,
+.st-key-v12_outline_card_grid [data-testid="stButton"] button,
+.st-key-v12_font_card_grid [data-testid="stButton"] button{width:100% !important;height:100% !important;min-height:0 !important;display:flex !important;align-items:flex-end !important;justify-content:center !important;padding:.35rem !important;border:1px solid transparent !important;border-radius:11px !important;background:linear-gradient(180deg,transparent 54%,rgba(11,30,55,.72)) !important;color:#fff !important;text-shadow:0 1px 3px rgba(0,0,0,.8);box-shadow:none !important;}
+.st-key-v12_style_card_grid [data-testid="stButton"] button:hover,
+.st-key-v12_outline_card_grid [data-testid="stButton"] button:hover,
+.st-key-v12_font_card_grid [data-testid="stButton"] button:hover{border-color:#66c8ff !important;background:linear-gradient(180deg,rgba(73,180,238,.1),rgba(18,107,173,.82)) !important;}
+.st-key-v12_style_card_grid [data-testid="stButton"] button:focus-visible,
+.st-key-v12_outline_card_grid [data-testid="stButton"] button:focus-visible,
+.st-key-v12_font_card_grid [data-testid="stButton"] button:focus-visible{outline:3px solid #88dcff !important;outline-offset:2px !important;}
 }
 .v12-project-save-divider{
   height:1px;
@@ -15454,6 +15480,12 @@ else:
 # 自定義風格改由獨立勾選啟用，預設風格下拉只保留預設選項。
 _v8_style_items = [x for x in V8_STYLES if not x.startswith("⭐ 自訂")]
 _style_options = ["↓ 請選擇風格"] + _v8_style_items
+_pending_style_gallery_pick = st.session_state.pop("v12_style_gallery_pending_pick", None)
+if _pending_style_gallery_pick in _style_options:
+    # 圖卡總覽位於 fragment 中；先以獨立旗標帶回完整頁面，才能讓外部
+    # 的原生下拉選單在建立前取得新值並立即顯示為已選取。
+    st.session_state["v10_style_mode"] = _pending_style_gallery_pick
+    st.session_state["v12_last_preset_style_mode"] = _pending_style_gallery_pick
 style_mode = str(st.session_state.get("v10_style_mode", "↓ 請選擇風格"))
 if style_mode in V12_RETIRED_STYLE_FALLBACKS:
     style_mode = V12_RETIRED_STYLE_FALLBACKS[style_mode]
@@ -15543,7 +15575,7 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
             )
             if not st.session_state["v12_style_gallery_open"]:
                 return
-            st.markdown('<div class="v12-style-gallery-note">點選縮圖下方的風格名稱即可暫選；完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
+            st.markdown('<div class="v12-style-gallery-note">點選任一張風格圖卡即可選取，會同步到上方下拉選單；完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
             category = st.selectbox("篩選風格類型", V12_STYLE_PREVIEW_CATEGORIES,
                 key="v12_style_gallery_category")
             if st.session_state.get("v12_style_gallery_last_category") != category:
@@ -15559,12 +15591,6 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
             current_styles = gallery_styles[start:start + per_page]
             st.caption(f"{category}｜顯示 {start + 1}～{start + len(current_styles)} ／ {len(gallery_styles)} 種")
 
-            def _pick_style(style_name):
-                st.session_state["v10_style_mode"] = style_name
-                st.session_state["v12_last_preset_style_mode"] = style_name
-                st.session_state["v12_style_gallery_open"] = False
-                _v12_mark_settings_pending()
-
             active_style = str(st.session_state.get("v10_style_mode", "") or "")
             with st.container(key="v12_style_card_grid"):
                 cols = st.columns(5)
@@ -15576,10 +15602,13 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                             st.image(str(path), use_container_width=True)
                         else:
                             st.info("縮圖準備中")
-                        st.button(("✅ " if active_style == name else "") + name,
+                        if st.button(("✅ " if active_style == name else "") + name,
                             key=f"v12_style_card_pick_{name}", use_container_width=True,
-                            type="primary" if active_style == name else "secondary",
-                            on_click=_pick_style, args=(name,))
+                            type="primary" if active_style == name else "secondary"):
+                            st.session_state["v12_style_gallery_pending_pick"] = name
+                            st.session_state["v12_style_gallery_open"] = False
+                            _v12_mark_settings_pending()
+                            st.rerun(scope="app")
 
             def _change_page(delta):
                 st.session_state["v12_style_gallery_page"] = max(1, min(total_pages, page + delta))
@@ -16707,6 +16736,9 @@ if _saved_text_style not in V8_TEXT_STYLE_OPTIONS:
     st.session_state["v8_text_style"] = V8_TEXT_STYLE_LEGACY_MAP.get(
         _saved_text_style, "不使用外框"
     )
+_pending_outline_gallery_pick = st.session_state.pop("v12_outline_gallery_pending_pick", None)
+if _pending_outline_gallery_pick in V8_TEXT_STYLE_OPTIONS:
+    st.session_state["v8_text_style"] = _pending_outline_gallery_pick
 @st.fragment
 def _v12_render_deferred_text_outline_select():
     return st.selectbox(
@@ -16745,12 +16777,7 @@ def _v12_render_deferred_outline_gallery():
         )
         if not st.session_state["v12_outline_gallery_open"] or _text_tools_disabled:
             return
-        st.markdown('<div class="v12-style-gallery-note">點選外框名稱即可暫選；完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
-
-        def _pick_outline(name):
-            st.session_state["v8_text_style"] = name
-            st.session_state["v12_outline_gallery_open"] = False
-            _v12_mark_settings_pending()
+        st.markdown('<div class="v12-style-gallery-note">點選任一張外框圖卡即可選取，會同步到上方下拉選單；完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
 
         active_outline = str(st.session_state.get("v8_text_style", "") or "")
         with st.container(key="v12_outline_card_grid"):
@@ -16765,10 +16792,13 @@ def _v12_render_deferred_outline_gallery():
                             st.image(str(path), use_container_width=True)
                         else:
                             st.info("縮圖準備中")
-                    st.button(("✅ " if active_outline == name else "") + _v12_localized_option(name, V12_TEXT_OUTLINE_LABELS),
+                    if st.button(("✅ " if active_outline == name else "") + _v12_localized_option(name, V12_TEXT_OUTLINE_LABELS),
                         key=f"v12_outline_card_pick_{name}", use_container_width=True,
-                        type="primary" if active_outline == name else "secondary",
-                        on_click=_pick_outline, args=(name,))
+                        type="primary" if active_outline == name else "secondary"):
+                        st.session_state["v12_outline_gallery_pending_pick"] = name
+                        st.session_state["v12_outline_gallery_open"] = False
+                        _v12_mark_settings_pending()
+                        st.rerun(scope="app")
 
 _v12_render_deferred_outline_gallery()
 
@@ -16785,6 +16815,12 @@ _font_labels = [
 
 if "v12_font_quick_pick" not in st.session_state:
     st.session_state["v12_font_quick_pick"] = "— 快速選擇字型｜可直接輸入數字 —"
+_pending_font_gallery_pick = st.session_state.pop("v12_font_gallery_pending_pick", None)
+if _pending_font_gallery_pick in V8_TEXT_EFFECT_CATALOG:
+    st.session_state["v8_selected_font"] = _pending_font_gallery_pick
+    st.session_state["v12_font_quick_pick"] = (
+        f"{_pending_font_gallery_pick:03d}｜{V8_TEXT_EFFECT_CATALOG[_pending_font_gallery_pick]}"
+    )
 
 _quick_font_choice = "— 快速選擇字型｜可直接輸入數字 —"
 if _sticker_mode in {"text", "expression"}:
@@ -16873,7 +16909,7 @@ if _v12_deferred_font_gallery:
         )
         if not st.session_state.v10_font_gallery_open or _text_tools_disabled:
             return
-        st.markdown('<div class="v12-font-gallery-note">📱 分頁瀏覽，每頁 12 種；點選編號即可暫選，完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
+        st.markdown('<div class="v12-font-gallery-note">📱 分頁瀏覽，每頁 12 種；點選任一張字型圖卡即可選取並同步上方下拉選單，完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
         per_page = 12
         total_pages = (125 + per_page - 1) // per_page
         page = st.selectbox("📄 瀏覽頁數", list(range(1, total_pages + 1)), key="v12_font_gallery_page_select")
@@ -16881,12 +16917,6 @@ if _v12_deferred_font_gallery:
         start_no = (page - 1) * per_page + 1
         end_no = min(125, start_no + per_page - 1)
         st.caption(f"目前顯示 {start_no:03d}～{end_no:03d} ／ 125")
-
-        def _pick_font(font_no):
-            st.session_state["v8_selected_font"] = font_no
-            st.session_state["v12_font_quick_pick"] = f"{font_no:03d}｜{V8_TEXT_EFFECT_CATALOG[font_no]}"
-            st.session_state["v10_font_gallery_open"] = False
-            _v12_mark_settings_pending()
 
         with st.container(key="v12_font_card_grid"):
             cols = st.columns(4)
@@ -16896,8 +16926,13 @@ if _v12_deferred_font_gallery:
                     continue
                 with cols[index % 4]:
                     st.image(str(path), use_container_width=True)
-                    st.button(f"{font_no:03d}", key=f"font_card_pick_{font_no}",
-                        use_container_width=True, on_click=_pick_font, args=(font_no,))
+                    if st.button(f"{font_no:03d}", key=f"font_card_pick_{font_no}",
+                        use_container_width=True):
+                        st.session_state["v12_font_gallery_pending_pick"] = font_no
+                        st.session_state["v10_font_gallery_open"] = False
+                        st.session_state["v10_scroll_to_font_result"] = True
+                        _v12_mark_settings_pending()
+                        st.rerun(scope="app")
                     st.caption(_v12_font_display_name(font_no))
 
         def _change_font_page(delta):
