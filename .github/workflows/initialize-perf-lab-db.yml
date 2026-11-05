@@ -7,6 +7,11 @@ on:
         description: "Type kvistqhcphsalxdlnhxw to confirm the isolated performance-lab database"
         required: true
         type: string
+  push:
+    branches:
+      - perf-lab
+    paths:
+      - .perf-lab/initialize-database
 
 permissions:
   contents: read
@@ -14,7 +19,9 @@ permissions:
 jobs:
   migrate:
     name: Apply schema only to Performance Lab
-    if: inputs.confirm_project_ref == 'kvistqhcphsalxdlnhxw'
+    if: >
+      (github.event_name == 'workflow_dispatch' && inputs.confirm_project_ref == 'kvistqhcphsalxdlnhxw') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/perf-lab')
     runs-on: ubuntu-latest
     env:
       PERF_LAB_DB_URL: ${{ secrets.PERF_LAB_DB_URL }}
