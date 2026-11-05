@@ -26,6 +26,11 @@ jobs:
     env:
       SUPABASE_DB_PASSWORD: ${{ secrets.PERF_LAB_DB_PASSWORD }}
       PERF_LAB_PROJECT_REF: kvistqhcphsalxdlnhxw
+      PGHOST: aws-0-ap-southeast-2.pooler.supabase.com
+      PGPORT: "5432"
+      PGUSER: postgres.kvistqhcphsalxdlnhxw
+      PGDATABASE: postgres
+      PGSSLMODE: require
     steps:
       - name: Check out performance-lab source
         uses: actions/checkout@v6
@@ -39,29 +44,36 @@ jobs:
             echo "Missing PERF_LAB_DB_PASSWORD repository secret." >&2
             exit 1
           }
-          python - <<'PY'
-          import os
-          from urllib.parse import quote
-
-          password = os.environ["SUPABASE_DB_PASSWORD"]
-          project_ref = os.environ["PERF_LAB_PROJECT_REF"]
-          # This project is in ap-southeast-2. Construct the Session pooler
-          # URI here so user-entered connection strings cannot be malformed.
-          remote_url = (
-              f"postgresql://postgres.{project_ref}:{quote(password, safe='')}"
-              "@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres?sslmode=require"
-          )
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
-              env_file.write(f"PERF_LAB_REMOTE_URL={remote_url}\\n")
-          PY
-
-      - name: Set up Supabase CLI
-        uses: supabase/setup-cli@v3
-        with:
-          version: latest
+      - name: Verify isolated database connection
+        env:
+          PGPASSWORD: ${{ secrets.PERF_LAB_DB_PASSWORD }}
+        run: psql -w -v ON_ERROR_STOP=1 -c "select current_database(), current_user"
 
       - name: Preview pending migrations
-        run: supabase db push --yes --remote="$PERF_LAB_REMOTE_URL" --dry-run
+        run: |
+          find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort
 
       - name: Apply pending migrations
-        run: supabase db push --yes --remote="$PERF_LAB_REMOTE_URL"
+        env:
+          PGPASSWORD: ${{ secrets.PERF_LAB_DB_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -w -v ON_ERROR_STOP=1 -c 'create schema if not exists perf_lab_meta'
+          psql -w -v ON_ERROR_STOP=1 -c '
+            create table if not exists perf_lab_meta.migration_history (
+              filename text primary key,
+              applied_at timestamptz not null default now()
+            )
+          '
+          while IFS= read -r migration; do
+            filename="$(basename "$migration")"
+            already_applied="$(psql -w -Atqc "select 1 from perf_lab_meta.migration_history where filename = '$filename'" || true)"
+            if [[ "$already_applied" == "1" ]]; then
+              echo "Skipping already applied migration: $filename"
+              continue
+            fi
+            echo "Applying migration: $filename"
+            psql -w -v ON_ERROR_STOP=1 --single-transaction -f "$migration"
+            psql -w -v ON_ERROR_STOP=1 -c "insert into perf_lab_meta.migration_history (filename) values ('$filename')"
+          done < <(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | sort)
