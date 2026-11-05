@@ -15697,35 +15697,40 @@ if isinstance(_saved_character_options, list):
     st.session_state["v10_character_options"] = [
         option for option in _saved_character_options if option in CHARACTER_OPTIONS
     ]
-# Do not place these controls in a form.  A Streamlit form keeps the browser's
-# visible values separate from Session State until its submit button is
-# pressed, which made a cleared feature look empty while generation still used
-# an older selection.  Changes now reach the current creation snapshot at once.
-selected_character = st.multiselect(
-    t("feature_select"),
-    CHARACTER_OPTIONS,
-    key="v10_character_options",
-    on_change=_v12_capture_character_settings_draft,
-)
-st.text_area(
-    t("custom_character"),
-    key="v10_character_custom_1",
-    height=70,
-    on_change=_v12_capture_character_settings_draft,
-)
-with st.container(key="v12_character_settings_apply_button"):
-    _save_character_settings = st.button(
-        t("save_character"),
-        type="primary",
-        use_container_width=True,
-        on_click=_v12_capture_character_settings_draft,
+# Performance Lab first step: keep ordinary STEP 03 choices in a Streamlit
+# form.  Selecting features or writing a scene note now stays entirely in the
+# browser until the member deliberately applies it.  The form submit itself is
+# the single, expected rerun that updates the durable creation draft used by
+# generation, project loading, and reel loading.
+#
+# This replaces the former per-widget on_change reruns.  We intentionally do
+# not use clear_on_submit: an empty list or empty note is a valid explicit
+# edit and must overwrite the previous draft when the member presses Apply.
+with st.form("v12_character_settings_draft_form", border=False):
+    selected_character = st.multiselect(
+        t("feature_select"),
+        CHARACTER_OPTIONS,
+        key="v10_character_options",
     )
+    st.text_area(
+        t("custom_character"),
+        key="v10_character_custom_1",
+        height=70,
+    )
+    with st.container(key="v12_character_settings_apply_button"):
+        _save_character_settings = st.form_submit_button(
+            "✅ 套用人物／畫面設定",
+            type="primary",
+            use_container_width=True,
+            help="一次套用這一區的人物／畫面特色與自定義需求；輸入與勾選期間不會重新讀取頁面。",
+        )
 custom_character = str(
     st.session_state.get("v10_character_custom_1", "") or ""
 ).strip()
 if _save_character_settings:
+    _v12_capture_character_settings_draft()
     if _save_v10_presets():
-        st.success(t("character_saved"))
+        st.success("✅ 人物／畫面設定已套用。")
     else:
         st.error(t("save_failed"))
 
