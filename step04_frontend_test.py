@@ -626,7 +626,9 @@ GENERATOR_CSS = r"""
 :host { display:block; width:100%; }
 .step04-generator-root button { width:100%; min-height:42px; border:0; border-radius:9px;
   background:#ff5878; color:#fff; font:inherit; font-size:16px; font-weight:850; cursor:pointer; }
-.step04-generator-root button:disabled { opacity:.62; cursor:wait; }
+.step04-generator-root button:disabled { opacity:.72; cursor:not-allowed; }
+.step04-generator-root button.is-generating:disabled { cursor:wait; }
+.step04-generator-root button.needs-apply:disabled { background:rgba(112,139,175,.72); color:#eef5ff; }
 """
 GENERATOR_JS = r"""
 export default function(component) {
@@ -647,14 +649,16 @@ export default function(component) {
       slot => String(slot?.text || '').trim()
     ))
   );
-  const needsSettingsApply = !readDraft() || readDraft()?.settingsAppliedFingerprint !== fingerprint(readDraft());
+  const draft = readDraft();
+  const needsSettingsApply = Boolean(data.settingsPending) || !draft || draft.settingsAppliedFingerprint !== fingerprint(draft);
   const disabled = Boolean(data.disabled) || needsSettingsApply;
   const label = data.disabled
     ? '🔄 AI 正在生成，請稍候……'
     : needsSettingsApply
-      ? '🧩 請先套用所有設定'
+      ? '⚠️ 請按下「套用所有設定」按鈕後，方能進行生成'
     : '✨ 生成 4×2 八格總圖';
-  root.innerHTML = `<button ${disabled ? 'disabled' : ''}>${label}</button>`;
+  const buttonClass = data.disabled ? 'is-generating' : needsSettingsApply ? 'needs-apply' : '';
+  root.innerHTML = `<button class="${buttonClass}" ${disabled ? 'disabled' : ''}>${label}</button>`;
   const button = root.querySelector('button');
   button.addEventListener('click', () => {
     // STEP 04 inputs deliberately stay browser-only while users type, so this
@@ -693,9 +697,9 @@ def render_frontend_generate_button(*, data, key):
 APPLY_SETTINGS_HTML = '<div class="step04-apply-settings-root"></div>'
 APPLY_SETTINGS_CSS = r"""
 :host { display:block; width:100%; }
-.step04-apply-settings-root button { width:100%; min-height:48px; border:1px solid rgba(167,139,250,.9);
+.step04-apply-settings-root button { width:100%; min-height:58px; border:1px solid rgba(167,139,250,.9);
   border-radius:11px; background:linear-gradient(100deg,rgba(92,198,255,.66),rgba(160,110,255,.66),rgba(255,104,157,.62));
-  color:#fff; font:inherit; font-size:17px; font-weight:900; letter-spacing:.02em; cursor:pointer;
+  color:#fff; font:inherit; font-size:16px; font-weight:900; line-height:1.35; white-space:pre-line; letter-spacing:.02em; cursor:pointer;
   box-shadow:0 5px 18px rgba(103,119,255,.24); }
 .step04-apply-settings-root button:hover { filter:brightness(1.1); transform:translateY(-1px); }
 .step04-apply-settings-root button:disabled { opacity:.62; cursor:wait; transform:none; }
