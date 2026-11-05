@@ -12536,6 +12536,9 @@ def _v12_step04_frontend_component_state():
             ai_quota_text = "AI幫想 今日額度（台灣時間）：暫時無法確認"
     return {
         "mode": snapshot["mode"],
+        "forceTextMode": bool(
+            st.session_state.get("v12_use_text_only_style", False)
+        ),
         "sourcePanel": str(
             st.session_state.get("v12_step04_frontend_source_panel", "") or ""
         ),
@@ -12609,6 +12612,11 @@ def _v12_apply_step04_frontend_snapshot(payload):
         }
 
     mode = "expression" if payload.get("mode") == "expression" else "text"
+    # The browser editor also disables this option, but the canonical state is
+    # the final authority: pure-text design must never accept an expression
+    # mode from an old local draft or a crafted component payload.
+    if bool(st.session_state.get("v12_use_text_only_style", False)):
+        mode = "text"
     st.session_state["v12_sticker_content_mode"] = (
         V12_STICKER_EXPRESSION_MODE if mode == "expression" else V12_STICKER_TEXT_MODE
     )
@@ -15814,6 +15822,13 @@ if _v12_step04_frontend_enabled:
 
 def _v12_set_sticker_content_mode(mode):
     # 切換模式前後都以獨立草稿保存／回填，不依賴條件式 widget state。
+    if (
+        mode == V12_STICKER_EXPRESSION_MODE
+        and bool(st.session_state.get("v12_use_text_only_style", False))
+    ):
+        # 純文字設計不允許無文字表情模式；這是前端 disabled 之外的
+        # server-side safety guard，避免舊 localStorage 草稿覆寫目前模式。
+        return
     if mode == V12_STICKER_EXPRESSION_MODE:
         _v12_capture_sticker_action_draft()
         _v12_restore_expression_widgets()
@@ -15848,6 +15863,7 @@ if not _v12_step04_frontend_enabled:
             type="primary" if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "secondary",
             on_click=_v12_set_sticker_content_mode,
             args=(V12_STICKER_EXPRESSION_MODE,),
+            disabled=bool(st.session_state.get("v12_use_text_only_style", False)),
         )
     if _sticker_mode == "text":
         v12_mode_panel_heading(t("text_source_heading"), '#3498db')
@@ -16468,6 +16484,9 @@ _text_reference_dimensional_active = bool(
     _text_reference_priority_active
     and st.session_state.get("v12_text_reference_dimensional", False)
 )
+_text_tools_disabled = bool(
+    _sticker_mode != "text" or _text_reference_priority_active
+)
 if _text_reference_priority_active:
     # 暫時收起既有圖卡，不清除使用者原本的選擇；取消優先模式後可直接恢復。
     st.session_state["v12_outline_gallery_open"] = False
@@ -16479,34 +16498,35 @@ if _sticker_mode == "text":
             st.markdown(f"**{_v12_localized_option(cat, V12_RANDOM_POOL_LABELS)}**")
             st.write("、".join(vals))
 
-if _sticker_mode == "text":
-    st.divider()
-    v10_section(t("font_section"), "#8e67d8")
-    v10_subsection(t("font_outline"), "#8e67d8")
-    v12_font_caption(t("font_outline_caption"))
-    _saved_text_style = str(st.session_state.get("v8_text_style", "") or "")
-    if _saved_text_style not in V8_TEXT_STYLE_OPTIONS:
-        st.session_state["v8_text_style"] = V8_TEXT_STYLE_LEGACY_MAP.get(
-            _saved_text_style, "不使用外框"
-        )
-    @st.fragment
-    def _v12_render_deferred_text_outline_select():
-        return st.selectbox(
-            t("font_label"),
-            V8_TEXT_STYLE_OPTIONS,
-            index=0,
-            key="v8_text_style",
-            format_func=lambda value: _v12_localized_option(value, V12_TEXT_OUTLINE_LABELS),
-            disabled=_text_reference_priority_active,
-            on_change=_v12_mark_settings_pending,
-        )
+st.divider()
+v10_section(t("font_section"), "#8e67d8")
+v10_subsection(t("font_outline"), "#8e67d8")
+v12_font_caption(t("font_outline_caption"))
+_saved_text_style = str(st.session_state.get("v8_text_style", "") or "")
+if _saved_text_style not in V8_TEXT_STYLE_OPTIONS:
+    st.session_state["v8_text_style"] = V8_TEXT_STYLE_LEGACY_MAP.get(
+        _saved_text_style, "不使用外框"
+    )
+@st.fragment
+def _v12_render_deferred_text_outline_select():
+    return st.selectbox(
+        t("font_label"),
+        V8_TEXT_STYLE_OPTIONS,
+        index=0,
+        key="v8_text_style",
+        format_func=lambda value: _v12_localized_option(value, V12_TEXT_OUTLINE_LABELS),
+        disabled=_text_tools_disabled,
+        on_change=_v12_mark_settings_pending,
+    )
 
-    text_style = _v12_render_deferred_text_outline_select()
-    if _text_reference_priority_active:
-        st.info("🖋️ 文字畫風參考優先已啟用：本次會保留你的外框選擇，但不會套用外框效果。")
+text_style = _v12_render_deferred_text_outline_select()
+if _text_reference_priority_active:
+    st.info("🖋️ 文字畫風參考優先已啟用：本次會保留你的外框選擇，但不會套用外框效果。")
+elif _sticker_mode != "text":
+    st.info("😶 已選擇「使用表情貼圖（無文字）」：文字外框與帶圖字型會保留顯示，但本次不可使用。")
 
-    @st.fragment
-    def _v12_render_deferred_outline_gallery():
+@st.fragment
+def _v12_render_deferred_outline_gallery():
         """Opening or choosing an outline refreshes only the preview block."""
         st.session_state.setdefault("v12_outline_gallery_open", False)
 
@@ -16521,9 +16541,9 @@ if _sticker_mode == "text":
             else "收起文字外框縮圖總覽",
             key="v12_outline_gallery_toggle", use_container_width=True,
             on_click=_toggle_outline_gallery,
-            disabled=_text_reference_priority_active,
+            disabled=_text_tools_disabled,
         )
-        if not st.session_state["v12_outline_gallery_open"] or _text_reference_priority_active:
+        if not st.session_state["v12_outline_gallery_open"] or _text_tools_disabled:
             return
         st.markdown('<div class="v12-style-gallery-note">點選外框名稱即可暫選；完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
 
@@ -16550,13 +16570,10 @@ if _sticker_mode == "text":
                         type="primary" if active_outline == name else "secondary",
                         on_click=_pick_outline, args=(name,))
 
-    _v12_render_deferred_outline_gallery()
-else:
-    text_style = ""
+_v12_render_deferred_outline_gallery()
 
 _selected_font = st.session_state.get("v8_selected_font", None)
-if _sticker_mode == "text":
-    v10_subsection(t("font_catalog"), "#8e67d8")
+v10_subsection(t("font_catalog"), "#8e67d8")
 
 # 125 種帶圖字型｜快速選擇＋分頁圖卡總覽
 # 手機不再一次渲染 125 張大圖，降低滑動成本。
@@ -16570,7 +16587,7 @@ if "v12_font_quick_pick" not in st.session_state:
     st.session_state["v12_font_quick_pick"] = "— 快速選擇字型｜可直接輸入數字 —"
 
 _quick_font_choice = "— 快速選擇字型｜可直接輸入數字 —"
-if _sticker_mode == "text":
+if _sticker_mode in {"text", "expression"}:
     v12_font_caption(t("font_pick_caption"))
     st.markdown('<div id="v10-font-result-anchor" style="scroll-margin-top: 72px;"></div>', unsafe_allow_html=True)
     def _v12_quick_font_pick_changed():
@@ -16594,7 +16611,7 @@ if _sticker_mode == "text":
             ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
             key="v12_font_quick_pick",
             format_func=_v12_font_choice_display,
-            disabled=_text_reference_priority_active,
+            disabled=_text_tools_disabled,
             on_change=_v12_quick_font_pick_changed,
         )
 
@@ -16607,6 +16624,8 @@ if _sticker_mode == "text":
         _selected_font = _quick_font_no
     if _text_reference_priority_active:
         st.info("🖋️ 文字畫風參考優先已啟用：本次會保留你的字型選擇，但不會套用 125 種帶圖字型。")
+    elif _sticker_mode != "text":
+        st.info("😶 無文字表情貼圖模式中：此區保留供查看，但不可選取或套用。")
     elif not _selected_font:
         st.info(t("font_none"))
 
@@ -16637,7 +16656,7 @@ if "v12_font_gallery_page" not in st.session_state:
     st.session_state.v12_font_gallery_page = 1
 
 _v12_deferred_font_gallery = True
-if _v12_deferred_font_gallery and _sticker_mode == "text":
+if _v12_deferred_font_gallery:
     @st.fragment
     def _v12_render_deferred_font_gallery():
         """Load at most one font-preview page without rerunning the creator."""
@@ -16650,9 +16669,9 @@ if _v12_deferred_font_gallery and _sticker_mode == "text":
             t("font_open_gallery") if not st.session_state.v10_font_gallery_open else t("font_close_gallery"),
             key="v10_font_gallery_toggle", use_container_width=True,
             on_click=_toggle_font_gallery,
-            disabled=_text_reference_priority_active,
+            disabled=_text_tools_disabled,
         )
-        if not st.session_state.v10_font_gallery_open or _text_reference_priority_active:
+        if not st.session_state.v10_font_gallery_open or _text_tools_disabled:
             return
         st.markdown('<div class="v12-font-gallery-note">📱 分頁瀏覽，每頁 12 種；點選編號即可暫選，完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
         per_page = 12

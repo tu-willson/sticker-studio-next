@@ -23,7 +23,7 @@ EDITOR_CSS = r"""
 .s4-mode { min-height:40px; border:1px solid #526a86; border-radius:8px; cursor:pointer;
   background:rgba(29,43,64,.82); color:#d8e6f6; font-size:15px; font-weight:760; }
 .s4-mode.active { background:#ff5878; border-color:#ff7893; color:white; box-shadow:none; }
-.s4-mode:disabled { cursor:wait; opacity:.7; }
+.s4-mode:disabled { cursor:not-allowed; opacity:.7; }
 .s4-mode-sync-notice { margin:-20px 16px 18px; color:#a9ddff; font-size:13px; font-weight:800; text-align:center; }
 .s4-heading { max-width:900px; margin:0 auto; padding:10px 16px; border:2px solid #279fe7; border-radius:11px; color:#f0f8ff;
   background:rgba(21,52,79,.46); font-size:20px; font-weight:850; text-align:center; }
@@ -93,6 +93,7 @@ export default function(component) {
   const formal = Boolean(data.formal);
   const revision = String(data.revision || '');
   const initial = data.initial && typeof data.initial === 'object' ? data.initial : {};
+  const forceTextMode = Boolean(initial.forceTextMode);
   const aiQuotaText = String(initial.aiQuotaText || 'AI幫想 今日額度（台灣時間）：登入後可查看');
   const aiLoginNotice = String(initial.aiLoginNotice || '');
   const COLOR_OPTIONS = [
@@ -180,6 +181,11 @@ export default function(component) {
     state.__revision = revision;
     localStorage.setItem(storageKey, JSON.stringify(state));
   };
+  if (forceTextMode && state.mode !== 'text') {
+    state.mode = 'text';
+    state.sourcePanel = '';
+    save();
+  }
   // Hydrating an existing browser draft must preserve a prior global Apply.
   save(false);
   const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -320,9 +326,9 @@ export default function(component) {
       <div class="s4-shell">
         <div class="s4-mode-row">
           <button class="s4-mode ${textMode ? 'active' : ''}" data-mode="text" ${modeSwitching ? 'disabled' : ''}>${textMode ? '✓ ' : ''}💬 使用文字貼圖</button>
-          <button class="s4-mode ${!textMode ? 'active' : ''}" data-mode="expression" ${modeSwitching ? 'disabled' : ''}>${!textMode ? '✓ ' : ''}😶 使用表情貼圖（無文字）</button>
+          <button class="s4-mode ${!textMode ? 'active' : ''}" data-mode="expression" ${(modeSwitching || forceTextMode) ? 'disabled' : ''}>${!textMode ? '✓ ' : ''}😶 使用表情貼圖（無文字）</button>
         </div>
-        ${modeSwitching ? '<div class="s4-mode-sync-notice">⌛ 正在切換模式，請稍候…</div>' : ''}
+        ${forceTextMode ? '<div class="s4-mode-sync-notice">📝 已啟用純文字設計；無文字表情貼圖模式暫時不可使用。</div>' : modeSwitching ? '<div class="s4-mode-sync-notice">⌛ 正在切換模式，請稍候…</div>' : ''}
         <div class="s4-heading">${textMode ? '💬 使用文字貼圖' : '😶 使用表情貼圖（無文字）'}</div>
         ${textMode ? sourcePanel() : '<p class="s4-caption">切換模式時會短暫同步；設定表情不會讀取頁面。回到文字模式後，先前的 01～08 文字仍會保留。</p>'}
         <div class="s4-grid">${firstRow}</div>
@@ -416,6 +422,7 @@ export default function(component) {
       return;
     }
     if (button.dataset.mode) {
+      if (forceTextMode && button.dataset.mode === 'expression') return;
       if (modeSwitching || button.disabled) return;
       modeSwitching = true;
       state.mode = button.dataset.mode;
