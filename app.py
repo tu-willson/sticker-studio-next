@@ -742,10 +742,34 @@ def _v12_style_reference_influence_changed(mode):
         st.session_state["v12_text_reference_priority"] = False
         st.session_state["v12_text_reference_dimensional"] = False
     elif mode == "text_priority":
-        st.session_state["v12_style_reference_soft_choice"] = False
-        st.session_state["v12_style_reference_strong_choice"] = False
-        st.session_state["v12_text_reference_priority"] = True
+        priority_enabled = bool(
+            st.session_state.get("v12_text_reference_priority", False)
+        )
+        if priority_enabled:
+            st.session_state["v12_style_reference_soft_choice"] = False
+            st.session_state["v12_style_reference_strong_choice"] = False
+        st.session_state["v12_text_reference_priority"] = priority_enabled
     _v12_mark_settings_pending()
+
+
+def _v12_text_reference_priority_changed():
+    """Synchronize text-priority to the downstream font controls immediately."""
+    _v12_style_reference_influence_changed("text_priority")
+    # This is the one STEP 02 option whose effect lives in a later section of
+    # the page.  A full rerun is intentional: it immediately disables or
+    # restores the text-outline and 125-font controls, while all ordinary
+    # typing remains fragment-local.
+    st.rerun()
+
+
+def _v12_style_reference_strength_changed(mode):
+    """Restore downstream text controls when strength replaces priority mode."""
+    was_text_priority = bool(
+        st.session_state.get("v12_text_reference_priority", False)
+    )
+    _v12_style_reference_influence_changed(mode)
+    if was_text_priority:
+        st.rerun()
 
 
 def _v12_sync_saved_style_choice_to_editor(choice):
@@ -15666,18 +15690,18 @@ else:
             )
             with _reference_soft_col:
                 st.checkbox(t("style_strength_soft"), key="v12_style_reference_soft_choice",
-                    on_change=_v12_style_reference_influence_changed, args=("soft",),
+                    on_change=_v12_style_reference_strength_changed, args=("soft",),
                     help=t("style_strength_help"))
             with _reference_strong_col:
                 st.checkbox(t("style_strength_strong"), key="v12_style_reference_strong_choice",
-                    on_change=_v12_style_reference_influence_changed, args=("strong",),
+                    on_change=_v12_style_reference_strength_changed, args=("strong",),
                     help=t("style_strength_help"))
             with _reference_text_col:
                 st.checkbox(
                     "🖋️ 文字畫風參考優先（使用上傳參考圖的字體意象）",
                     key="v12_text_reference_priority",
-                    on_change=_v12_style_reference_influence_changed,
-                    args=("text_priority",), disabled=not _reference_priority_available,
+                    on_change=_v12_text_reference_priority_changed,
+                    disabled=not _reference_priority_available,
                     help="啟用後會暫時不套用 125 種帶圖字型與文字外框，改以這張畫風參考的字體筆觸、材質、配色與留白為最高優先。",
                 )
             if _text_reference_priority_selected and _reference_priority_available:
