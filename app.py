@@ -15245,119 +15245,79 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
 
         style_mode = _v12_render_deferred_preset_style_select()
 
-        # 縮圖總覽與字型圖卡採相同模式：平常保持精簡，需要時再展開瀏覽。
-        st.session_state.setdefault("v12_style_gallery_open", False)
-        st.session_state.setdefault("v12_style_gallery_category", "全部")
-        st.session_state.setdefault("v12_style_gallery_page", 1)
-        st.button(
-            "🖼️ 快速瀏覽 35 種貼圖風格"
-            if not st.session_state["v12_style_gallery_open"]
-            else "收起貼圖風格縮圖總覽",
-            key="v12_style_gallery_toggle",
-            use_container_width=True,
-            on_click=_v12_set_session_state_callback,
-            args=("v12_style_gallery_open", not st.session_state["v12_style_gallery_open"]),
-        )
-        if st.session_state["v12_style_gallery_open"]:
-            st.markdown(
-                '<div class="v12-style-gallery-note">'
-                '點選縮圖下方的風格名稱即可套用。縮圖為範例效果；實際生成仍會依人物照片、文字與動作重新創作。'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-            _style_gallery_category = st.selectbox(
-                "篩選風格類型",
-                V12_STYLE_PREVIEW_CATEGORIES,
-                key="v12_style_gallery_category",
-            )
-            if st.session_state.get("v12_style_gallery_last_category") != _style_gallery_category:
-                st.session_state["v12_style_gallery_last_category"] = _style_gallery_category
-                st.session_state["v12_style_gallery_page"] = 1
-            _gallery_styles = [
-                _style_name for _style_name in _v8_style_items
-                if _style_name in V12_STYLE_PREVIEW_CATALOG
-                and (
-                    _style_gallery_category == "全部"
-                    or V12_STYLE_PREVIEW_CATALOG[_style_name][0] == _style_gallery_category
-                )
-            ]
-            _gallery_per_page = 10
-            _gallery_total_pages = max(
-                1, (_gallery_styles.__len__() + _gallery_per_page - 1) // _gallery_per_page
-            )
-            _gallery_page = max(
-                1,
-                min(int(st.session_state.get("v12_style_gallery_page", 1)), _gallery_total_pages),
-            )
-            st.session_state["v12_style_gallery_page"] = _gallery_page
-            _gallery_start = (_gallery_page - 1) * _gallery_per_page
-            _gallery_current_styles = _gallery_styles[
-                _gallery_start:_gallery_start + _gallery_per_page
-            ]
-            st.caption(
-                f"{_style_gallery_category}｜顯示 {_gallery_start + 1}～"
-                f"{_gallery_start + len(_gallery_current_styles)} ／ {len(_gallery_styles)} 種"
-            )
+        @st.fragment
+        def _v12_render_deferred_style_gallery():
+            """Browse only this preview block; never reread the whole creator."""
+            st.session_state.setdefault("v12_style_gallery_open", False)
+            st.session_state.setdefault("v12_style_gallery_category", "全部")
+            st.session_state.setdefault("v12_style_gallery_page", 1)
 
-            def _v12_pick_style_from_card(style_name):
+            def _toggle_style_gallery():
+                st.session_state["v12_style_gallery_open"] = not bool(
+                    st.session_state.get("v12_style_gallery_open", False)
+                )
+
+            st.button(
+                "🖼️ 快速瀏覽 35 種貼圖風格"
+                if not st.session_state["v12_style_gallery_open"]
+                else "收起貼圖風格縮圖總覽",
+                key="v12_style_gallery_toggle", use_container_width=True,
+                on_click=_toggle_style_gallery,
+            )
+            if not st.session_state["v12_style_gallery_open"]:
+                return
+            st.markdown('<div class="v12-style-gallery-note">點選縮圖下方的風格名稱即可暫選；完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
+            category = st.selectbox("篩選風格類型", V12_STYLE_PREVIEW_CATEGORIES,
+                key="v12_style_gallery_category")
+            if st.session_state.get("v12_style_gallery_last_category") != category:
+                st.session_state["v12_style_gallery_last_category"] = category
+                st.session_state["v12_style_gallery_page"] = 1
+            gallery_styles = [name for name in _v8_style_items
+                if name in V12_STYLE_PREVIEW_CATALOG and (category == "全部" or V12_STYLE_PREVIEW_CATALOG[name][0] == category)]
+            per_page = 10
+            total_pages = max(1, (len(gallery_styles) + per_page - 1) // per_page)
+            page = max(1, min(int(st.session_state.get("v12_style_gallery_page", 1)), total_pages))
+            st.session_state["v12_style_gallery_page"] = page
+            start = (page - 1) * per_page
+            current_styles = gallery_styles[start:start + per_page]
+            st.caption(f"{category}｜顯示 {start + 1}～{start + len(current_styles)} ／ {len(gallery_styles)} 種")
+
+            def _pick_style(style_name):
                 st.session_state["v10_style_mode"] = style_name
                 st.session_state["v12_last_preset_style_mode"] = style_name
                 st.session_state["v12_style_gallery_open"] = False
                 _v12_mark_settings_pending()
 
+            active_style = str(st.session_state.get("v10_style_mode", "") or "")
             with st.container(key="v12_style_card_grid"):
-                _style_card_cols = st.columns(5)
-                for _style_card_index, _style_card_name in enumerate(_gallery_current_styles):
-                    _style_card_category, _style_card_asset = V12_STYLE_PREVIEW_CATALOG[
-                        _style_card_name
-                    ]
-                    _style_card_path = V12_STYLE_PREVIEW_DIR / _style_card_asset
-                    with _style_card_cols[_style_card_index % 5]:
-                        if _style_card_path.exists():
-                            st.image(str(_style_card_path), use_container_width=True)
+                cols = st.columns(5)
+                for index, name in enumerate(current_styles):
+                    _, asset = V12_STYLE_PREVIEW_CATALOG[name]
+                    path = V12_STYLE_PREVIEW_DIR / asset
+                    with cols[index % 5]:
+                        if path.exists():
+                            st.image(str(path), use_container_width=True)
                         else:
                             st.info("縮圖準備中")
-                        st.button(
-                            ("✅ " if style_mode == _style_card_name else "")
-                            + _style_card_name,
-                            key=f"v12_style_card_pick_{_style_card_name}",
-                            use_container_width=True,
-                            type="primary" if style_mode == _style_card_name else "secondary",
-                            on_click=_v12_pick_style_from_card,
-                            args=(_style_card_name,),
-                        )
+                        st.button(("✅ " if active_style == name else "") + name,
+                            key=f"v12_style_card_pick_{name}", use_container_width=True,
+                            type="primary" if active_style == name else "secondary",
+                            on_click=_pick_style, args=(name,))
 
-            def _v12_change_style_gallery_page(delta):
-                current = int(st.session_state.get("v12_style_gallery_page", 1))
-                st.session_state["v12_style_gallery_page"] = max(
-                    1, min(_gallery_total_pages, current + delta)
-                )
+            def _change_page(delta):
+                st.session_state["v12_style_gallery_page"] = max(1, min(total_pages, page + delta))
 
-            _style_prev_col, _style_page_col, _style_next_col = st.columns([1, 1.2, 1])
-            with _style_prev_col:
-                st.button(
-                    "⬅️ 上一頁",
-                    key="v12_style_gallery_prev",
-                    use_container_width=True,
-                    disabled=_gallery_page <= 1,
-                    on_click=_v12_change_style_gallery_page,
-                    args=(-1,),
-                )
-            with _style_page_col:
-                st.markdown(
-                    f'<div style="text-align:center;padding:.55rem 0;font-weight:800;">'
-                    f'第 {_gallery_page} / {_gallery_total_pages} 頁</div>',
-                    unsafe_allow_html=True,
-                )
-            with _style_next_col:
-                st.button(
-                    "下一頁 ➡️",
-                    key="v12_style_gallery_next",
-                    use_container_width=True,
-                    disabled=_gallery_page >= _gallery_total_pages,
-                    on_click=_v12_change_style_gallery_page,
-                    args=(1,),
-                )
+            prev_col, page_col, next_col = st.columns([1, 1.2, 1])
+            with prev_col:
+                st.button("⬅️ 上一頁", key="v12_style_gallery_prev", use_container_width=True,
+                    disabled=page <= 1, on_click=_change_page, args=(-1,))
+            with page_col:
+                st.markdown(f'<div style="text-align:center;padding:.55rem 0;font-weight:800;">第 {page} / {total_pages} 頁</div>', unsafe_allow_html=True)
+            with next_col:
+                st.button("下一頁 ➡️", key="v12_style_gallery_next", use_container_width=True,
+                    disabled=page >= total_pages, on_click=_change_page, args=(1,))
+
+        _v12_render_deferred_style_gallery()
 
     if _use_text_only_style:
         st.info(
@@ -16475,60 +16435,52 @@ if _sticker_mode == "text":
     if _text_reference_priority_active:
         st.info("🖋️ 文字畫風參考優先已啟用：本次會保留你的外框選擇，但不會套用外框效果。")
 
-    # 外框縮圖與貼圖風格縮圖採相同操作：平常維持選單精簡，
-    # 需要比較效果時再展開，點擊圖卡名稱即可套用。
-    st.session_state.setdefault("v12_outline_gallery_open", False)
-    st.button(
-        "🧩 快速瀏覽 11 種文字外框效果"
-        if not st.session_state["v12_outline_gallery_open"]
-        else "收起文字外框縮圖總覽",
-        key="v12_outline_gallery_toggle",
-        use_container_width=True,
-        on_click=_v12_set_session_state_callback,
-        args=("v12_outline_gallery_open", not st.session_state["v12_outline_gallery_open"]),
-        disabled=_text_reference_priority_active,
-    )
-    if st.session_state["v12_outline_gallery_open"] and not _text_reference_priority_active:
-        st.markdown(
-            '<div class="v12-style-gallery-note">'
-            '點選縮圖下方的外框名稱即可套用。縮圖保留透明背景，僅用來比較文字周圍的描邊、框形與裝飾效果。'
-            '</div>',
-            unsafe_allow_html=True,
-        )
+    @st.fragment
+    def _v12_render_deferred_outline_gallery():
+        """Opening or choosing an outline refreshes only the preview block."""
+        st.session_state.setdefault("v12_outline_gallery_open", False)
 
-        def _v12_pick_text_outline_from_card(outline_name):
-            st.session_state["v8_text_style"] = outline_name
+        def _toggle_outline_gallery():
+            st.session_state["v12_outline_gallery_open"] = not bool(
+                st.session_state.get("v12_outline_gallery_open", False)
+            )
+
+        st.button(
+            "🧩 快速瀏覽 11 種文字外框效果"
+            if not st.session_state["v12_outline_gallery_open"]
+            else "收起文字外框縮圖總覽",
+            key="v12_outline_gallery_toggle", use_container_width=True,
+            on_click=_toggle_outline_gallery,
+            disabled=_text_reference_priority_active,
+        )
+        if not st.session_state["v12_outline_gallery_open"] or _text_reference_priority_active:
+            return
+        st.markdown('<div class="v12-style-gallery-note">點選外框名稱即可暫選；完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
+
+        def _pick_outline(name):
+            st.session_state["v8_text_style"] = name
             st.session_state["v12_outline_gallery_open"] = False
             _v12_mark_settings_pending()
 
+        active_outline = str(st.session_state.get("v8_text_style", "") or "")
         with st.container(key="v12_outline_card_grid"):
-            _outline_card_cols = st.columns(4)
-            for _outline_card_index, _outline_card_name in enumerate(V8_TEXT_STYLE_OPTIONS):
-                with _outline_card_cols[_outline_card_index % 4]:
-                    if _outline_card_name == "不使用外框":
-                        st.markdown(
-                            '<div class="v12-outline-none-card"><span>⊘</span>'
-                            '<small>不加描邊／框形</small></div>',
-                            unsafe_allow_html=True,
-                        )
+            cols = st.columns(4)
+            for index, name in enumerate(V8_TEXT_STYLE_OPTIONS):
+                with cols[index % 4]:
+                    if name == "不使用外框":
+                        st.markdown('<div class="v12-outline-none-card"><span>⊘</span><small>不加描邊／框形</small></div>', unsafe_allow_html=True)
                     else:
-                        _outline_card_path = (
-                            V12_TEXT_OUTLINE_PREVIEW_DIR
-                            / V12_TEXT_OUTLINE_PREVIEW_CATALOG[_outline_card_name]
-                        )
-                        if _outline_card_path.exists():
-                            st.image(str(_outline_card_path), use_container_width=True)
+                        path = V12_TEXT_OUTLINE_PREVIEW_DIR / V12_TEXT_OUTLINE_PREVIEW_CATALOG[name]
+                        if path.exists():
+                            st.image(str(path), use_container_width=True)
                         else:
                             st.info("縮圖準備中")
-                    st.button(
-                        ("✅ " if text_style == _outline_card_name else "")
-                        + _v12_localized_option(_outline_card_name, V12_TEXT_OUTLINE_LABELS),
-                        key=f"v12_outline_card_pick_{_outline_card_name}",
-                        use_container_width=True,
-                        type="primary" if text_style == _outline_card_name else "secondary",
-                        on_click=_v12_pick_text_outline_from_card,
-                        args=(_outline_card_name,),
-                    )
+                    st.button(("✅ " if active_outline == name else "") + _v12_localized_option(name, V12_TEXT_OUTLINE_LABELS),
+                        key=f"v12_outline_card_pick_{name}", use_container_width=True,
+                        type="primary" if active_outline == name else "secondary",
+                        on_click=_pick_outline, args=(name,))
+
+    _v12_render_deferred_outline_gallery()
 else:
     text_style = ""
 
@@ -16614,7 +16566,68 @@ if "v10_font_gallery_open" not in st.session_state:
 if "v12_font_gallery_page" not in st.session_state:
     st.session_state.v12_font_gallery_page = 1
 
-if _sticker_mode == "text":
+_v12_deferred_font_gallery = True
+if _v12_deferred_font_gallery and _sticker_mode == "text":
+    @st.fragment
+    def _v12_render_deferred_font_gallery():
+        """Load at most one font-preview page without rerunning the creator."""
+        def _toggle_font_gallery():
+            st.session_state["v10_font_gallery_open"] = not bool(
+                st.session_state.get("v10_font_gallery_open", False)
+            )
+
+        st.button(
+            t("font_open_gallery") if not st.session_state.v10_font_gallery_open else t("font_close_gallery"),
+            key="v10_font_gallery_toggle", use_container_width=True,
+            on_click=_toggle_font_gallery,
+            disabled=_text_reference_priority_active,
+        )
+        if not st.session_state.v10_font_gallery_open or _text_reference_priority_active:
+            return
+        st.markdown('<div class="v12-font-gallery-note">📱 分頁瀏覽，每頁 12 種；點選編號即可暫選，完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
+        per_page = 12
+        total_pages = (125 + per_page - 1) // per_page
+        page = st.selectbox("📄 瀏覽頁數", list(range(1, total_pages + 1)), key="v12_font_gallery_page_select")
+        st.session_state["v12_font_gallery_page"] = page
+        start_no = (page - 1) * per_page + 1
+        end_no = min(125, start_no + per_page - 1)
+        st.caption(f"目前顯示 {start_no:03d}～{end_no:03d} ／ 125")
+
+        def _pick_font(font_no):
+            st.session_state["v8_selected_font"] = font_no
+            st.session_state["v12_font_quick_pick"] = f"{font_no:03d}｜{V8_TEXT_EFFECT_CATALOG[font_no]}"
+            st.session_state["v10_font_gallery_open"] = False
+            _v12_mark_settings_pending()
+
+        with st.container(key="v12_font_card_grid"):
+            cols = st.columns(4)
+            for index, font_no in enumerate(range(start_no, end_no + 1)):
+                path = V8_FONT_PREVIEW_DIR / f"{font_no:03d}.jpg"
+                if not path.exists():
+                    continue
+                with cols[index % 4]:
+                    st.image(str(path), use_container_width=True)
+                    st.button(f"{font_no:03d}", key=f"font_card_pick_{font_no}",
+                        use_container_width=True, on_click=_pick_font, args=(font_no,))
+                    st.caption(_v12_font_display_name(font_no))
+
+        def _change_font_page(delta):
+            st.session_state["v12_font_gallery_page_select"] = max(1, min(total_pages, page + delta))
+            st.session_state["v12_font_gallery_page"] = st.session_state["v12_font_gallery_page_select"]
+
+        prev_col, page_col, next_col = st.columns([1, 1.2, 1])
+        with prev_col:
+            st.button("⬅️ 上一頁", key="v12_font_prev", use_container_width=True,
+                disabled=page <= 1, on_click=_change_font_page, args=(-1,))
+        with page_col:
+            st.markdown(f'<div style="text-align:center;padding:.55rem 0;font-weight:800;">第 {page} / {total_pages} 頁</div>', unsafe_allow_html=True)
+        with next_col:
+            st.button("下一頁 ➡️", key="v12_font_next", use_container_width=True,
+                disabled=page >= total_pages, on_click=_change_font_page, args=(1,))
+
+    _v12_render_deferred_font_gallery()
+
+if not _v12_deferred_font_gallery and _sticker_mode == "text":
     st.button(
         t("font_open_gallery") if not st.session_state.v10_font_gallery_open
         else t("font_close_gallery"),
@@ -16629,6 +16642,8 @@ if _sticker_mode == "text":
     st.caption("來源出處：cz88422")
 
 if (
+    not _v12_deferred_font_gallery
+    and
     _sticker_mode == "text"
     and st.session_state.v10_font_gallery_open
     and not _text_reference_priority_active
