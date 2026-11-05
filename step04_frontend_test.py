@@ -81,6 +81,15 @@ EDITOR_CSS = r"""
 .s4-reset { border:1px solid #667c96; background:#27374d; color:#dce8f4; }
 .s4-local { color:#9fb2c9; font-size:13px; }
 .s4-count { margin-top:15px; border-radius:10px; padding:10px 12px; background:rgba(57,136,205,.15); color:#9fd8ff; font-weight:750; }
+.step04-editor-root.s4-compact .s4-shell { margin-top:4px; }
+.step04-editor-root.s4-compact .s4-mode-row,
+.step04-editor-root.s4-compact .s4-source-row,
+.step04-editor-root.s4-compact .s4-panel-grid { grid-template-columns:1fr; gap:10px; margin-left:0; margin-right:0; }
+.step04-editor-root.s4-compact .s4-grid { grid-template-columns:1fr; gap:14px; }
+.step04-editor-root.s4-compact .s4-candidates,
+.step04-editor-root.s4-compact .s4-random-phrases,
+.step04-editor-root.s4-compact .s4-picked-list { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.step04-editor-root.s4-compact .s4-card { padding:0; }
 @media (max-width: 820px) { .s4-mode-row { gap:12px; margin:0 0 20px; } .s4-grid, .s4-candidates, .s4-random-phrases, .s4-picked-list { grid-template-columns:repeat(2, minmax(0,1fr)); } .s4-panel-grid { grid-template-columns:1fr; } }
 @media (max-width: 520px) { .s4-grid { grid-template-columns:1fr; } .s4-mode { font-size:14px; } }
 """
@@ -93,6 +102,7 @@ export default function(component) {
   const formal = Boolean(data.formal);
   const revision = String(data.revision || '');
   const initial = data.initial && typeof data.initial === 'object' ? data.initial : {};
+  root.classList.toggle('s4-compact', Boolean(initial.compactLayout));
   const forceTextMode = Boolean(initial.forceTextMode);
   const aiQuotaText = String(initial.aiQuotaText || 'AI幫想 今日額度（台灣時間）：登入後可查看');
   const aiLoginNotice = String(initial.aiLoginNotice || '');
