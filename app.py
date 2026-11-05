@@ -1631,27 +1631,22 @@ div[class*="st-key-v12_basket_download_"] button:hover{
   background:#1671bb !important;
   border-color:#1671bb !important;
 }
-/* 三種快速總覽的整張圖卡皆可點選。Streamlit 的 image 元件沒有 on_click，
-   因此讓原生選取按鈕透明覆蓋在圖卡上；鍵盤與螢幕閱讀器仍保有按鈕語意。 */
-.st-key-v12_style_card_grid [data-testid="stColumn"],
-.st-key-v12_outline_card_grid [data-testid="stColumn"],
-.st-key-v12_font_card_grid [data-testid="stColumn"]{position:relative;}
+/* 三種快速總覽：保留圖片下方原本可見、可按的名稱／編號按鈕。 */
 .st-key-v12_style_card_grid [data-testid="stButton"],
 .st-key-v12_outline_card_grid [data-testid="stButton"],
-.st-key-v12_font_card_grid [data-testid="stButton"]{position:absolute !important;inset:0 !important;z-index:4;width:100% !important;margin:0 !important;}
+.st-key-v12_font_card_grid [data-testid="stButton"]{position:static !important;width:100% !important;margin:.3rem 0 0 !important;}
 .st-key-v12_style_card_grid [data-testid="stButton"] button,
 .st-key-v12_outline_card_grid [data-testid="stButton"] button,
-.st-key-v12_font_card_grid [data-testid="stButton"] button{width:100% !important;height:100% !important;min-height:0 !important;display:block !important;padding:0 !important;border:0 !important;border-radius:11px !important;background:transparent !important;color:transparent !important;text-shadow:none !important;box-shadow:none !important;}
-/* 號碼/名稱只是無障礙標籤；整張卡才是實際點選區，避免顯示一條被拉寬的按鈕框。 */
+.st-key-v12_font_card_grid [data-testid="stButton"] button{width:100% !important;min-height:38px !important;padding:.35rem .5rem !important;border:1px solid rgba(136,201,238,.58) !important;border-radius:9px !important;background:rgba(17,50,84,.68) !important;color:#eef8ff !important;text-shadow:none !important;box-shadow:none !important;}
 .st-key-v12_style_card_grid [data-testid="stButton"] button:hover,
 .st-key-v12_outline_card_grid [data-testid="stButton"] button:hover,
-.st-key-v12_font_card_grid [data-testid="stButton"] button:hover{border:0 !important;background:transparent !important;}
-.st-key-v12_style_card_grid [data-testid="stButton"] button:focus-visible,
-.st-key-v12_outline_card_grid [data-testid="stButton"] button:focus-visible,
-.st-key-v12_font_card_grid [data-testid="stButton"] button:focus-visible{outline:0 !important;box-shadow:none !important;}
-.st-key-v12_style_card_grid [data-testid="stColumn"]:has([data-testid="stButton"] button:focus-visible) [data-testid="stImage"],
-.st-key-v12_outline_card_grid [data-testid="stColumn"]:has([data-testid="stButton"] button:focus-visible) [data-testid="stImage"],
-.st-key-v12_font_card_grid [data-testid="stColumn"]:has([data-testid="stButton"] button:focus-visible) [data-testid="stImage"]{outline:3px solid #88dcff;outline-offset:2px;}
+.st-key-v12_font_card_grid [data-testid="stButton"] button:hover{border-color:#74d7ff !important;background:rgba(24,105,163,.9) !important;}
+.st-key-v12_style_card_grid [data-testid="stColumn"]:has([data-testid="stBaseButton-primary"]) [data-testid="stImage"],
+.st-key-v12_outline_card_grid [data-testid="stColumn"]:has([data-testid="stBaseButton-primary"]) [data-testid="stImage"],
+.st-key-v12_font_card_grid [data-testid="stColumn"]:has([data-testid="stBaseButton-primary"]) [data-testid="stImage"]{border:3px solid #48c8ff !important;box-shadow:0 0 0 3px rgba(72,200,255,.24),0 8px 22px rgba(37,138,216,.32) !important;}
+.st-key-v12_style_card_grid [data-testid="stBaseButton-primary"],
+.st-key-v12_outline_card_grid [data-testid="stBaseButton-primary"],
+.st-key-v12_font_card_grid [data-testid="stBaseButton-primary"]{background:#2588d8 !important;border-color:#6ed9ff !important;color:#fff !important;}
 }
 .v12-project-save-divider{
   height:1px;
@@ -15606,7 +15601,6 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                             st.image(str(path), use_container_width=True)
                         else:
                             st.info("縮圖準備中")
-                        st.caption(("✅ " if active_style == name else "") + name)
                         if st.button(("✅ " if active_style == name else "") + name,
                             key=f"v12_style_card_pick_{name}", use_container_width=True,
                             type="primary" if active_style == name else "secondary"):
@@ -16797,7 +16791,6 @@ def _v12_render_deferred_outline_gallery():
                             st.image(str(path), use_container_width=True)
                         else:
                             st.info("縮圖準備中")
-                    st.caption(("✅ " if active_outline == name else "") + _v12_localized_option(name, V12_TEXT_OUTLINE_LABELS))
                     if st.button(("✅ " if active_outline == name else "") + _v12_localized_option(name, V12_TEXT_OUTLINE_LABELS),
                         key=f"v12_outline_card_pick_{name}", use_container_width=True,
                         type="primary" if active_outline == name else "secondary"):
@@ -16932,9 +16925,9 @@ if _v12_deferred_font_gallery:
                     continue
                 with cols[index % 4]:
                     st.image(str(path), use_container_width=True)
-                    st.caption(f"{font_no:03d}")
                     if st.button(f"{font_no:03d}", key=f"font_card_pick_{font_no}",
-                        use_container_width=True):
+                        use_container_width=True,
+                        type="primary" if _selected_font == font_no else "secondary"):
                         st.session_state["v12_font_gallery_pending_pick"] = font_no
                         st.session_state["v10_font_gallery_open"] = False
                         st.session_state["v10_scroll_to_font_result"] = True
