@@ -1,0 +1,52 @@
+name: Initialize Performance Lab Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_project_ref:
+        description: "Type kvistqhcphsalxdlnhxw to confirm the isolated performance-lab database"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Apply schema only to Performance Lab
+    if: inputs.confirm_project_ref == 'kvistqhcphsalxdlnhxw'
+    runs-on: ubuntu-latest
+    env:
+      PERF_LAB_DB_URL: ${{ secrets.PERF_LAB_DB_URL }}
+      PERF_LAB_PROJECT_REF: kvistqhcphsalxdlnhxw
+    steps:
+      - name: Check out performance-lab source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Validate isolated target
+        shell: bash
+        run: |
+          test -n "$PERF_LAB_DB_URL" || {
+            echo "Missing PERF_LAB_DB_URL repository secret." >&2
+            exit 1
+          }
+          case "$PERF_LAB_DB_URL" in
+            *"$PERF_LAB_PROJECT_REF"*) ;;
+            *)
+              echo "The connection URL does not point to the isolated Performance Lab project." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: latest
+
+      - name: Preview pending migrations
+        run: supabase db push --yes --remote="$PERF_LAB_DB_URL" --dry-run
+
+      - name: Apply pending migrations
+        run: supabase db push --yes --remote="$PERF_LAB_DB_URL"
