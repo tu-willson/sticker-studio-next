@@ -16738,11 +16738,21 @@ if _sticker_mode == "text":
 st.divider()
 v10_section(t("section_background"), "#16a085")
 st.markdown(f'<div class="v11-transparent-title">{t("background_transparent")}</div>', unsafe_allow_html=True)
-with st.container(key="transparent_png_option_box"):
-    transparent = st.checkbox(
-        t("transparent_png"),
-        key="transparent_png_option",
+with st.form("v12_background_settings_draft_form", border=False):
+    with st.container(key="transparent_png_option_box"):
+        transparent = st.checkbox(
+            t("transparent_png"),
+            key="transparent_png_option",
+        )
+    _apply_background_settings = st.form_submit_button(
+        "✅ 套用背景設定",
+        type="primary",
+        use_container_width=True,
+        help="勾選期間不會重新讀取頁面；按下後才會同步到這次生成設定。",
     )
+
+if _apply_background_settings:
+    st.success("✅ 背景設定已套用。")
 
 _v12_update_navigation_safe_creation_draft(
     transparent_png_option=bool(transparent),
