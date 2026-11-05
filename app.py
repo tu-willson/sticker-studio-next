@@ -17413,6 +17413,13 @@ def _v12_reject_generation_request(message, level="warning"):
     st.session_state["v12_frontend_generate_reset_revision"] = int(
         st.session_state.get("v12_frontend_generate_reset_revision", 0) or 0
     ) + 1
+    # The same browser-side guard also protects the apply button.  Rebuild it
+    # after a rejected request (such as a missing photo), otherwise the old
+    # component can retain its temporary "圖片生成中" appearance even though
+    # this request never reserved a point or reached the AI provider.
+    st.session_state["v12_apply_all_settings_revision"] = int(
+        st.session_state.get("v12_apply_all_settings_revision", 0) or 0
+    ) + 1
     st.rerun()
 
 if _generate_clicked:
