@@ -16779,9 +16779,12 @@ st.caption("STEP 02～05 完成後，請按一次下方按鈕同步所有設定�
 _v12_apply_all_settings_result = render_frontend_apply_button(
     data={
         "storageKey": "sticker-studio-next.step04-formal.v1",
-        "label": "🧩 套用所有設定（才能進行生成）",
+        "label": "🧩 套用所有設定（才能進行生成）\n※ 修改內容後需再次套用",
     },
-    key="v12_step04_frontend_apply_all_settings",
+    key=(
+        "v12_step04_frontend_apply_all_settings_"
+        f"{int(st.session_state.get('v12_apply_all_settings_revision', 0) or 0)}"
+    ),
 )
 if isinstance(_v12_apply_all_settings_result, dict):
     _v12_apply_token = str(_v12_apply_all_settings_result.get("token", "") or "")
@@ -16796,6 +16799,12 @@ if isinstance(_v12_apply_all_settings_result, dict):
         st.session_state["v12_apply_all_settings_notice"] = (
             "success" if _v12_apply_saved else "local_only"
         )
+        # A new component key replaces the browser button after a successful
+        # apply. Otherwise its temporary “applying” text remains disabled and
+        # members cannot apply a later edit.
+        st.session_state["v12_apply_all_settings_revision"] = int(
+            st.session_state.get("v12_apply_all_settings_revision", 0) or 0
+        ) + 1
         st.rerun()
 _v12_apply_notice = st.session_state.pop("v12_apply_all_settings_notice", "")
 if _v12_apply_notice == "success":
@@ -17236,6 +17245,9 @@ if _v12_step04_frontend_enabled:
         data={
             "storageKey": "sticker-studio-next.step04-formal.v1",
             "disabled": _generation_locked,
+            "settingsPending": bool(
+                st.session_state.get("v12_settings_pending_apply", False)
+            ),
         },
         # 早期驗證 stop 時，重新建立元件可解除其瀏覽器端 disabled 狀態。
         key=(
