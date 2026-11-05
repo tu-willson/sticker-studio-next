@@ -15648,11 +15648,11 @@ else:
                         help="依照本次生成文字的筆畫、顏色與外輪廓，隨機產生相容的立體層次。")
                 with _effects_col:
                     st.text_area(
-                        "✨ 允許自訂補充效果（選填）",
+                        "✨ 畫風補充說明（選填）",
                         key="v12_style_reference_custom_elements",
-                        placeholder="例如：強調毛筆筆勢痕跡、文字加入極淡的立體層次與灰黑色短陰影；也可明確指定外框、圖案或彩色特效。",
+                        placeholder="例如：加強毛筆筆勢痕跡、文字內嵌紋理、可辨識的字體切面或灰黑色短陰影。",
                         max_chars=1200, on_change=_v12_mark_settings_pending,
-                        help="只有此欄明確寫出的效果才會例外開放；未填寫時，仍維持純文字、無額外特效的畫風參考模式。",
+                        help="文字畫風優先時，內容僅能針對文字內容效果進行強化；只有此欄明確寫出的效果才會例外開放。",
                     )
             else:
                 st.text_area(t("style_elements"), key="v12_style_reference_custom_elements",
@@ -15722,6 +15722,9 @@ def _v12_render_deferred_character_settings():
 
 
 _v12_render_deferred_character_settings()
+selected_character = list(
+    st.session_state.get("v10_character_options", []) or []
+)
 custom_character = str(
     st.session_state.get("v10_character_custom_1", "") or ""
 ).strip()
