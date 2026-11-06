@@ -10,6 +10,13 @@ FRONTEND = ROOT.joinpath("step04_frontend_test.py").read_text(encoding="utf-8")
 
 
 class GenerationStatusSyncTests(unittest.TestCase):
+    def test_creation_page_exposes_taiwan_backup_link(self):
+        self.assertIn("台灣備援創作站（正式站延遲時可改由此創作）", APP)
+        self.assertIn(
+            "https://sticker-studio-next-formal-candidate-335753249693.asia-east1.run.app/",
+            APP,
+        )
+
     def test_sync_uses_tiny_status_poll_without_streamlit_rerun(self):
         self.assertIn("GENERATION_STATUS_MONITOR_JS", FRONTEND)
         self.assertIn("get_my_generation_recovery_status", APP)
