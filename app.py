@@ -6,6 +6,7 @@ import streamlit as st
 from openai import OpenAI
 import base64
 import os
+import importlib
 from io import BytesIO
 from PIL import Image
 import random
@@ -21,11 +22,15 @@ import textwrap
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 from i18n import LANGUAGES, tr
-from step04_frontend_test import (
-    render_frontend_apply_button,
-    render_frontend_editor,
-    render_frontend_generate_button,
-)
+import step04_frontend_test as _step04_frontend
+
+# Streamlit reloads the entry script on a Git update but can retain imported
+# helper modules in the running worker.  Reload this browser-side editor module
+# so an app update never mixes a newer app.py with an older component API.
+_step04_frontend = importlib.reload(_step04_frontend)
+render_frontend_apply_button = _step04_frontend.render_frontend_apply_button
+render_frontend_editor = _step04_frontend.render_frontend_editor
+render_frontend_generate_button = _step04_frontend.render_frontend_generate_button
 
 
 def _v12_ui_locale():
