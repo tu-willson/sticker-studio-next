@@ -3372,10 +3372,6 @@ div[data-testid="stExpander"]{
 .v12-layout-mode-title{color:#d9efff;font-size:.95rem;font-weight:850;text-align:center;letter-spacing:.04em;margin:0 0 .35rem;}
 .st-key-v12_layout_mode_switch [role="radiogroup"]{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem;}
 .st-key-v12_layout_mode_switch [role="radiogroup"] label{min-height:42px;justify-content:center;margin:0 !important;padding:.5rem .75rem;border:1px solid rgba(137,194,239,.42);border-radius:10px;background:rgba(41,79,115,.38);color:#e9f6ff;font-weight:800;}
-.st-key-v12_taiwan_backup_link{width:min(720px,100%);margin:.15rem auto .55rem !important;}
-.st-key-v12_taiwan_backup_link [data-testid="stLinkButton"] a{min-height:42px;border:1px solid rgba(255,205,108,.82)!important;border-radius:10px!important;background:linear-gradient(100deg,rgba(112,73,202,.74),rgba(30,144,195,.74))!important;color:#fff7d4!important;font-weight:850!important;box-shadow:0 5px 16px rgba(84,69,200,.24)!important;}
-.st-key-v12_taiwan_backup_link [data-testid="stLinkButton"] a:hover{filter:brightness(1.12);transform:translateY(-1px);}
-.v12-taiwan-backup-note{width:min(720px,100%);margin:-.25rem auto .65rem;color:rgba(225,237,255,.8);font-size:.8rem;font-weight:650;text-align:center;}
 .v12-mobile-layout-notice{width:min(720px,100%);margin:.15rem auto .6rem;padding:.56rem .8rem;box-sizing:border-box;border:1px solid rgba(133,219,203,.48);border-radius:10px;color:#d8fff4;background:rgba(33,116,104,.28);font-size:.88rem;font-weight:720;text-align:center;}
 body:has(.v12-mobile-layout-marker) .block-container{max-width:720px !important;padding-left:clamp(.75rem,3vw,1.2rem) !important;padding-right:clamp(.75rem,3vw,1.2rem) !important;}
 body:has(.v12-mobile-layout-marker) .v12-journey-steps{grid-template-columns:repeat(2,minmax(0,1fr));gap:.48rem;}
@@ -15347,16 +15343,6 @@ with st.container(key="v12_layout_mode_switch"):
         key="v12_layout_mode",
         label_visibility="collapsed",
     )
-with st.container(key="v12_taiwan_backup_link"):
-    st.link_button(
-        "⚡ 台灣備援創作站（正式站延遲時可改由此創作）",
-        "https://sticker-studio-next-formal-candidate-335753249693.asia-east1.run.app/",
-        use_container_width=True,
-    )
-st.markdown(
-    '<div class="v12-taiwan-backup-note">與正式站共用帳號、額度、作品與膠卷；購買與加值仍於正式站完成。</div>',
-    unsafe_allow_html=True,
-)
 if _v12_layout_mode == "mobile":
     st.markdown('<div class="v12-mobile-layout-marker"></div><div class="v12-mobile-layout-notice">📱 手機友善模式：主要設定改為單欄與大按鈕；裁切微調仍建議使用電腦。</div>', unsafe_allow_html=True)
 
