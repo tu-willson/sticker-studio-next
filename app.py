@@ -5,6 +5,7 @@ import copy
 import streamlit as st
 from openai import OpenAI
 import base64
+import os
 from io import BytesIO
 from PIL import Image
 import random
@@ -20,7 +21,11 @@ import textwrap
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 from i18n import LANGUAGES, tr
-from step04_frontend_test import render_frontend_editor, render_frontend_generate_button
+from step04_frontend_test import (
+    render_frontend_apply_button,
+    render_frontend_editor,
+    render_frontend_generate_button,
+)
 
 
 def _v12_ui_locale():
@@ -717,6 +722,11 @@ def _v12_text_person_style_toggle_changed():
         st.session_state["v12_sticker_content_mode"] = V12_STICKER_TEXT_MODE
 
 
+def _v12_mark_settings_pending():
+    """Mark a deferred STEP 02/03/05 edit without triggering a full rerun."""
+    st.session_state["v12_settings_pending_apply"] = True
+
+
 def _v12_style_reference_influence_changed(mode):
     """Treat the three visible checkboxes as one mutually exclusive choice."""
     mode = str(mode or "").strip()
@@ -733,9 +743,34 @@ def _v12_style_reference_influence_changed(mode):
         st.session_state["v12_text_reference_priority"] = False
         st.session_state["v12_text_reference_dimensional"] = False
     elif mode == "text_priority":
-        st.session_state["v12_style_reference_soft_choice"] = False
-        st.session_state["v12_style_reference_strong_choice"] = False
-        st.session_state["v12_text_reference_priority"] = True
+        priority_enabled = bool(
+            st.session_state.get("v12_text_reference_priority", False)
+        )
+        if priority_enabled:
+            st.session_state["v12_style_reference_soft_choice"] = False
+            st.session_state["v12_style_reference_strong_choice"] = False
+        st.session_state["v12_text_reference_priority"] = priority_enabled
+    _v12_mark_settings_pending()
+
+
+def _v12_text_reference_priority_changed():
+    """Synchronize text-priority to the downstream font controls immediately."""
+    _v12_style_reference_influence_changed("text_priority")
+    # This is the one STEP 02 option whose effect lives in a later section of
+    # the page.  A full rerun is intentional: it immediately disables or
+    # restores the text-outline and 125-font controls, while all ordinary
+    # typing remains fragment-local.
+    st.rerun()
+
+
+def _v12_style_reference_strength_changed(mode):
+    """Restore downstream text controls when strength replaces priority mode."""
+    was_text_priority = bool(
+        st.session_state.get("v12_text_reference_priority", False)
+    )
+    _v12_style_reference_influence_changed(mode)
+    if was_text_priority:
+        st.rerun()
 
 
 def _v12_sync_saved_style_choice_to_editor(choice):
@@ -1125,6 +1160,60 @@ export default function(component) {
     isolate_styles=False,
 )
 
+
+# Streamlit session_state belongs to one live browser/WebSocket session.  A
+# normal browser refresh therefore starts with an empty session_state even
+# though the member did not actually sign out.  This tiny, invisible component
+# keeps only Supabase's rotating refresh token in the current site's browser
+# storage, then hands it back to Python on the next page load.  The server
+# immediately exchanges it for a short-lived access token; no access token is
+# persisted in the browser storage.  Each deployment origin has separate
+# localStorage, so the production and performance-lab accounts never cross.
+_BETA_AUTH_PERSISTENCE_COMPONENT = components_v2.component(
+    "beta_auth_persistence",
+    html='<div class="beta-auth-persistence-root" aria-hidden="true"></div>',
+    css=(
+        ':host,.beta-auth-persistence-root'
+        '{display:block;width:0;height:0;min-height:0;margin:0;padding:0;overflow:hidden}'
+    ),
+    js=r'''
+export default function(component) {
+  const { parentElement, data, setTriggerValue } = component;
+  const root = parentElement.querySelector('.beta-auth-persistence-root') || parentElement;
+  const storageKey = String(data.storageKey || 'sticker-studio-auth');
+  const refreshToken = String(data.refreshToken || '');
+  const clearRevision = String(data.clearRevision || '0');
+
+  // Explicit sign-out or an invalid/revoked token must remove the browser copy
+  // before a later rerun gets a chance to restore it.
+  if (String(root._betaAuthClearRevision || '') !== clearRevision) {
+    root._betaAuthClearRevision = clearRevision;
+    if (clearRevision !== '0') {
+      try { localStorage.removeItem(storageKey); } catch (_) {}
+    }
+  }
+
+  if (refreshToken) {
+    try {
+      const current = localStorage.getItem(storageKey) || '';
+      if (current !== refreshToken) localStorage.setItem(storageKey, refreshToken);
+    } catch (_) {}
+    // The server has an in-memory session again.  Do not echo the same refresh
+    // token back on every Streamlit rerun.
+    root._betaAuthLastRestoreToken = refreshToken;
+    return;
+  }
+
+  let stored = '';
+  try { stored = String(localStorage.getItem(storageKey) || ''); } catch (_) {}
+  if (!stored || root._betaAuthLastRestoreToken === stored) return;
+  root._betaAuthLastRestoreToken = stored;
+  setTriggerValue('restore', { refreshToken: stored });
+}
+''',
+    isolate_styles=False,
+)
+
 def _v11_clear_generation_state() -> None:
     """Clear only transient generation UI/session flags after a terminal outcome."""
     for _key in (
@@ -1136,7 +1225,7 @@ def _v11_clear_generation_state() -> None:
 
 
 def _v12_recover_generation_ui_callback() -> None:
-    """Recover a local submit state or a safely stale server reservation."""
+    """Cancel an unstarted job, or recover a safely stale active generation."""
     # 同一頁仍在執行 AI 時，絕不能讓使用者中斷真正有效的作業。
     if bool(st.session_state.get("v11_generation_pending", False)) or bool(
         st.session_state.get("v11_generation_in_progress", False)
@@ -1159,7 +1248,11 @@ def _v12_recover_generation_ui_callback() -> None:
             )
             return
         if bool(recovery.get("recovered", False)):
-            recovery_feedback = "stale_released"
+            recovery_feedback = (
+                "cancelled_before_start"
+                if reason == "cancelled_before_start"
+                else "stale_released"
+            )
 
     _v11_clear_generation_state()
     for _key in (
@@ -1530,6 +1623,31 @@ div[class*="st-key-v12_basket_download_"] button{
   padding-right:.55rem !important;
   font-size:15px !important;
   white-space:nowrap !important;
+  background:#2588d8 !important;
+  border-color:#2588d8 !important;
+  color:#fff !important;
+  font-weight:850 !important;
+}
+div[class*="st-key-v12_basket_download_"] button:hover{
+  background:#1671bb !important;
+  border-color:#1671bb !important;
+}
+/* 三種快速總覽：保留圖片下方原本可見、可按的名稱／編號按鈕。 */
+.st-key-v12_style_card_grid [data-testid="stButton"],
+.st-key-v12_outline_card_grid [data-testid="stButton"],
+.st-key-v12_font_card_grid [data-testid="stButton"]{position:static !important;width:100% !important;margin:.3rem 0 0 !important;}
+.st-key-v12_style_card_grid [data-testid="stButton"] button,
+.st-key-v12_outline_card_grid [data-testid="stButton"] button,
+.st-key-v12_font_card_grid [data-testid="stButton"] button{width:100% !important;min-height:38px !important;padding:.35rem .5rem !important;border:1px solid rgba(136,201,238,.58) !important;border-radius:9px !important;background:rgba(17,50,84,.68) !important;color:#eef8ff !important;text-shadow:none !important;box-shadow:none !important;}
+.st-key-v12_style_card_grid [data-testid="stButton"] button:hover,
+.st-key-v12_outline_card_grid [data-testid="stButton"] button:hover,
+.st-key-v12_font_card_grid [data-testid="stButton"] button:hover{border-color:#74d7ff !important;background:rgba(24,105,163,.9) !important;}
+.st-key-v12_style_card_grid [data-testid="stColumn"]:has([data-testid="stBaseButton-primary"]) [data-testid="stImage"],
+.st-key-v12_outline_card_grid [data-testid="stColumn"]:has([data-testid="stBaseButton-primary"]) [data-testid="stImage"],
+.st-key-v12_font_card_grid [data-testid="stColumn"]:has([data-testid="stBaseButton-primary"]) [data-testid="stImage"]{border:3px solid #48c8ff !important;box-shadow:0 0 0 3px rgba(72,200,255,.24),0 8px 22px rgba(37,138,216,.32) !important;}
+.st-key-v12_style_card_grid [data-testid="stBaseButton-primary"],
+.st-key-v12_outline_card_grid [data-testid="stBaseButton-primary"],
+.st-key-v12_font_card_grid [data-testid="stBaseButton-primary"]{background:#2588d8 !important;border-color:#6ed9ff !important;color:#fff !important;}
 }
 .v12-project-save-divider{
   height:1px;
@@ -3242,6 +3360,22 @@ div[data-testid="stExpander"]{
   margin-left:auto !important;
   margin-right:auto !important;
 }
+
+/* 效能測試版｜手機模式使用同一份創作設定，只改為單欄與大觸控目標。 */
+.st-key-v12_layout_mode_switch{width:min(720px,100%);margin:.45rem auto .25rem !important;padding:.7rem .85rem .6rem;border:1px solid rgba(112,185,237,.44);border-radius:14px;background:rgba(17,39,66,.52);box-shadow:0 8px 20px rgba(3,11,29,.13);}
+.v12-layout-mode-title{color:#d9efff;font-size:.95rem;font-weight:850;text-align:center;letter-spacing:.04em;margin:0 0 .35rem;}
+.st-key-v12_layout_mode_switch [role="radiogroup"]{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem;}
+.st-key-v12_layout_mode_switch [role="radiogroup"] label{min-height:42px;justify-content:center;margin:0 !important;padding:.5rem .75rem;border:1px solid rgba(137,194,239,.42);border-radius:10px;background:rgba(41,79,115,.38);color:#e9f6ff;font-weight:800;}
+.v12-mobile-layout-notice{width:min(720px,100%);margin:.15rem auto .6rem;padding:.56rem .8rem;box-sizing:border-box;border:1px solid rgba(133,219,203,.48);border-radius:10px;color:#d8fff4;background:rgba(33,116,104,.28);font-size:.88rem;font-weight:720;text-align:center;}
+body:has(.v12-mobile-layout-marker) .block-container{max-width:720px !important;padding-left:clamp(.75rem,3vw,1.2rem) !important;padding-right:clamp(.75rem,3vw,1.2rem) !important;}
+body:has(.v12-mobile-layout-marker) .v12-journey-steps{grid-template-columns:repeat(2,minmax(0,1fr));gap:.48rem;}
+body:has(.v12-mobile-layout-marker) .v12-journey-step{padding:.52rem .3rem;}
+body:has(.v12-mobile-layout-marker) div[data-testid="stButton"] button{min-height:48px !important;font-size:1rem !important;}
+body:has(.v12-mobile-layout-marker) div[data-testid="stTextInput"] input,body:has(.v12-mobile-layout-marker) div[data-testid="stTextArea"] textarea,body:has(.v12-mobile-layout-marker) div[data-testid="stSelectbox"] [data-baseweb="select"]{min-height:46px;font-size:1rem;}
+body:has(.v12-mobile-layout-marker) .st-key-v12_style_mode_toggles [data-testid="stHorizontalBlock"],body:has(.v12-mobile-layout-marker) .st-key-v12_style_source_mode_switch [data-testid="stHorizontalBlock"],body:has(.v12-mobile-layout-marker) .st-key-v12_style_reference_layout [data-testid="stHorizontalBlock"]{flex-direction:column !important;gap:.65rem !important;}
+body:has(.v12-mobile-layout-marker) .st-key-v12_style_mode_toggles [data-testid="stColumn"],body:has(.v12-mobile-layout-marker) .st-key-v12_style_source_mode_switch [data-testid="stColumn"],body:has(.v12-mobile-layout-marker) .st-key-v12_style_reference_layout [data-testid="stColumn"]{flex:1 1 100% !important;width:100% !important;min-width:0 !important;}
+body:has(.v12-mobile-layout-marker) .st-key-v12_style_card_grid [data-testid="stHorizontalBlock"],body:has(.v12-mobile-layout-marker) .st-key-v12_outline_card_grid [data-testid="stHorizontalBlock"],body:has(.v12-mobile-layout-marker) .st-key-v12_font_card_grid [data-testid="stHorizontalBlock"]{flex-direction:row !important;flex-wrap:wrap !important;gap:9px !important;align-items:flex-start !important;}
+body:has(.v12-mobile-layout-marker) .st-key-v12_style_card_grid [data-testid="stColumn"],body:has(.v12-mobile-layout-marker) .st-key-v12_outline_card_grid [data-testid="stColumn"],body:has(.v12-mobile-layout-marker) .st-key-v12_font_card_grid [data-testid="stColumn"]{flex:0 0 calc(50% - 4.5px) !important;width:calc(50% - 4.5px) !important;min-width:0 !important;}
 @media (max-width:800px){
   .block-container{
     padding-left:.75rem !important;
@@ -3792,6 +3926,8 @@ def _beta_rpc(function_name, payload, access_token=None):
 
 def _beta_payuni_sandbox_enabled():
     """Keep public checkout disabled until deployment secrets explicitly enable it."""
+    if _v12_acceptance_mode_enabled():
+        return False
     try:
         value = str(st.secrets.get("PAYUNI_SANDBOX_ENABLED", "") or "").strip().lower()
     except Exception:
@@ -3801,8 +3937,26 @@ def _beta_payuni_sandbox_enabled():
 
 def _beta_newebpay_live_enabled():
     """Formal NewebPay remains invisible until both deployment gates are enabled."""
+    # The private formal-architecture acceptance service uses the same
+    # Supabase project as production, but must never be able to create a
+    # live payment order while it is being tested.
+    if _v12_acceptance_mode_enabled():
+        return False
     try:
         value = str(st.secrets.get("NEWEBPAY_LIVE_ENABLED", "") or "").strip().lower()
+    except Exception:
+        return False
+    return value in {"1", "true", "yes", "on"}
+
+
+def _v12_acceptance_mode_enabled():
+    """Whether this deployment is the private formal acceptance station."""
+    try:
+        value = str(
+            st.secrets.get("V12_ACCEPTANCE_MODE", "")
+            or os.environ.get("V12_ACCEPTANCE_MODE", "")
+            or ""
+        ).strip().lower()
     except Exception:
         return False
     return value in {"1", "true", "yes", "on"}
@@ -5260,6 +5414,81 @@ def _beta_store_auth_session(token_response, user):
     }
 
 
+def _beta_browser_auth_storage_key():
+    """Return an origin-local key that also separates Supabase environments."""
+    config = _beta_config() or {}
+    project_marker = str(config.get("url", "") or "").encode("utf-8")
+    digest = hashlib.sha256(project_marker).hexdigest()[:16]
+    return f"sticker-studio:member-refresh:{digest}"
+
+
+def _beta_clear_browser_auth_storage():
+    """Ask the invisible browser bridge to discard a revoked local session."""
+    st.session_state["beta_auth_browser_clear_revision"] = (
+        int(st.session_state.get("beta_auth_browser_clear_revision", 0) or 0) + 1
+    )
+    st.session_state.pop("beta_auth_restored_refresh_digest", None)
+
+
+def _beta_sync_browser_auth_session():
+    """Persist or restore the signed-in member across a normal page refresh.
+
+    The component is intentionally not an authentication authority: it only
+    returns a locally-held refresh token, which is validated and exchanged by
+    Supabase before Python treats the visitor as signed in.
+    """
+    session = st.session_state.get("beta_auth_session")
+    refresh_token = ""
+    if isinstance(session, dict):
+        refresh_token = str(session.get("refresh_token", "") or "")
+    bridge_result = _BETA_AUTH_PERSISTENCE_COMPONENT(
+        data={
+            "storageKey": _beta_browser_auth_storage_key(),
+            "refreshToken": refresh_token,
+            "clearRevision": int(
+                st.session_state.get("beta_auth_browser_clear_revision", 0) or 0
+            ),
+        },
+        key="beta_auth_persistence_bridge",
+    )
+
+    # An already live Streamlit session wins.  This also prevents the component
+    # from replaying its last trigger during ordinary in-app reruns.
+    if isinstance(session, dict):
+        return False
+
+    restored = getattr(bridge_result, "restore", None)
+    if not isinstance(restored, dict):
+        return False
+    candidate = str(restored.get("refreshToken", "") or "")
+    if not candidate or len(candidate) > 4096 or any(ch.isspace() for ch in candidate):
+        _beta_clear_browser_auth_storage()
+        return False
+    candidate_digest = hashlib.sha256(candidate.encode("utf-8")).hexdigest()
+    if candidate_digest == st.session_state.get("beta_auth_restored_refresh_digest"):
+        return False
+    st.session_state["beta_auth_restored_refresh_digest"] = candidate_digest
+
+    try:
+        token_response = _beta_http(
+            "POST",
+            "/auth/v1/token?grant_type=refresh_token",
+            payload={"refresh_token": candidate},
+        )
+        user = _beta_verify_access_token(
+            str(token_response.get("access_token", "") or "")
+        )
+        _beta_store_auth_session(token_response, user)
+        # Render once more with the (possibly rotated) refresh token so the
+        # browser store is immediately brought up to date.
+        st.rerun()
+    except Exception:
+        # A stale/revoked token is not a login failure message.  Remove it and
+        # let the regular Google sign-in affordance appear quietly.
+        _beta_clear_browser_auth_storage()
+        st.rerun()
+
+
 def _beta_verify_access_token(access_token):
     user = _beta_http("GET", "/auth/v1/user", access_token=access_token)
     if not isinstance(user, dict) or not user.get("id"):
@@ -5331,6 +5560,7 @@ def _beta_current_user():
             )
             st.session_state.pop("beta_auth_session", None)
             st.session_state.pop("beta_account_access_status", None)
+            _beta_clear_browser_auth_storage()
             return None
         _beta_record_login_once(session)
         return session
@@ -5438,6 +5668,7 @@ def _beta_logout_callback():
     st.session_state.pop("v12_member_style_bank_synced_user_id", None)
     st.session_state.pop("v12_member_style_bank_load_error", None)
     st.session_state.pop("beta_operational_login_user_id", None)
+    _beta_clear_browser_auth_storage()
     _beta_clear_cached_copy_usage_status()
 
 
@@ -5561,6 +5792,18 @@ def _beta_finish_generation(session, job_id, failure_code=None):
     return _beta_rpc(function_name, payload, access_token=session["access_token"])
 
 
+def _beta_start_generation(session, job_id):
+    """Atomically mark a reservation as actively calling the image provider."""
+    response = _beta_rpc(
+        "start_generation",
+        {"p_job_id": job_id},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else False
+    return bool(response)
+
+
 def _beta_get_generation_recovery_status(session):
     """Read whether this member has a server-side generation lock to recover."""
     response = _beta_rpc(
@@ -5574,6 +5817,7 @@ def _beta_get_generation_recovery_status(session):
         raise RuntimeError("generation_recovery_status_invalid")
     return {
         "has_reserved": bool(response.get("has_reserved", False)),
+        "can_cancel": bool(response.get("can_cancel", False)),
         "can_recover": bool(response.get("can_recover", False)),
         "seconds_remaining": max(
             0, int(response.get("seconds_remaining", 0) or 0)
@@ -5582,7 +5826,7 @@ def _beta_get_generation_recovery_status(session):
 
 
 def _beta_recover_stale_generation(session):
-    """Release only the caller's own reservation after the five-minute grace."""
+    """Cancel the caller's unstarted reservation or recover a stale active one."""
     response = _beta_rpc(
         "recover_my_stale_generation",
         {},
@@ -7447,6 +7691,10 @@ def _beta_render_account_panel():
     _beta_complete_oauth_callback()
     session = _beta_current_user()
     if session:
+        # Keep the browser's rotating refresh token synchronized after a
+        # successful login or token renewal.  This is what lets F5 restore the
+        # same member rather than showing Google login again.
+        _beta_sync_browser_auth_session()
         _v12_sync_member_custom_style_bank(session)
         st.markdown(f"#### {t('login_title')}")
         user = session.get("user", {})
@@ -9762,6 +10010,9 @@ def _v12_load_history_record(record):
     else:
         st.session_state.pop("v12_loaded_cloud_project_id", None)
     st.session_state["v12_current_project"] = metadata
+    # A loaded work/reel becomes the editable draft, but must be deliberately
+    # applied once before it can start a new image-generation request.
+    st.session_state["v12_settings_pending_apply"] = True
     # 載回作品／膠卷的快照具有最高優先權。延後清空上一次 file_uploader
     # 的控制值，避免舊上傳檔在下一次 render 時覆蓋膠卷保存的參考圖與立體設定。
     st.session_state["v12_style_reference_clear_upload_control"] = True
@@ -11907,6 +12158,15 @@ st.session_state.setdefault("v12_text_reference_dimensional", False)
 st.session_state.setdefault("v12_style_reference_elements_enabled", False)
 st.session_state.setdefault("v12_style_reference_elements", [])
 st.session_state.setdefault("v12_style_reference_custom_elements", "")
+# A newly opened or freshly loaded creation always needs one deliberate
+# STEP 02–05 apply.  This is server state, so an old browser localStorage
+# marker can never make the generation control look ready by itself.  The
+# version marker also upgrades an already-open Streamlit session once.
+if int(st.session_state.get("v12_settings_apply_policy_version", 0) or 0) < 2:
+    st.session_state["v12_settings_pending_apply"] = True
+    st.session_state["v12_settings_apply_policy_version"] = 2
+else:
+    st.session_state.setdefault("v12_settings_pending_apply", True)
 st.session_state.setdefault("v12_project_name_clear_revision", 0)
 st.session_state.setdefault("generated_4x2_bytes", None)
 st.session_state.setdefault("last_prompt", "")
@@ -12497,6 +12757,10 @@ def _v12_step04_frontend_component_state():
             ai_quota_text = "AI幫想 今日額度（台灣時間）：暫時無法確認"
     return {
         "mode": snapshot["mode"],
+        "compactLayout": str(st.session_state.get("v12_layout_mode", "desktop")) == "mobile",
+        "forceTextMode": bool(
+            st.session_state.get("v12_use_text_only_style", False)
+        ),
         "sourcePanel": str(
             st.session_state.get("v12_step04_frontend_source_panel", "") or ""
         ),
@@ -12570,6 +12834,11 @@ def _v12_apply_step04_frontend_snapshot(payload):
         }
 
     mode = "expression" if payload.get("mode") == "expression" else "text"
+    # The browser editor also disables this option, but the canonical state is
+    # the final authority: pure-text design must never accept an expression
+    # mode from an old local draft or a crafted component payload.
+    if bool(st.session_state.get("v12_use_text_only_style", False)):
+        mode = "text"
     st.session_state["v12_sticker_content_mode"] = (
         V12_STICKER_EXPRESSION_MODE if mode == "expression" else V12_STICKER_TEXT_MODE
     )
@@ -14060,6 +14329,8 @@ def _v12_render_pricing_page():
         st.success(f"📋 {current_label}")
     else:
         st.info(t("pricing_login_notice"))
+    if _v12_acceptance_mode_enabled():
+        st.info("🧪 正式架構驗收站：此站僅供內部驗收，付款功能已關閉，不會建立或送出任何藍新付款訂單。")
     # The signed PAYUNi return may be opened after the Streamlit session has
     # restarted. Show its compact provider message independently of member
     # session state so a rejected sandbox request is actionable.
@@ -14131,7 +14402,11 @@ def _v12_render_pricing_page():
     chosen = next((item for item in products if item["code"] == selected_code), None)
     if chosen:
         st.markdown(f"### {t('pricing_selected', name=chosen['name'], price=chosen['price'])}")
-        if session:
+        if _v12_acceptance_mode_enabled():
+            st.info(
+                "🧪 正式架構驗收站已停用付款流程：不會建立測試訂單、藍新訂單或任何扣款。"
+            )
+        elif session:
             if _beta_newebpay_live_enabled():
                 _checkout = st.session_state.get("v12_newebpay_checkout")
                 if isinstance(_checkout, dict) and _checkout.get("product_name"):
@@ -14226,6 +14501,14 @@ st.markdown("""<style>
 # reading the navigation role so an administrator sees the private entry on the
 # first clean page render after signing in.
 if _beta_config():
+    # A refresh has a new Streamlit session_state.  Restore first only when
+    # there is no OAuth callback to consume; the callback itself wins over any
+    # old browser session and will be mirrored after it succeeds.
+    if (
+        not isinstance(st.session_state.get("beta_auth_session"), dict)
+        and not str(st.query_params.get("code", "") or "")
+    ):
+        _beta_sync_browser_auth_session()
     _beta_complete_oauth_callback()
     _v12_close_payment_return_popup()
 
@@ -14933,7 +15216,7 @@ elif _shared_template_apply_error == "failed":
 
 
 def _v12_capture_style_reference_details_draft():
-    """Persist reference-detail widgets immediately in the durable creation draft."""
+    """Commit reference-detail widgets after the member confirms all settings."""
     _v12_update_navigation_safe_creation_draft(
         v12_style_reference_strength=st.session_state.get(
             "v12_style_reference_strength"
@@ -14948,6 +15231,64 @@ def _v12_capture_style_reference_details_draft():
             st.session_state.get("v12_style_reference_custom_elements", "") or ""
         ).strip()[:1200],
     )
+
+
+def _v12_creation_readiness_messages():
+    """Return the user-facing checks that remain after one full settings apply."""
+    messages = []
+    text_only = bool(st.session_state.get("v12_use_text_only_style", False))
+    sticker_mode = _v12_sticker_mode_value()
+    has_person_photo = bool(st.session_state.get("uploaded_image_bytes"))
+    uses_style_reference = (
+        str(st.session_state.get("v12_style_source_mode", "") or "")
+        == V12_STYLE_REFERENCE_MODE
+    )
+    has_style_reference = bool(
+        st.session_state.get("v12_style_reference_image_bytes")
+    )
+    texts = [str(item or "").strip() for item in get_texts()]
+
+    if not text_only and not has_person_photo:
+        messages.append("尚未上傳人物照片：請先回到 STEP 01 上傳人物照片。")
+
+    # Pure-text mode forces this source internally but keeps the reference
+    # image optional.  Only warn when the member explicitly selected
+    # 「畫風參考上傳」 for a photo-based creation.
+    if not text_only and uses_style_reference and not has_style_reference:
+        messages.append(
+            "已選擇「畫風參考上傳」，但尚未上傳參考圖：請上傳畫風圖片，或改用「貼圖風格快選」。"
+        )
+
+    if text_only:
+        missing_slots = [str(index + 1).zfill(2) for index, value in enumerate(texts) if not value]
+        if missing_slots:
+            messages.append(
+                "已啟用「純文字設計（無人物）」：請填滿 8 格文字後再生成"
+                f"（尚未填寫：{'、'.join(missing_slots)}）。"
+            )
+    elif sticker_mode == "text" and not any(texts):
+        messages.append(
+            "目前是一般照片文字貼圖模式：請至少填寫 1 格貼圖文字後再生成。"
+        )
+
+    return messages
+
+
+def _v12_commit_all_creation_settings():
+    """Atomically commit the deferred STEP 02, 03 and 05 settings."""
+    _v12_capture_style_reference_details_draft()
+    _v12_capture_character_settings_draft()
+    _v12_update_navigation_safe_creation_draft(
+        transparent_png_option=bool(
+            st.session_state.get("transparent_png_option", False)
+        ),
+        v8_text_style=st.session_state.get("v8_text_style"),
+        v8_selected_font=st.session_state.get("v8_selected_font"),
+        v12_font_quick_pick=st.session_state.get("v12_font_quick_pick"),
+    )
+    _saved = _save_v10_presets()
+    st.session_state["v12_settings_pending_apply"] = False
+    return bool(_saved)
 
 # API 使用模式常數必須在所有 callback / widget 使用前先建立。
 # Streamlit 會由上而下執行整個 script，因此不可放在 AI 文案區之後。
@@ -14979,6 +15320,20 @@ _beta_session = _beta_render_account_panel()
 if not _beta_session:
     st.warning(t("login_required"))
 
+st.session_state.setdefault("v12_layout_mode", "desktop")
+with st.container(key="v12_layout_mode_switch"):
+    st.markdown('<div class="v12-layout-mode-title">🖼️ 創作版面</div>', unsafe_allow_html=True)
+    _v12_layout_mode = st.radio(
+        "創作版面",
+        options=("desktop", "mobile"),
+        format_func=lambda mode: "🖥️ 電腦創作模式" if mode == "desktop" else "📱 手機友善模式",
+        horizontal=True,
+        key="v12_layout_mode",
+        label_visibility="collapsed",
+    )
+if _v12_layout_mode == "mobile":
+    st.markdown('<div class="v12-mobile-layout-marker"></div><div class="v12-mobile-layout-notice">📱 手機友善模式：主要設定改為單欄與大按鈕；裁切微調仍建議使用電腦。</div>', unsafe_allow_html=True)
+
 
 st.markdown(f"""
 <div class="v12-journey">
@@ -15003,15 +15358,18 @@ v12_section_caption(t("photo_intro"))
 # 文字主導模式屬於素材來源的選擇，放在 STEP 01 的人物照片說明下方，讓
 # 使用者在上傳前就清楚知道本次是否需要人物照片。
 with st.container(key="v12_style_mode_toggles"):
+    # STEP 01 is the creation entry point.  Switch modes immediately so the
+    # relevant settings appear without a second action; callbacks run before
+    # widgets are recreated and keep the two choices mutually exclusive.
     _text_only_toggle_col, _text_person_toggle_col = st.columns([1, 1], gap="large")
     with _text_only_toggle_col:
-        _step01_use_text_only_style = st.checkbox(
+        st.checkbox(
             V12_TEXT_ONLY_STYLE_CHECKBOX_LABEL,
             key="v12_use_text_only_style",
             on_change=_v12_text_only_style_toggle_changed,
         )
     with _text_person_toggle_col:
-        _step01_use_text_person_style = st.checkbox(
+        st.checkbox(
             V12_TEXT_PERSON_STYLE_CHECKBOX_LABEL,
             key="v12_use_text_person_style",
             on_change=_v12_text_person_style_toggle_changed,
@@ -15122,31 +15480,38 @@ if st.session_state.pop("v12_style_reference_clear_upload_control", False):
 if _use_text_only_style:
     st.info("📝 純文字設計不使用人物照片、內建貼圖風格或自定義風格；可在下方上傳畫風參考，讓文字沿用想要的視覺語言。")
 else:
-    _style_preset_col, _style_reference_col = st.columns(2)
-    with _style_preset_col:
-        st.button(
-            ("✓ " if _style_source_mode == V12_STYLE_PRESET_MODE else "")
-            + t("style_preset_mode"),
-            key="v12_select_style_preset_mode",
-            use_container_width=True,
-            type="primary" if _style_source_mode == V12_STYLE_PRESET_MODE else "secondary",
-            on_click=_v12_set_style_source_mode,
-            args=(V12_STYLE_PRESET_MODE,),
-        )
-    with _style_reference_col:
-        st.button(
-            ("✓ " if _style_source_mode == V12_STYLE_REFERENCE_MODE else "")
-            + t("style_reference_mode"),
-            key="v12_select_style_reference_mode",
-            use_container_width=True,
-            type="primary" if _style_source_mode == V12_STYLE_REFERENCE_MODE else "secondary",
-            on_click=_v12_set_style_source_mode,
-            args=(V12_STYLE_REFERENCE_MODE,),
-        )
+    with st.container(key="v12_style_source_mode_switch"):
+        _style_preset_col, _style_reference_col = st.columns(2)
+        with _style_preset_col:
+            st.button(
+                ("✓ " if _style_source_mode == V12_STYLE_PRESET_MODE else "")
+                + t("style_preset_mode"),
+                key="v12_select_style_preset_mode",
+                use_container_width=True,
+                type="primary" if _style_source_mode == V12_STYLE_PRESET_MODE else "secondary",
+                on_click=_v12_set_style_source_mode,
+                args=(V12_STYLE_PRESET_MODE,),
+            )
+        with _style_reference_col:
+            st.button(
+                ("✓ " if _style_source_mode == V12_STYLE_REFERENCE_MODE else "")
+                + t("style_reference_mode"),
+                key="v12_select_style_reference_mode",
+                use_container_width=True,
+                type="primary" if _style_source_mode == V12_STYLE_REFERENCE_MODE else "secondary",
+                on_click=_v12_set_style_source_mode,
+                args=(V12_STYLE_REFERENCE_MODE,),
+            )
 
 # 自定義風格改由獨立勾選啟用，預設風格下拉只保留預設選項。
 _v8_style_items = [x for x in V8_STYLES if not x.startswith("⭐ 自訂")]
 _style_options = ["↓ 請選擇風格"] + _v8_style_items
+_pending_style_gallery_pick = st.session_state.pop("v12_style_gallery_pending_pick", None)
+if _pending_style_gallery_pick in _style_options:
+    # 圖卡總覽位於 fragment 中；先以獨立旗標帶回完整頁面，才能讓外部
+    # 的原生下拉選單在建立前取得新值並立即顯示為已選取。
+    st.session_state["v10_style_mode"] = _pending_style_gallery_pick
+    st.session_state["v12_last_preset_style_mode"] = _pending_style_gallery_pick
 style_mode = str(st.session_state.get("v10_style_mode", "↓ 請選擇風格"))
 if style_mode in V12_RETIRED_STYLE_FALLBACKS:
     style_mode = V12_RETIRED_STYLE_FALLBACKS[style_mode]
@@ -15201,125 +15566,90 @@ if _style_source_mode == V12_STYLE_PRESET_MODE:
                 if _last_preset_style in _style_options
                 else "↓ 請選擇風格"
             )
-        style_mode = st.selectbox(
-            t("style_label"),
-            _style_options,
-            key="v10_style_mode",
-        )
-        st.session_state["v12_last_preset_style_mode"] = style_mode
+        @st.fragment
+        def _v12_render_deferred_preset_style_select():
+            """Change the preset style without re-running the whole creator."""
+            selected_style = st.selectbox(
+                t("style_label"),
+                _style_options,
+                key="v10_style_mode",
+                on_change=_v12_mark_settings_pending,
+            )
+            st.session_state["v12_last_preset_style_mode"] = selected_style
+            return selected_style
 
-        # 縮圖總覽與字型圖卡採相同模式：平常保持精簡，需要時再展開瀏覽。
-        st.session_state.setdefault("v12_style_gallery_open", False)
-        st.session_state.setdefault("v12_style_gallery_category", "全部")
-        st.session_state.setdefault("v12_style_gallery_page", 1)
-        st.button(
-            "🖼️ 快速瀏覽 35 種貼圖風格"
-            if not st.session_state["v12_style_gallery_open"]
-            else "收起貼圖風格縮圖總覽",
-            key="v12_style_gallery_toggle",
-            use_container_width=True,
-            on_click=_v12_set_session_state_callback,
-            args=("v12_style_gallery_open", not st.session_state["v12_style_gallery_open"]),
-        )
-        if st.session_state["v12_style_gallery_open"]:
-            st.markdown(
-                '<div class="v12-style-gallery-note">'
-                '點選縮圖下方的風格名稱即可套用。縮圖為範例效果；實際生成仍會依人物照片、文字與動作重新創作。'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-            _style_gallery_category = st.selectbox(
-                "篩選風格類型",
-                V12_STYLE_PREVIEW_CATEGORIES,
-                key="v12_style_gallery_category",
-            )
-            if st.session_state.get("v12_style_gallery_last_category") != _style_gallery_category:
-                st.session_state["v12_style_gallery_last_category"] = _style_gallery_category
-                st.session_state["v12_style_gallery_page"] = 1
-            _gallery_styles = [
-                _style_name for _style_name in _v8_style_items
-                if _style_name in V12_STYLE_PREVIEW_CATALOG
-                and (
-                    _style_gallery_category == "全部"
-                    or V12_STYLE_PREVIEW_CATALOG[_style_name][0] == _style_gallery_category
+        style_mode = _v12_render_deferred_preset_style_select()
+
+        @st.fragment
+        def _v12_render_deferred_style_gallery():
+            """Browse only this preview block; never reread the whole creator."""
+            st.session_state.setdefault("v12_style_gallery_open", False)
+            st.session_state.setdefault("v12_style_gallery_category", "全部")
+            st.session_state.setdefault("v12_style_gallery_page", 1)
+
+            def _toggle_style_gallery():
+                st.session_state["v12_style_gallery_open"] = not bool(
+                    st.session_state.get("v12_style_gallery_open", False)
                 )
-            ]
-            _gallery_per_page = 10
-            _gallery_total_pages = max(
-                1, (_gallery_styles.__len__() + _gallery_per_page - 1) // _gallery_per_page
-            )
-            _gallery_page = max(
-                1,
-                min(int(st.session_state.get("v12_style_gallery_page", 1)), _gallery_total_pages),
-            )
-            st.session_state["v12_style_gallery_page"] = _gallery_page
-            _gallery_start = (_gallery_page - 1) * _gallery_per_page
-            _gallery_current_styles = _gallery_styles[
-                _gallery_start:_gallery_start + _gallery_per_page
-            ]
-            st.caption(
-                f"{_style_gallery_category}｜顯示 {_gallery_start + 1}～"
-                f"{_gallery_start + len(_gallery_current_styles)} ／ {len(_gallery_styles)} 種"
-            )
 
-            def _v12_pick_style_from_card(style_name):
-                st.session_state["v10_style_mode"] = style_name
-                st.session_state["v12_last_preset_style_mode"] = style_name
-                st.session_state["v12_style_gallery_open"] = False
+            st.button(
+                "🖼️ 快速瀏覽 35 種貼圖風格"
+                if not st.session_state["v12_style_gallery_open"]
+                else "收起貼圖風格縮圖總覽",
+                key="v12_style_gallery_toggle", use_container_width=True,
+                on_click=_toggle_style_gallery,
+            )
+            if not st.session_state["v12_style_gallery_open"]:
+                return
+            st.markdown('<div class="v12-style-gallery-note">點選任一張風格圖卡即可選取，會同步到上方下拉選單；完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
+            category = st.selectbox("篩選風格類型", V12_STYLE_PREVIEW_CATEGORIES,
+                key="v12_style_gallery_category")
+            if st.session_state.get("v12_style_gallery_last_category") != category:
+                st.session_state["v12_style_gallery_last_category"] = category
+                st.session_state["v12_style_gallery_page"] = 1
+            gallery_styles = [name for name in _v8_style_items
+                if name in V12_STYLE_PREVIEW_CATALOG and (category == "全部" or V12_STYLE_PREVIEW_CATALOG[name][0] == category)]
+            per_page = 10
+            total_pages = max(1, (len(gallery_styles) + per_page - 1) // per_page)
+            page = max(1, min(int(st.session_state.get("v12_style_gallery_page", 1)), total_pages))
+            st.session_state["v12_style_gallery_page"] = page
+            start = (page - 1) * per_page
+            current_styles = gallery_styles[start:start + per_page]
+            st.caption(f"{category}｜顯示 {start + 1}～{start + len(current_styles)} ／ {len(gallery_styles)} 種")
 
+            active_style = str(st.session_state.get("v10_style_mode", "") or "")
             with st.container(key="v12_style_card_grid"):
-                _style_card_cols = st.columns(5)
-                for _style_card_index, _style_card_name in enumerate(_gallery_current_styles):
-                    _style_card_category, _style_card_asset = V12_STYLE_PREVIEW_CATALOG[
-                        _style_card_name
-                    ]
-                    _style_card_path = V12_STYLE_PREVIEW_DIR / _style_card_asset
-                    with _style_card_cols[_style_card_index % 5]:
-                        if _style_card_path.exists():
-                            st.image(str(_style_card_path), use_container_width=True)
+                cols = st.columns(5)
+                for index, name in enumerate(current_styles):
+                    _, asset = V12_STYLE_PREVIEW_CATALOG[name]
+                    path = V12_STYLE_PREVIEW_DIR / asset
+                    with cols[index % 5]:
+                        if path.exists():
+                            st.image(str(path), use_container_width=True)
                         else:
                             st.info("縮圖準備中")
-                        st.button(
-                            ("✅ " if style_mode == _style_card_name else "")
-                            + _style_card_name,
-                            key=f"v12_style_card_pick_{_style_card_name}",
-                            use_container_width=True,
-                            type="primary" if style_mode == _style_card_name else "secondary",
-                            on_click=_v12_pick_style_from_card,
-                            args=(_style_card_name,),
-                        )
+                        if st.button(("✅ " if active_style == name else "") + name,
+                            key=f"v12_style_card_pick_{name}", use_container_width=True,
+                            type="primary" if active_style == name else "secondary"):
+                            st.session_state["v12_style_gallery_pending_pick"] = name
+                            st.session_state["v12_style_gallery_open"] = False
+                            _v12_mark_settings_pending()
+                            st.rerun(scope="app")
 
-            def _v12_change_style_gallery_page(delta):
-                current = int(st.session_state.get("v12_style_gallery_page", 1))
-                st.session_state["v12_style_gallery_page"] = max(
-                    1, min(_gallery_total_pages, current + delta)
-                )
+            def _change_page(delta):
+                st.session_state["v12_style_gallery_page"] = max(1, min(total_pages, page + delta))
 
-            _style_prev_col, _style_page_col, _style_next_col = st.columns([1, 1.2, 1])
-            with _style_prev_col:
-                st.button(
-                    "⬅️ 上一頁",
-                    key="v12_style_gallery_prev",
-                    use_container_width=True,
-                    disabled=_gallery_page <= 1,
-                    on_click=_v12_change_style_gallery_page,
-                    args=(-1,),
-                )
-            with _style_page_col:
-                st.markdown(
-                    f'<div style="text-align:center;padding:.55rem 0;font-weight:800;">'
-                    f'第 {_gallery_page} / {_gallery_total_pages} 頁</div>',
-                    unsafe_allow_html=True,
-                )
-            with _style_next_col:
-                st.button(
-                    "下一頁 ➡️",
-                    key="v12_style_gallery_next",
-                    use_container_width=True,
-                    disabled=_gallery_page >= _gallery_total_pages,
-                    on_click=_v12_change_style_gallery_page,
-                    args=(1,),
-                )
+            prev_col, page_col, next_col = st.columns([1, 1.2, 1])
+            with prev_col:
+                st.button("⬅️ 上一頁", key="v12_style_gallery_prev", use_container_width=True,
+                    disabled=page <= 1, on_click=_change_page, args=(-1,))
+            with page_col:
+                st.markdown(f'<div style="text-align:center;padding:.55rem 0;font-weight:800;">第 {page} / {total_pages} 頁</div>', unsafe_allow_html=True)
+            with next_col:
+                st.button("下一頁 ➡️", key="v12_style_gallery_next", use_container_width=True,
+                    disabled=page >= total_pages, on_click=_change_page, args=(1,))
+
+        _v12_render_deferred_style_gallery()
 
     if _use_text_only_style:
         st.info(
@@ -15492,34 +15822,35 @@ else:
         f'<div class="v12-style-reference-caption">{html.escape(t("style_reference_caption"))}</div>',
         unsafe_allow_html=True,
     )
-    _style_reference_left, _style_reference_center, _style_reference_right = st.columns([1, 2, 1])
-    with _style_reference_center:
-        _style_reference_upload = _beta_image_uploader(
-            t("style_reference_upload"),
-            session=_beta_session,
-            type=["jpg", "jpeg", "png", "webp"],
-            key="v12_style_reference_upload",
-            on_change=_v12_style_reference_upload_changed,
-            help=t("style_reference_help"),
-        )
-    with _style_reference_right:
-        with st.container(key="v12_style_reference_examples"):
-            st.markdown(
-                '<div class="v12-style-reference-example-links">'
-                '<a class="v12-style-reference-example-link" '
-                'href="https://www.threads.com/share/EzlgQ8CSh/" '
-                'target="_blank" rel="noopener noreferrer">'
-                '<span class="v12-style-reference-example-link-title">示範連結</span>'
-                '</a>'
-                '<a class="v12-style-reference-example-link" '
-                'href="https://huaban.com/boards/44417392?source_file_id=339054540" '
-                'target="_blank" rel="noopener noreferrer">'
-                '<span class="v12-style-reference-example-link-title">文字參考範例連結</span>'
-                '<span class="v12-style-reference-example-link-source">（出處：花瓣）</span>'
-                '</a>'
-                '</div>',
-                unsafe_allow_html=True,
+    with st.container(key="v12_style_reference_layout"):
+        _style_reference_left, _style_reference_center, _style_reference_right = st.columns([1, 2, 1])
+        with _style_reference_center:
+            _style_reference_upload = _beta_image_uploader(
+                t("style_reference_upload"),
+                session=_beta_session,
+                type=["jpg", "jpeg", "png", "webp"],
+                key="v12_style_reference_upload",
+                on_change=_v12_style_reference_upload_changed,
+                help=t("style_reference_help"),
             )
+        with _style_reference_right:
+            with st.container(key="v12_style_reference_examples"):
+                st.markdown(
+                    '<div class="v12-style-reference-example-links">'
+                    '<a class="v12-style-reference-example-link" '
+                    'href="https://www.threads.com/share/EzlgQ8CSh/" '
+                    'target="_blank" rel="noopener noreferrer">'
+                    '<span class="v12-style-reference-example-link-title">示範連結</span>'
+                    '</a>'
+                    '<a class="v12-style-reference-example-link" '
+                    'href="https://huaban.com/boards/44417392?source_file_id=339054540" '
+                    'target="_blank" rel="noopener noreferrer">'
+                    '<span class="v12-style-reference-example-link-title">文字參考範例連結</span>'
+                    '<span class="v12-style-reference-example-link-source">（出處：花瓣）</span>'
+                    '</a>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
     if _style_reference_upload is not None:
         try:
             _v12_set_style_reference_from_upload(_style_reference_upload)
@@ -15554,127 +15885,99 @@ else:
             on_click=_v12_clear_style_reference,
         )
         st.caption(t("style_settings_caption"))
-        _normalized_style_strength = _v12_normalize_style_reference_strength(
-            st.session_state.get("v12_style_reference_strength")
-        )
-        if st.session_state.get("v12_style_reference_strength") != _normalized_style_strength:
-            st.session_state["v12_style_reference_strength"] = _normalized_style_strength
-        _reference_priority_available = bool(
-            st.session_state.get("v12_use_text_only_style", False)
-            or st.session_state.get("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
-            == V12_STICKER_TEXT_MODE
-        )
-        if not _reference_priority_available:
-            # 表情貼圖沒有文字筆畫可轉譯；保留已選字型與外框本身，
-            # 但不要讓這個文字專用開關在表情模式意外生效。
-            st.session_state["v12_text_reference_priority"] = False
-        _reference_strength = _v12_normalize_style_reference_strength(
-            st.session_state.get("v12_style_reference_strength")
-        )
-        st.markdown(f"**{t('style_strength')}{t('style_strength_immediate')}**")
-        _text_reference_priority_selected = bool(
-            st.session_state.get("v12_text_reference_priority", False)
-            and _reference_priority_available
-        )
-        # 三個看似獨立的勾選框實際上代表同一組互斥的畫風影響程度；
-        # 這樣可避免 radio 的圓點外觀，也讓「文字優先」緊接在兩個程度後。
-        st.session_state["v12_style_reference_soft_choice"] = (
-            not _text_reference_priority_selected and _reference_strength == "柔和融入"
-        )
-        st.session_state["v12_style_reference_strong_choice"] = (
-            not _text_reference_priority_selected and _reference_strength == "強烈融入"
-        )
-        _reference_soft_col, _reference_strong_col, _reference_text_col = st.columns(
-            [1, 1, 2.7], vertical_alignment="center"
-        )
-        with _reference_soft_col:
-            st.checkbox(
-                t("style_strength_soft"),
-                key="v12_style_reference_soft_choice",
-                on_change=_v12_style_reference_influence_changed,
-                args=("soft",),
-                help=t("style_strength_help"),
+        @st.fragment
+        def _v12_render_deferred_style_reference_details():
+            """Keep reference-detail edits local until the single final Apply."""
+            _normalized_style_strength = _v12_normalize_style_reference_strength(
+                st.session_state.get("v12_style_reference_strength")
             )
-        with _reference_strong_col:
-            st.checkbox(
-                t("style_strength_strong"),
-                key="v12_style_reference_strong_choice",
-                on_change=_v12_style_reference_influence_changed,
-                args=("strong",),
-                help=t("style_strength_help"),
+            if st.session_state.get("v12_style_reference_strength") != _normalized_style_strength:
+                st.session_state["v12_style_reference_strength"] = _normalized_style_strength
+            _reference_priority_available = bool(
+                st.session_state.get("v12_use_text_only_style", False)
+                or st.session_state.get("v12_sticker_content_mode", V12_STICKER_TEXT_MODE)
+                == V12_STICKER_TEXT_MODE
             )
-        with _reference_text_col:
-            st.checkbox(
-                "🖋️ 文字畫風參考優先（使用上傳參考圖的字體意象）",
-                key="v12_text_reference_priority",
-                on_change=_v12_style_reference_influence_changed,
-                args=("text_priority",),
-                disabled=not _reference_priority_available,
-                help=(
-                    "啟用後會暫時不套用 125 種帶圖字型與文字外框，"
-                    "改以這張畫風參考的字體筆觸、材質、配色與留白為最高優先。"
-                ),
+            if not _reference_priority_available:
+                st.session_state["v12_text_reference_priority"] = False
+            _reference_strength = _v12_normalize_style_reference_strength(
+                st.session_state.get("v12_style_reference_strength")
             )
-        if _text_reference_priority_selected and _reference_priority_available:
-            st.caption("🖋️ 已啟用文字畫風參考優先：預設只生成平面文字，優先重現參考圖的筆觸與色系；下方可另外指定要開放的補充效果。")
-        if _text_reference_priority_selected and _reference_priority_available:
-            _dimension_col, _effects_col = st.columns([1.1, 3.4], vertical_alignment="top")
-            with _dimension_col:
+            _text_reference_priority_selected = bool(
+                st.session_state.get("v12_text_reference_priority", False)
+                and _reference_priority_available
+            )
+            # These are a single mutually exclusive choice, but checkboxes are
+            # retained for the existing visual design.
+            st.session_state["v12_style_reference_soft_choice"] = (
+                not _text_reference_priority_selected and _reference_strength == "柔和融入"
+            )
+            st.session_state["v12_style_reference_strong_choice"] = (
+                not _text_reference_priority_selected and _reference_strength == "強烈融入"
+            )
+            st.markdown(f"**{t('style_strength')}（完成後統一套用）**")
+            _reference_soft_col, _reference_strong_col, _reference_text_col = st.columns(
+                [1, 1, 2.7], vertical_alignment="center"
+            )
+            with _reference_soft_col:
+                st.checkbox(t("style_strength_soft"), key="v12_style_reference_soft_choice",
+                    on_change=_v12_style_reference_strength_changed, args=("soft",),
+                    help=t("style_strength_help"))
+            with _reference_strong_col:
+                st.checkbox(t("style_strength_strong"), key="v12_style_reference_strong_choice",
+                    on_change=_v12_style_reference_strength_changed, args=("strong",),
+                    help=t("style_strength_help"))
+            with _reference_text_col:
                 st.checkbox(
-                    "加入立體感",
-                    key="v12_text_reference_dimensional",
-                    on_change=_v12_capture_style_reference_details_draft,
-                    help=(
-                        "依照本次生成文字的筆畫、顏色與外輪廓，隨機產生相容的立體層次。"
-                    ),
+                    "🖋️ 文字畫風參考優先（使用上傳參考圖的字體意象）",
+                    key="v12_text_reference_priority",
+                    on_change=_v12_text_reference_priority_changed,
+                    disabled=not _reference_priority_available,
+                    help="啟用後會暫時不套用 125 種帶圖字型與文字外框，改以這張畫風參考的字體筆觸、材質、配色與留白為最高優先。",
                 )
-            with _effects_col:
-                st.text_area(
-                    "✨ 允許自訂補充效果（選填）",
-                    key="v12_style_reference_custom_elements",
-                    placeholder=(
-                        "例如：強調毛筆筆勢痕跡、文字加入極淡的立體層次與灰黑色短陰影；"
-                        "也可明確指定外框、圖案或彩色特效。"
-                    ),
-                    max_chars=1200,
-                    on_change=_v12_capture_style_reference_details_draft,
-                    help=(
-                        "只有此欄明確寫出的效果才會例外開放；未填寫時，"
-                        "仍維持純文字、無額外特效的畫風參考模式。"
-                    ),
-                )
-            st.caption("勾選或輸入後會自動套用，並隨作品與創作膠卷保存；日後載回時會自動帶回。")
-        else:
-            st.text_area(
-                t("style_elements"),
-                key="v12_style_reference_custom_elements",
-                placeholder=t("style_elements_placeholder"),
-                max_chars=1200,
-                on_change=_v12_capture_style_reference_details_draft,
-            )
-        st.caption(t("style_elements_help"))
-        st.caption(t("style_materials_caption"))
+            if _text_reference_priority_selected and _reference_priority_available:
+                st.caption("🖋️ 已啟用文字畫風參考優先：預設只生成平面文字，優先重現參考圖的筆觸與色系；下方可另外指定要開放的補充效果。")
+                _dimension_col, _effects_col = st.columns([1.1, 3.4], vertical_alignment="top")
+                with _dimension_col:
+                    st.checkbox("加入立體感", key="v12_text_reference_dimensional",
+                        on_change=_v12_mark_settings_pending,
+                        help="依照本次生成文字的筆畫、顏色與外輪廓，隨機產生相容的立體層次。")
+                with _effects_col:
+                    st.text_area(
+                        "✨ 畫風補充說明（選填）",
+                        key="v12_style_reference_custom_elements",
+                        placeholder="例如：加強毛筆筆勢痕跡、文字內嵌紋理、可辨識的字體切面或灰黑色短陰影。",
+                        max_chars=1200, on_change=_v12_mark_settings_pending,
+                        help="文字畫風優先時，內容僅能針對文字內容效果進行強化；只有此欄明確寫出的效果才會例外開放。",
+                    )
+            else:
+                st.text_area(t("style_elements"), key="v12_style_reference_custom_elements",
+                    placeholder=t("style_elements_placeholder"), max_chars=1200,
+                    on_change=_v12_mark_settings_pending)
+            st.caption("這一區的選擇會在 STEP 05 按下「套用所有設定」後，一次寫入這次生成、作品與創作膠卷。")
+            st.caption(t("style_materials_caption"))
+
+        _v12_render_deferred_style_reference_details()
 
 # 檔案上傳控制項已在這次 create rerun 建立完成，換頁保護旗標不再需要。
 st.session_state.pop("v12_style_reference_navigation_guard", None)
 
 _v12_update_navigation_safe_creation_draft(
     v12_style_source_mode=st.session_state.get("v12_style_source_mode"),
+    v12_style_reference_image_bytes=st.session_state.get("v12_style_reference_image_bytes"),
+    v12_style_reference_filename=st.session_state.get("v12_style_reference_filename"),
+    v12_style_reference_fingerprint=st.session_state.get("v12_style_reference_fingerprint"),
+)
+if not bool(st.session_state.get("v12_settings_pending_apply", False)):
+    _v12_update_navigation_safe_creation_draft(
     v10_style_mode=st.session_state.get("v10_style_mode"),
     v12_last_preset_style_mode=st.session_state.get("v12_last_preset_style_mode"),
     v12_use_custom_style=st.session_state.get("v12_use_custom_style"),
     v12_use_text_only_style=st.session_state.get("v12_use_text_only_style"),
     v12_use_text_person_style=st.session_state.get("v12_use_text_person_style"),
-    v12_style_reference_image_bytes=st.session_state.get("v12_style_reference_image_bytes"),
-    v12_style_reference_filename=st.session_state.get("v12_style_reference_filename"),
-    v12_style_reference_fingerprint=st.session_state.get("v12_style_reference_fingerprint"),
     v12_style_reference_strength=st.session_state.get("v12_style_reference_strength"),
-    v12_text_reference_priority=bool(
-        st.session_state.get("v12_text_reference_priority", False)
-    ),
-    v12_text_reference_dimensional=bool(
-        st.session_state.get("v12_text_reference_dimensional", False)
-    ),
+    v12_text_reference_priority=bool(st.session_state.get("v12_text_reference_priority", False)),
+    v12_text_reference_dimensional=bool(st.session_state.get("v12_text_reference_dimensional", False)),
     v12_style_reference_custom_elements=st.session_state.get("v12_style_reference_custom_elements"),
     v12_loaded_project_custom_style=st.session_state.get(
         "v12_loaded_project_custom_style"
@@ -15685,7 +15988,7 @@ _v12_update_navigation_safe_creation_draft(
     v12_applied_template_style_prompt=st.session_state.get(
         "v12_applied_template_style_prompt"
     ),
-)
+    )
 
 v10_section(t("section_features"), "#2ecc71")
 v12_section_caption(t("features_intro"))
@@ -15697,43 +16000,37 @@ if isinstance(_saved_character_options, list):
     st.session_state["v10_character_options"] = [
         option for option in _saved_character_options if option in CHARACTER_OPTIONS
     ]
-# Do not place these controls in a form.  A Streamlit form keeps the browser's
-# visible values separate from Session State until its submit button is
-# pressed, which made a cleared feature look empty while generation still used
-# an older selection.  Changes now reach the current creation snapshot at once.
-selected_character = st.multiselect(
-    t("feature_select"),
-    CHARACTER_OPTIONS,
-    key="v10_character_options",
-    on_change=_v12_capture_character_settings_draft,
-)
-st.text_area(
-    t("custom_character"),
-    key="v10_character_custom_1",
-    height=70,
-    on_change=_v12_capture_character_settings_draft,
-)
-with st.container(key="v12_character_settings_apply_button"):
-    _save_character_settings = st.button(
-        t("save_character"),
-        type="primary",
-        use_container_width=True,
-        on_click=_v12_capture_character_settings_draft,
+@st.fragment
+def _v12_render_deferred_character_settings():
+    """Let STEP 03 edit locally; the single STEP 05 action commits it."""
+    selected_character = st.multiselect(
+        t("feature_select"),
+        CHARACTER_OPTIONS,
+        key="v10_character_options",
+        on_change=_v12_mark_settings_pending,
     )
+    st.text_area(
+        t("custom_character"),
+        key="v10_character_custom_1",
+        height=70,
+        on_change=_v12_mark_settings_pending,
+    )
+
+
+_v12_render_deferred_character_settings()
+selected_character = list(
+    st.session_state.get("v10_character_options", []) or []
+)
 custom_character = str(
     st.session_state.get("v10_character_custom_1", "") or ""
 ).strip()
-if _save_character_settings:
-    if _save_v10_presets():
-        st.success(t("character_saved"))
-    else:
-        st.error(t("save_failed"))
 
-_v12_update_navigation_safe_creation_draft(
-    v10_character_options=list(st.session_state.get("v10_character_options", []) or []),
-    v10_character_custom_1=str(st.session_state.get("v10_character_custom_1", "") or ""),
-    v10_character_enabled_1=bool(st.session_state.get("v10_character_enabled_1", False)),
-)
+if not bool(st.session_state.get("v12_settings_pending_apply", False)):
+    _v12_update_navigation_safe_creation_draft(
+        v10_character_options=list(st.session_state.get("v10_character_options", []) or []),
+        v10_character_custom_1=str(st.session_state.get("v10_character_custom_1", "") or ""),
+        v10_character_enabled_1=bool(st.session_state.get("v10_character_enabled_1", False)),
+    )
 
 if str(st.session_state.get("v10_style_mode", "") or "") == V12_TEXT_ONLY_STYLE:
     # 純文字風格不支援無文字表情模式；在 STEP 04 元件建立前強制回到文字模式，
@@ -15780,6 +16077,13 @@ if _v12_step04_frontend_enabled:
 
 def _v12_set_sticker_content_mode(mode):
     # 切換模式前後都以獨立草稿保存／回填，不依賴條件式 widget state。
+    if (
+        mode == V12_STICKER_EXPRESSION_MODE
+        and bool(st.session_state.get("v12_use_text_only_style", False))
+    ):
+        # 純文字設計不允許無文字表情模式；這是前端 disabled 之外的
+        # server-side safety guard，避免舊 localStorage 草稿覆寫目前模式。
+        return
     if mode == V12_STICKER_EXPRESSION_MODE:
         _v12_capture_sticker_action_draft()
         _v12_restore_expression_widgets()
@@ -15814,6 +16118,7 @@ if not _v12_step04_frontend_enabled:
             type="primary" if _sticker_content_choice == V12_STICKER_EXPRESSION_MODE else "secondary",
             on_click=_v12_set_sticker_content_mode,
             args=(V12_STICKER_EXPRESSION_MODE,),
+            disabled=bool(st.session_state.get("v12_use_text_only_style", False)),
         )
     if _sticker_mode == "text":
         v12_mode_panel_heading(t("text_source_heading"), '#3498db')
@@ -16434,6 +16739,9 @@ _text_reference_dimensional_active = bool(
     _text_reference_priority_active
     and st.session_state.get("v12_text_reference_dimensional", False)
 )
+_text_tools_disabled = bool(
+    _sticker_mode != "text" or _text_reference_priority_active
+)
 if _text_reference_priority_active:
     # 暫時收起既有圖卡，不清除使用者原本的選擇；取消優先模式後可直接恢復。
     st.session_state["v12_outline_gallery_open"] = False
@@ -16445,86 +16753,83 @@ if _sticker_mode == "text":
             st.markdown(f"**{_v12_localized_option(cat, V12_RANDOM_POOL_LABELS)}**")
             st.write("、".join(vals))
 
-if _sticker_mode == "text":
-    st.divider()
-    v10_section(t("font_section"), "#8e67d8")
-    v10_subsection(t("font_outline"), "#8e67d8")
-    v12_font_caption(t("font_outline_caption"))
-    _saved_text_style = str(st.session_state.get("v8_text_style", "") or "")
-    if _saved_text_style not in V8_TEXT_STYLE_OPTIONS:
-        st.session_state["v8_text_style"] = V8_TEXT_STYLE_LEGACY_MAP.get(
-            _saved_text_style, "不使用外框"
-        )
-    text_style = st.selectbox(
+st.divider()
+v10_section(t("font_section"), "#8e67d8")
+v10_subsection(t("font_outline"), "#8e67d8")
+v12_font_caption(t("font_outline_caption"))
+_saved_text_style = str(st.session_state.get("v8_text_style", "") or "")
+if _saved_text_style not in V8_TEXT_STYLE_OPTIONS:
+    st.session_state["v8_text_style"] = V8_TEXT_STYLE_LEGACY_MAP.get(
+        _saved_text_style, "不使用外框"
+    )
+_pending_outline_gallery_pick = st.session_state.pop("v12_outline_gallery_pending_pick", None)
+if _pending_outline_gallery_pick in V8_TEXT_STYLE_OPTIONS:
+    st.session_state["v8_text_style"] = _pending_outline_gallery_pick
+@st.fragment
+def _v12_render_deferred_text_outline_select():
+    return st.selectbox(
         t("font_label"),
         V8_TEXT_STYLE_OPTIONS,
         index=0,
         key="v8_text_style",
         format_func=lambda value: _v12_localized_option(value, V12_TEXT_OUTLINE_LABELS),
-        disabled=_text_reference_priority_active,
+        disabled=_text_tools_disabled,
+        on_change=_v12_mark_settings_pending,
     )
-    if _text_reference_priority_active:
-        st.info("🖋️ 文字畫風參考優先已啟用：本次會保留你的外框選擇，但不會套用外框效果。")
 
-    # 外框縮圖與貼圖風格縮圖採相同操作：平常維持選單精簡，
-    # 需要比較效果時再展開，點擊圖卡名稱即可套用。
-    st.session_state.setdefault("v12_outline_gallery_open", False)
-    st.button(
-        "🧩 快速瀏覽 11 種文字外框效果"
-        if not st.session_state["v12_outline_gallery_open"]
-        else "收起文字外框縮圖總覽",
-        key="v12_outline_gallery_toggle",
-        use_container_width=True,
-        on_click=_v12_set_session_state_callback,
-        args=("v12_outline_gallery_open", not st.session_state["v12_outline_gallery_open"]),
-        disabled=_text_reference_priority_active,
-    )
-    if st.session_state["v12_outline_gallery_open"] and not _text_reference_priority_active:
-        st.markdown(
-            '<div class="v12-style-gallery-note">'
-            '點選縮圖下方的外框名稱即可套用。縮圖保留透明背景，僅用來比較文字周圍的描邊、框形與裝飾效果。'
-            '</div>',
-            unsafe_allow_html=True,
+text_style = _v12_render_deferred_text_outline_select()
+if _text_reference_priority_active:
+    st.info("🖋️ 文字畫風參考優先已啟用：本次會保留你的外框選擇，但不會套用外框效果。")
+elif _sticker_mode != "text":
+    st.info("😶 已選擇「使用表情貼圖（無文字）」：文字外框與帶圖字型會保留顯示，但本次不可使用。")
+
+@st.fragment
+def _v12_render_deferred_outline_gallery():
+        """Opening or choosing an outline refreshes only the preview block."""
+        st.session_state.setdefault("v12_outline_gallery_open", False)
+
+        def _toggle_outline_gallery():
+            st.session_state["v12_outline_gallery_open"] = not bool(
+                st.session_state.get("v12_outline_gallery_open", False)
+            )
+
+        st.button(
+            "🧩 快速瀏覽 11 種文字外框效果"
+            if not st.session_state["v12_outline_gallery_open"]
+            else "收起文字外框縮圖總覽",
+            key="v12_outline_gallery_toggle", use_container_width=True,
+            on_click=_toggle_outline_gallery,
+            disabled=_text_tools_disabled,
         )
+        if not st.session_state["v12_outline_gallery_open"] or _text_tools_disabled:
+            return
+        st.markdown('<div class="v12-style-gallery-note">點選任一張外框圖卡即可選取，會同步到上方下拉選單；完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
 
-        def _v12_pick_text_outline_from_card(outline_name):
-            st.session_state["v8_text_style"] = outline_name
-            st.session_state["v12_outline_gallery_open"] = False
-
+        active_outline = str(st.session_state.get("v8_text_style", "") or "")
         with st.container(key="v12_outline_card_grid"):
-            _outline_card_cols = st.columns(4)
-            for _outline_card_index, _outline_card_name in enumerate(V8_TEXT_STYLE_OPTIONS):
-                with _outline_card_cols[_outline_card_index % 4]:
-                    if _outline_card_name == "不使用外框":
-                        st.markdown(
-                            '<div class="v12-outline-none-card"><span>⊘</span>'
-                            '<small>不加描邊／框形</small></div>',
-                            unsafe_allow_html=True,
-                        )
+            cols = st.columns(4)
+            for index, name in enumerate(V8_TEXT_STYLE_OPTIONS):
+                with cols[index % 4]:
+                    if name == "不使用外框":
+                        st.markdown('<div class="v12-outline-none-card"><span>⊘</span><small>不加描邊／框形</small></div>', unsafe_allow_html=True)
                     else:
-                        _outline_card_path = (
-                            V12_TEXT_OUTLINE_PREVIEW_DIR
-                            / V12_TEXT_OUTLINE_PREVIEW_CATALOG[_outline_card_name]
-                        )
-                        if _outline_card_path.exists():
-                            st.image(str(_outline_card_path), use_container_width=True)
+                        path = V12_TEXT_OUTLINE_PREVIEW_DIR / V12_TEXT_OUTLINE_PREVIEW_CATALOG[name]
+                        if path.exists():
+                            st.image(str(path), use_container_width=True)
                         else:
                             st.info("縮圖準備中")
-                    st.button(
-                        ("✅ " if text_style == _outline_card_name else "")
-                        + _v12_localized_option(_outline_card_name, V12_TEXT_OUTLINE_LABELS),
-                        key=f"v12_outline_card_pick_{_outline_card_name}",
-                        use_container_width=True,
-                        type="primary" if text_style == _outline_card_name else "secondary",
-                        on_click=_v12_pick_text_outline_from_card,
-                        args=(_outline_card_name,),
-                    )
-else:
-    text_style = ""
+                    if st.button(("✅ " if active_outline == name else "") + _v12_localized_option(name, V12_TEXT_OUTLINE_LABELS),
+                        key=f"v12_outline_card_pick_{name}", use_container_width=True,
+                        type="primary" if active_outline == name else "secondary"):
+                        st.session_state["v12_outline_gallery_pending_pick"] = name
+                        st.session_state["v12_outline_gallery_open"] = False
+                        _v12_mark_settings_pending()
+                        st.rerun(scope="app")
+
+_v12_render_deferred_outline_gallery()
 
 _selected_font = st.session_state.get("v8_selected_font", None)
-if _sticker_mode == "text":
-    v10_subsection(t("font_catalog"), "#8e67d8")
+v10_subsection(t("font_catalog"), "#8e67d8")
 
 # 125 種帶圖字型｜快速選擇＋分頁圖卡總覽
 # 手機不再一次渲染 125 張大圖，降低滑動成本。
@@ -16536,18 +16841,43 @@ _font_labels = [
 
 if "v12_font_quick_pick" not in st.session_state:
     st.session_state["v12_font_quick_pick"] = "— 快速選擇字型｜可直接輸入數字 —"
+_pending_font_gallery_pick = st.session_state.pop("v12_font_gallery_pending_pick", None)
+if _pending_font_gallery_pick in V8_TEXT_EFFECT_CATALOG:
+    st.session_state["v8_selected_font"] = _pending_font_gallery_pick
+    st.session_state["v12_font_quick_pick"] = (
+        f"{_pending_font_gallery_pick:03d}｜{V8_TEXT_EFFECT_CATALOG[_pending_font_gallery_pick]}"
+    )
 
 _quick_font_choice = "— 快速選擇字型｜可直接輸入數字 —"
-if _sticker_mode == "text":
+if _sticker_mode in {"text", "expression"}:
     v12_font_caption(t("font_pick_caption"))
     st.markdown('<div id="v10-font-result-anchor" style="scroll-margin-top: 72px;"></div>', unsafe_allow_html=True)
-    _quick_font_choice = st.selectbox(
-        t("font_quick_pick"),
-        ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
-        key="v12_font_quick_pick",
-        format_func=_v12_font_choice_display,
-        disabled=_text_reference_priority_active,
-    )
+    def _v12_quick_font_pick_changed():
+        selected_label = str(
+            st.session_state.get("v12_font_quick_pick", "") or ""
+        )
+        if selected_label != "— 快速選擇字型｜可直接輸入數字 —":
+            try:
+                st.session_state["v8_selected_font"] = int(
+                    selected_label.split("｜", 1)[0]
+                )
+                st.session_state["v10_font_gallery_open"] = False
+            except (TypeError, ValueError):
+                pass
+        _v12_mark_settings_pending()
+
+    @st.fragment
+    def _v12_render_deferred_quick_font_pick():
+        return st.selectbox(
+            t("font_quick_pick"),
+            ["— 快速選擇字型｜可直接輸入數字 —"] + _font_labels,
+            key="v12_font_quick_pick",
+            format_func=_v12_font_choice_display,
+            disabled=_text_tools_disabled,
+            on_change=_v12_quick_font_pick_changed,
+        )
+
+    _quick_font_choice = _v12_render_deferred_quick_font_pick()
     if _quick_font_choice != "— 快速選擇字型｜可直接輸入數字 —":
         _quick_font_no = int(_quick_font_choice.split("｜", 1)[0])
         if st.session_state.get("v8_selected_font") != _quick_font_no:
@@ -16556,6 +16886,8 @@ if _sticker_mode == "text":
         _selected_font = _quick_font_no
     if _text_reference_priority_active:
         st.info("🖋️ 文字畫風參考優先已啟用：本次會保留你的字型選擇，但不會套用 125 種帶圖字型。")
+    elif _sticker_mode != "text":
+        st.info("😶 無文字表情貼圖模式中：此區保留供查看，但不可選取或套用。")
     elif not _selected_font:
         st.info(t("font_none"))
 
@@ -16585,7 +16917,68 @@ if "v10_font_gallery_open" not in st.session_state:
 if "v12_font_gallery_page" not in st.session_state:
     st.session_state.v12_font_gallery_page = 1
 
-if _sticker_mode == "text":
+_v12_deferred_font_gallery = True
+if _v12_deferred_font_gallery:
+    @st.fragment
+    def _v12_render_deferred_font_gallery():
+        """Load at most one font-preview page without rerunning the creator."""
+        def _toggle_font_gallery():
+            st.session_state["v10_font_gallery_open"] = not bool(
+                st.session_state.get("v10_font_gallery_open", False)
+            )
+
+        st.button(
+            t("font_open_gallery") if not st.session_state.v10_font_gallery_open else t("font_close_gallery"),
+            key="v10_font_gallery_toggle", use_container_width=True,
+            on_click=_toggle_font_gallery,
+            disabled=_text_tools_disabled,
+        )
+        if not st.session_state.v10_font_gallery_open or _text_tools_disabled:
+            return
+        st.markdown('<div class="v12-font-gallery-note">📱 分頁瀏覽，每頁 12 種；點選任一張字型圖卡即可選取並同步上方下拉選單，完成後請按 STEP 05 的「套用所有設定」。</div>', unsafe_allow_html=True)
+        per_page = 12
+        total_pages = (125 + per_page - 1) // per_page
+        page = st.selectbox("📄 瀏覽頁數", list(range(1, total_pages + 1)), key="v12_font_gallery_page_select")
+        st.session_state["v12_font_gallery_page"] = page
+        start_no = (page - 1) * per_page + 1
+        end_no = min(125, start_no + per_page - 1)
+        st.caption(f"目前顯示 {start_no:03d}～{end_no:03d} ／ 125")
+
+        with st.container(key="v12_font_card_grid"):
+            cols = st.columns(4)
+            for index, font_no in enumerate(range(start_no, end_no + 1)):
+                path = V8_FONT_PREVIEW_DIR / f"{font_no:03d}.jpg"
+                if not path.exists():
+                    continue
+                with cols[index % 4]:
+                    st.image(str(path), use_container_width=True)
+                    if st.button(f"{font_no:03d}", key=f"font_card_pick_{font_no}",
+                        use_container_width=True,
+                        type="primary" if _selected_font == font_no else "secondary"):
+                        st.session_state["v12_font_gallery_pending_pick"] = font_no
+                        st.session_state["v10_font_gallery_open"] = False
+                        st.session_state["v10_scroll_to_font_result"] = True
+                        _v12_mark_settings_pending()
+                        st.rerun(scope="app")
+                    st.caption(_v12_font_display_name(font_no))
+
+        def _change_font_page(delta):
+            st.session_state["v12_font_gallery_page_select"] = max(1, min(total_pages, page + delta))
+            st.session_state["v12_font_gallery_page"] = st.session_state["v12_font_gallery_page_select"]
+
+        prev_col, page_col, next_col = st.columns([1, 1.2, 1])
+        with prev_col:
+            st.button("⬅️ 上一頁", key="v12_font_prev", use_container_width=True,
+                disabled=page <= 1, on_click=_change_font_page, args=(-1,))
+        with page_col:
+            st.markdown(f'<div style="text-align:center;padding:.55rem 0;font-weight:800;">第 {page} / {total_pages} 頁</div>', unsafe_allow_html=True)
+        with next_col:
+            st.button("下一頁 ➡️", key="v12_font_next", use_container_width=True,
+                disabled=page >= total_pages, on_click=_change_font_page, args=(1,))
+
+    _v12_render_deferred_font_gallery()
+
+if not _v12_deferred_font_gallery and _sticker_mode == "text":
     st.button(
         t("font_open_gallery") if not st.session_state.v10_font_gallery_open
         else t("font_close_gallery"),
@@ -16600,6 +16993,8 @@ if _sticker_mode == "text":
     st.caption("來源出處：cz88422")
 
 if (
+    not _v12_deferred_font_gallery
+    and
     _sticker_mode == "text"
     and st.session_state.v10_font_gallery_open
     and not _text_reference_priority_active
@@ -16670,6 +17065,7 @@ if (
                     )
                     st.session_state["v10_scroll_to_font_result"] = True
                     st.session_state["v10_font_gallery_open"] = False
+                    _v12_mark_settings_pending()
 
                 st.button(
                     f"{_i:03d}",
@@ -16733,15 +17129,85 @@ if _sticker_mode == "text":
 st.divider()
 v10_section(t("section_background"), "#16a085")
 st.markdown(f'<div class="v11-transparent-title">{t("background_transparent")}</div>', unsafe_allow_html=True)
-with st.container(key="transparent_png_option_box"):
-    transparent = st.checkbox(
-        t("transparent_png"),
-        key="transparent_png_option",
-    )
+@st.fragment
+def _v12_render_deferred_background_setting():
+    """Keep the PNG background choice local until the one final Apply."""
+    with st.container(key="transparent_png_option_box"):
+        return st.checkbox(
+            t("transparent_png"),
+            key="transparent_png_option",
+            on_change=_v12_mark_settings_pending,
+        )
 
-_v12_update_navigation_safe_creation_draft(
-    transparent_png_option=bool(transparent),
+
+transparent = _v12_render_deferred_background_setting()
+st.caption("STEP 02～05 完成後，請按一次下方按鈕同步所有設定，再進行生成。")
+_v12_settings_apply_generation_locked = bool(
+    st.session_state.get("v11_generation_pending", False)
+    or st.session_state.get("v11_generation_in_progress", False)
 )
+_v12_apply_all_settings_result = render_frontend_apply_button(
+    data={
+        "storageKey": "sticker-studio-next.step04-formal.v1",
+        "label": "🧩 套用所有設定（才能進行生成）\n※ 修改內容後需再次套用",
+        "generationLocked": _v12_settings_apply_generation_locked,
+    },
+    key=(
+        "v12_step04_frontend_apply_all_settings_"
+        f"{int(st.session_state.get('v12_apply_all_settings_revision', 0) or 0)}"
+    ),
+)
+if isinstance(_v12_apply_all_settings_result, dict):
+    _v12_apply_token = str(_v12_apply_all_settings_result.get("token", "") or "")
+    if _v12_settings_apply_generation_locked:
+        # The browser guard prevents this in normal use.  Keep the server-side
+        # check too, so a stale component or crafted event cannot alter the
+        # frozen prompt while an image request is active.
+        st.session_state["v12_apply_all_settings_notice"] = "locked_generation"
+        st.session_state["v12_apply_all_settings_revision"] = int(
+            st.session_state.get("v12_apply_all_settings_revision", 0) or 0
+        ) + 1
+        st.rerun()
+    if _v12_apply_token and _v12_apply_token != str(
+        st.session_state.get("v12_last_apply_all_settings_token", "") or ""
+    ):
+        st.session_state["v12_last_apply_all_settings_token"] = _v12_apply_token
+        _v12_apply_state = _v12_apply_all_settings_result.get("state")
+        if isinstance(_v12_apply_state, dict):
+            _v12_apply_step04_frontend_snapshot(_v12_apply_state)
+        _v12_apply_saved = _v12_commit_all_creation_settings()
+        st.session_state["v12_apply_all_settings_readiness_messages"] = (
+            _v12_creation_readiness_messages()
+        )
+        st.session_state["v12_apply_all_settings_notice"] = (
+            "success" if _v12_apply_saved else "local_only"
+        )
+        # A new component key replaces the browser button after a successful
+        # apply. Otherwise its temporary “applying” text remains disabled and
+        # members cannot apply a later edit.
+        st.session_state["v12_apply_all_settings_revision"] = int(
+            st.session_state.get("v12_apply_all_settings_revision", 0) or 0
+        ) + 1
+        st.rerun()
+_v12_apply_notice = st.session_state.pop("v12_apply_all_settings_notice", "")
+if _v12_apply_notice == "success":
+    st.success("✅ 已套用 STEP 02～05 的所有設定，現在可以進行生成。")
+elif _v12_apply_notice == "local_only":
+    st.warning("設定已套用到本次生成，但雲端偏好同步未完成；請稍後再試。")
+elif _v12_apply_notice == "locked_generation":
+    st.info("🔒 圖片生成中，設定已鎖定；請等本次生成結束後再修改並套用。")
+_v12_apply_readiness_messages = st.session_state.pop(
+    "v12_apply_all_settings_readiness_messages", []
+)
+if isinstance(_v12_apply_readiness_messages, list) and _v12_apply_readiness_messages:
+    st.warning(
+        "⚠️ 生成前請完成下列項目：\n\n"
+        + "\n".join(
+            f"- {str(message)}" for message in _v12_apply_readiness_messages
+        )
+    )
+elif _v12_apply_notice == "success":
+    st.caption("✅ 生成前檢查完成：可前往 STEP 06 生成貼圖。")
 
 with st.container(key="v12_project_name_top"):
     _v12_project_name_initial = _v12_normalize_project_name(
@@ -17135,9 +17601,14 @@ _generation_in_progress = bool(st.session_state.get("v11_generation_in_progress"
 _generation_local_locked = _generation_pending or _generation_in_progress
 _generation_recovery_status = {
     "has_reserved": False,
+    "can_cancel": False,
     "can_recover": False,
     "seconds_remaining": 0,
 }
+# This page's pending hand-off always proceeds immediately into the provider
+# call.  Do not render an enabled recovery control in that tiny interval; a
+# broken hand-off can be cancelled safely after reopening the page, when the
+# server still reports it as an unstarted ``reserved`` job.
 if not _generation_local_locked:
     try:
         _recovery_status_session = _beta_current_user()
@@ -17176,6 +17647,9 @@ if _v12_step04_frontend_enabled:
         data={
             "storageKey": "sticker-studio-next.step04-formal.v1",
             "disabled": _generation_locked,
+            "settingsPending": bool(
+                st.session_state.get("v12_settings_pending_apply", False)
+            ),
         },
         # 早期驗證 stop 時，重新建立元件可解除其瀏覽器端 disabled 狀態。
         key=(
@@ -17203,8 +17677,9 @@ else:
         key="v11_generate_4x2",
     )
 
-# 此按鈕預設保持鎖定。只有系統查到本人確實有一筆超過五分鐘、
-# 仍未完成的後端生成作業時才開放，以免被用作任意退點工具。
+# 生成作業分為兩段：尚未交給 AI 的 reserved 可立即取消；已進入 AI
+# 生成中的 processing 一律鎖定，只有逾時五分鐘才可回復。這避免圖片
+# 已在生成卻被退回點數。
 with st.container(key="v12_recover_generate_state"):
     _recover_left, _recover_center, _recover_right = st.columns([2.2, 1.6, 2.2])
     with _recover_center:
@@ -17214,15 +17689,18 @@ with st.container(key="v12_recover_generate_state"):
         _recovery_has_waiting_job = bool(
             _generation_recovery_status.get("has_reserved", False)
         ) and not bool(_generation_recovery_status.get("can_recover", False))
+        _recovery_can_cancel = bool(
+            _generation_recovery_status.get("has_reserved", False)
+        ) and bool(_generation_recovery_status.get("can_cancel", False))
         _recovery_can_release = bool(
             _generation_recovery_status.get("has_reserved", False)
         ) and bool(_generation_recovery_status.get("can_recover", False))
         _recovery_help = (
-            "只有系統確認存在超過 5 分鐘未完成的生成時，才可解除鎖定並退回本次生成點數。"
+            "尚未開始送出 AI 的生成可取消；已開始的生成為避免誤退點，需逾時 5 分鐘才可回復。"
         )
         if _generation_local_locked:
             _recovery_help = "此頁正在生成中，為避免中斷有效作業，暫時不能回復。"
-        elif _recovery_has_waiting_job:
+        elif _recovery_has_waiting_job and not _recovery_can_cancel:
             _recovery_help = "生成開始未滿 5 分鐘，為避免中斷有效作業，暫時不能回復。"
         st.button(
             "↩️ 回復未生成狀態",
@@ -17230,47 +17708,102 @@ with st.container(key="v12_recover_generate_state"):
             help=_recovery_help,
             on_click=_v12_recover_generation_ui_callback,
             use_container_width=True,
-            disabled=not _recovery_can_release,
+            disabled=_generation_local_locked or not (
+                _recovery_can_cancel
+                or _recovery_can_release
+            ),
         )
-        if _recovery_has_waiting_job:
+        if _recovery_can_cancel:
+            st.caption("↩️ 尚未開始生成，可取消本次作業並退回點數。")
+        elif _recovery_has_waiting_job:
             _wait_minutes, _wait_seconds = divmod(_recovery_wait_seconds, 60)
             st.caption(
                 f"⏳ 正在生成中，約 {_wait_minutes} 分 {_wait_seconds:02d} 秒後可回復。"
             )
 
+if st.session_state.pop("v12_settings_apply_required_notice", False):
+    st.warning("請先回到 STEP 05 按「🧩 套用所有設定（才能進行生成）」，再開始生成。")
+
+_v12_generation_request_feedback = st.session_state.pop(
+    "v12_generation_request_feedback", None
+)
+if isinstance(_v12_generation_request_feedback, dict):
+    _v12_feedback_message = str(
+        _v12_generation_request_feedback.get("message", "") or ""
+    )
+    if _v12_feedback_message:
+        if _v12_generation_request_feedback.get("level") == "error":
+            st.error(_v12_feedback_message)
+        else:
+            st.warning(_v12_feedback_message)
+
+
+def _v12_reject_generation_request(message, level="warning"):
+    """Return the custom generator to a usable state after preflight rejects."""
+    st.session_state["v12_generation_request_feedback"] = {
+        "message": str(message or ""),
+        "level": str(level or "warning"),
+    }
+    # The browser component disables itself immediately on click.  A fresh key
+    # is required after *every* early validation exit, otherwise it remains on
+    # the misleading “正在準備生成” state even though no job was created.
+    st.session_state["v12_frontend_generate_reset_revision"] = int(
+        st.session_state.get("v12_frontend_generate_reset_revision", 0) or 0
+    ) + 1
+    # The same browser-side guard also protects the apply button.  Rebuild it
+    # after a rejected request (such as a missing photo), otherwise the old
+    # component can retain its temporary "圖片生成中" appearance even though
+    # this request never reserved a point or reached the AI provider.
+    st.session_state["v12_apply_all_settings_revision"] = int(
+        st.session_state.get("v12_apply_all_settings_revision", 0) or 0
+    ) + 1
+    st.rerun()
+
 if _generate_clicked:
+    # This is intentionally checked on the server as well as in the visible
+    # flow.  A stale browser component or a crafted request must never bypass
+    # the member's one deliberate STEP 02–05 apply action and consume credits.
+    if bool(st.session_state.get("v12_settings_pending_apply", False)):
+        st.session_state["v12_settings_apply_required_notice"] = True
+        st.session_state["v12_frontend_generate_reset_revision"] = int(
+            st.session_state.get("v12_frontend_generate_reset_revision", 0) or 0
+        ) + 1
+        st.rerun()
     if not _text_only_generation and not st.session_state.uploaded_image_bytes:
-        st.warning(t("upload_first"))
-        st.stop()
+        _v12_reject_generation_request(t("upload_first"))
 
     # 文字模式至少需要一格文字；無文字表情模式則由每格的表情／特效方向生成，
     # 不應共用「必須填貼圖文字」的驗證。
     if _sticker_mode == "text" and not any(str(text or "").strip() for text in texts):
-        st.stop()
+        _v12_reject_generation_request("請至少填入一格貼圖文字後再生成。")
 
     _click_beta_session = _beta_current_user()
     if not _click_beta_session:
-        st.error("❌ 請先使用 Google 登入會員。")
-        st.stop()
+        _v12_reject_generation_request("❌ 請先使用 Google 登入會員。", "error")
     if not _beta_site_openai_key():
-        st.error("❌ 會員生成服務尚未完成設定，請稍後再試。")
-        st.stop()
+        _v12_reject_generation_request(
+            "❌ 會員生成服務尚未完成設定，請稍後再試。", "error"
+        )
     try:
         _reservation = _beta_reserve_generation(_click_beta_session)
     except Exception:
-        st.error("❌ 目前無法確認會員可用生成次數，請稍後再試。")
-        st.stop()
+        _v12_reject_generation_request(
+            "❌ 目前無法確認會員可用生成次數，請稍後再試。", "error"
+        )
     if not _reservation["granted"]:
-        if _reservation["job_id"]:
-            st.warning("此帳號已有一份圖片正在生成，請等完成後再試。")
-        elif _reservation["balance"] > 0:
-            st.warning("剛完成生成，請等候 60 秒後再使用下一次體驗額度。")
-        else:
-            st.warning("體驗額度已使用完畢。")
-        st.stop()
+        _v12_reject_generation_request(
+            "此帳號已有一份圖片正在生成，請等完成後再試。"
+            if _reservation["job_id"]
+            else (
+                "剛完成生成，請等候 60 秒後再使用下一次體驗額度。"
+                if _reservation["balance"] > 0
+                else "體驗額度已使用完畢。"
+            )
+        )
     if not _reservation["job_id"]:
-        st.error("❌ 無法建立本次生成作業，請稍後再試。")
-        st.stop()
+        _v12_reject_generation_request(
+            "❌ 無法建立本次生成作業，請稍後再試。", "error"
+        )
     st.session_state["beta_generation_job_id"] = _reservation["job_id"]
 
     if _sticker_mode == "expression":
@@ -17310,6 +17843,8 @@ if isinstance(_generation_feedback, dict):
         st.error("❌ 這次生成未完成，現在可以立即重新嘗試。")
 if _generation_recovery_feedback == "stale_released":
     st.success("↩️ 已解除超過 5 分鐘未完成的生成作業，已退回本次生成點數；照片、文字與其他創作設定都已保留。")
+elif _generation_recovery_feedback == "cancelled_before_start":
+    st.success("↩️ 已取消尚未開始的生成作業，已退回本次生成點數；照片、文字與其他創作設定都已保留。")
 elif _generation_recovery_feedback == "local":
     st.info("↩️ 已回復未生成狀態；照片、文字與其他創作設定都已保留。")
 if _generation_recovery_blocked:
@@ -17344,6 +17879,11 @@ if st.session_state.get("v11_generation_pending", False):
         _beta_live_session = _beta_current_user()
         if not _beta_live_session or not _beta_job_id:
             raise RuntimeError("missing_beta_reservation")
+        # After this transition the provider call is genuinely underway.  A
+        # different tab, a refresh, or a new Cloud Run instance may no longer
+        # cancel it immediately; it must use the five-minute stale recovery.
+        if not _beta_start_generation(_beta_live_session, _beta_job_id):
+            raise RuntimeError("generation_start_not_confirmed")
         _server_openai_key = _beta_site_openai_key()
         if not _server_openai_key:
             raise RuntimeError("beta_generation_not_enabled")

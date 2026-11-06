@@ -23,7 +23,7 @@ EDITOR_CSS = r"""
 .s4-mode { min-height:40px; border:1px solid #526a86; border-radius:8px; cursor:pointer;
   background:rgba(29,43,64,.82); color:#d8e6f6; font-size:15px; font-weight:760; }
 .s4-mode.active { background:#ff5878; border-color:#ff7893; color:white; box-shadow:none; }
-.s4-mode:disabled { cursor:wait; opacity:.7; }
+.s4-mode:disabled { cursor:not-allowed; opacity:.7; }
 .s4-mode-sync-notice { margin:-20px 16px 18px; color:#a9ddff; font-size:13px; font-weight:800; text-align:center; }
 .s4-heading { max-width:900px; margin:0 auto; padding:10px 16px; border:2px solid #279fe7; border-radius:11px; color:#f0f8ff;
   background:rgba(21,52,79,.46); font-size:20px; font-weight:850; text-align:center; }
@@ -81,6 +81,15 @@ EDITOR_CSS = r"""
 .s4-reset { border:1px solid #667c96; background:#27374d; color:#dce8f4; }
 .s4-local { color:#9fb2c9; font-size:13px; }
 .s4-count { margin-top:15px; border-radius:10px; padding:10px 12px; background:rgba(57,136,205,.15); color:#9fd8ff; font-weight:750; }
+.step04-editor-root.s4-compact .s4-shell { margin-top:4px; }
+.step04-editor-root.s4-compact .s4-mode-row,
+.step04-editor-root.s4-compact .s4-source-row,
+.step04-editor-root.s4-compact .s4-panel-grid { grid-template-columns:1fr; gap:10px; margin-left:0; margin-right:0; }
+.step04-editor-root.s4-compact .s4-grid { grid-template-columns:1fr; gap:14px; }
+.step04-editor-root.s4-compact .s4-candidates,
+.step04-editor-root.s4-compact .s4-random-phrases,
+.step04-editor-root.s4-compact .s4-picked-list { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.step04-editor-root.s4-compact .s4-card { padding:0; }
 @media (max-width: 820px) { .s4-mode-row { gap:12px; margin:0 0 20px; } .s4-grid, .s4-candidates, .s4-random-phrases, .s4-picked-list { grid-template-columns:repeat(2, minmax(0,1fr)); } .s4-panel-grid { grid-template-columns:1fr; } }
 @media (max-width: 520px) { .s4-grid { grid-template-columns:1fr; } .s4-mode { font-size:14px; } }
 """
@@ -93,6 +102,8 @@ export default function(component) {
   const formal = Boolean(data.formal);
   const revision = String(data.revision || '');
   const initial = data.initial && typeof data.initial === 'object' ? data.initial : {};
+  root.classList.toggle('s4-compact', Boolean(initial.compactLayout));
+  const forceTextMode = Boolean(initial.forceTextMode);
   const aiQuotaText = String(initial.aiQuotaText || 'AI幫想 今日額度（台灣時間）：登入後可查看');
   const aiLoginNotice = String(initial.aiLoginNotice || '');
   const COLOR_OPTIONS = [
@@ -149,6 +160,7 @@ export default function(component) {
     base.randomCustomDraft = String(raw.randomCustomDraft || '');
     base.randomCustomPhrases = Array.isArray(raw.randomCustomPhrases) ? raw.randomCustomPhrases.map(value => String(value).trim()).filter(Boolean).slice(0, 50) : [];
     base.message = String(raw.message || '');
+    base.settingsAppliedFingerprint = String(raw.settingsAppliedFingerprint || '');
     if (Array.isArray(raw.slots)) base.slots = base.slots.map((slot, i) => {
       const saved = raw.slots[i] || {};
       const colorSegments = Array.isArray(saved.colorSegments) ? saved.colorSegments.slice(0, 3).map(segment => {
@@ -174,11 +186,18 @@ export default function(component) {
       : normalize(data.initial || null);
   }
   catch (_) { state = normalize(data.initial || null); }
-  const save = () => {
+  const save = (dirty = true) => {
+    if (dirty) delete state.settingsAppliedFingerprint;
     state.__revision = revision;
     localStorage.setItem(storageKey, JSON.stringify(state));
   };
-  save();
+  if (forceTextMode && state.mode !== 'text') {
+    state.mode = 'text';
+    state.sourcePanel = '';
+    save();
+  }
+  // Hydrating an existing browser draft must preserve a prior global Apply.
+  save(false);
   const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const checked = value => value ? 'checked' : '';
 
@@ -317,9 +336,9 @@ export default function(component) {
       <div class="s4-shell">
         <div class="s4-mode-row">
           <button class="s4-mode ${textMode ? 'active' : ''}" data-mode="text" ${modeSwitching ? 'disabled' : ''}>${textMode ? '✓ ' : ''}💬 使用文字貼圖</button>
-          <button class="s4-mode ${!textMode ? 'active' : ''}" data-mode="expression" ${modeSwitching ? 'disabled' : ''}>${!textMode ? '✓ ' : ''}😶 使用表情貼圖（無文字）</button>
+          <button class="s4-mode ${!textMode ? 'active' : ''}" data-mode="expression" ${(modeSwitching || forceTextMode) ? 'disabled' : ''}>${!textMode ? '✓ ' : ''}😶 使用表情貼圖（無文字）</button>
         </div>
-        ${modeSwitching ? '<div class="s4-mode-sync-notice">⌛ 正在切換模式，請稍候…</div>' : ''}
+        ${forceTextMode ? '<div class="s4-mode-sync-notice">📝 已啟用純文字設計；無文字表情貼圖模式暫時不可使用。</div>' : modeSwitching ? '<div class="s4-mode-sync-notice">⌛ 正在切換模式，請稍候…</div>' : ''}
         <div class="s4-heading">${textMode ? '💬 使用文字貼圖' : '😶 使用表情貼圖（無文字）'}</div>
         ${textMode ? sourcePanel() : '<p class="s4-caption">切換模式時會短暫同步；設定表情不會讀取頁面。回到文字模式後，先前的 01～08 文字仍會保留。</p>'}
         <div class="s4-grid">${firstRow}</div>
@@ -413,6 +432,7 @@ export default function(component) {
       return;
     }
     if (button.dataset.mode) {
+      if (forceTextMode && button.dataset.mode === 'expression') return;
       if (modeSwitching || button.disabled) return;
       modeSwitching = true;
       state.mode = button.dataset.mode;
@@ -623,16 +643,23 @@ GENERATOR_CSS = r"""
 :host { display:block; width:100%; }
 .step04-generator-root button { width:100%; min-height:42px; border:0; border-radius:9px;
   background:#ff5878; color:#fff; font:inherit; font-size:16px; font-weight:850; cursor:pointer; }
-.step04-generator-root button:disabled { opacity:.62; cursor:wait; }
+.step04-generator-root button:disabled { opacity:.72; cursor:not-allowed; }
+.step04-generator-root button.is-generating:disabled { cursor:wait; }
+.step04-generator-root button.needs-apply:disabled { background:rgba(112,139,175,.72); color:#eef5ff; }
 """
 GENERATOR_JS = r"""
 export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
   const root = parentElement.querySelector('.step04-generator-root') || parentElement;
+  const generationLockKey = `${String(data.storageKey || 'step04')}.generation-requested`;
   const readDraft = () => {
     try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
     catch (_) { return null; }
   };
+  const fingerprint = (state) => JSON.stringify({
+    mode: state?.mode || '',
+    slots: Array.isArray(state?.slots) ? state.slots : [],
+  });
   const isTextModeEmpty = (state) => Boolean(
     state
     && state.mode === 'text'
@@ -640,11 +667,16 @@ export default function(component) {
       slot => String(slot?.text || '').trim()
     ))
   );
-  const disabled = Boolean(data.disabled);
+  const draft = readDraft();
+  const needsSettingsApply = Boolean(data.settingsPending) || !draft || draft.settingsAppliedFingerprint !== fingerprint(draft);
+  const disabled = Boolean(data.disabled) || needsSettingsApply;
   const label = data.disabled
     ? '🔄 AI 正在生成，請稍候……'
+    : needsSettingsApply
+      ? '⚠️ 請按下「套用所有設定」按鈕後，方能進行生成'
     : '✨ 生成 4×2 八格總圖';
-  root.innerHTML = `<button ${disabled ? 'disabled' : ''}>${label}</button>`;
+  const buttonClass = data.disabled ? 'is-generating' : needsSettingsApply ? 'needs-apply' : '';
+  root.innerHTML = `<button class="${buttonClass}" ${disabled ? 'disabled' : ''}>${label}</button>`;
   const button = root.querySelector('button');
   button.addEventListener('click', () => {
     // STEP 04 inputs deliberately stay browser-only while users type, so this
@@ -655,6 +687,9 @@ export default function(component) {
     // 文字編輯器存在於瀏覽器端；先在此判斷，避免空白請求送到後端後
     // 讓按鈕被短暫鎖住。固定提醒則由 STEP 06 標題下方呈現。
     if (isTextModeEmpty(state)) return;
+    // Lock companion controls before Streamlit has time to start its rerun.
+    // The server remains authoritative; this is only a same-page UX guard.
+    localStorage.setItem(generationLockKey, '1');
     button.disabled = true;
     button.textContent = '🔄 正在準備生成…';
     setTriggerValue('request', {state});
@@ -674,6 +709,82 @@ def render_frontend_generate_button(*, data, key):
     )
     result = generator(data=data, key=key)
     return getattr(result, "request", None)
+
+
+# The STEP 02/03/05 controls intentionally keep their changes in the browser
+# until the member confirms one final apply action.  STEP 04 is already stored
+# in localStorage, so this companion component reads that same draft and sends
+# it together with the one deliberate full-page update.
+APPLY_SETTINGS_HTML = '<div class="step04-apply-settings-root"></div>'
+APPLY_SETTINGS_CSS = r"""
+:host { display:block; width:100%; }
+.step04-apply-settings-root button { width:100%; min-height:58px; border:1px solid rgba(167,139,250,.9);
+  border-radius:11px; background:linear-gradient(100deg,rgba(92,198,255,.66),rgba(160,110,255,.66),rgba(255,104,157,.62));
+  color:#fff; font:inherit; font-size:16px; font-weight:900; line-height:1.35; white-space:pre-line; letter-spacing:.02em; cursor:pointer;
+  box-shadow:0 5px 18px rgba(103,119,255,.24); }
+.step04-apply-settings-root button:hover { filter:brightness(1.1); transform:translateY(-1px); }
+.step04-apply-settings-root button:disabled { opacity:.62; cursor:not-allowed; transform:none; }
+"""
+APPLY_SETTINGS_JS = r"""
+export default function(component) {
+  const { parentElement, data, setTriggerValue } = component;
+  const root = parentElement.querySelector('.step04-apply-settings-root') || parentElement;
+  const generationLockKey = `${String(data.storageKey || 'step04')}.generation-requested`;
+  const readDraft = () => {
+    try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
+    catch (_) { return null; }
+  };
+  const fingerprint = (state) => JSON.stringify({
+    mode: state?.mode || '',
+    slots: Array.isArray(state?.slots) ? state.slots : [],
+  });
+  const generationLocked = Boolean(data.generationLocked);
+  if (!generationLocked) {
+    // A rejected request (for example, missing a required photo) arrives here
+    // on its fresh render and clears the browser-only click guard.
+    localStorage.removeItem(generationLockKey);
+  }
+  const label = generationLocked
+    ? '🔒 圖片生成中，設定暫時鎖定'
+    : String(data.label || '🧩 套用所有設定（才能進行生成）');
+  root.innerHTML = `<button ${generationLocked ? 'disabled' : ''}>${label}</button>`;
+  const button = root.querySelector('button');
+  button.addEventListener('click', () => {
+    // The generate component writes this synchronously before Streamlit can
+    // redraw.  It closes the small same-page window in which a second click
+    // could otherwise submit an apply request after generation was accepted.
+    if (generationLocked || localStorage.getItem(generationLockKey)) {
+      button.disabled = true;
+      button.textContent = '🔒 圖片生成中，設定暫時鎖定';
+      return;
+    }
+    const state = readDraft();
+    if (state && typeof state === 'object') {
+      state.settingsAppliedFingerprint = fingerprint(state);
+      localStorage.setItem(data.storageKey, JSON.stringify(state));
+    }
+    button.disabled = true;
+    button.textContent = '🔄 正在套用所有設定…';
+    setTriggerValue('apply', {
+      state,
+      token: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    });
+  });
+}
+"""
+
+
+def render_frontend_apply_button(*, data, key):
+    """Render the one deliberate STEP 02–05 apply action."""
+    apply_button = components.component(
+        "v12_step04_frontend_apply_button",
+        html=APPLY_SETTINGS_HTML,
+        css=APPLY_SETTINGS_CSS,
+        js=APPLY_SETTINGS_JS,
+        isolate_styles=False,
+    )
+    result = apply_button(data=data, key=key)
+    return getattr(result, "apply", None)
 
 
 def run_test_page():
