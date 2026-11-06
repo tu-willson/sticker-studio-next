@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { constantTimeEqual, decryptNewebpayCbc, newebpayTradeSha, parseNewebpayMpgValues, requestFields, safeProviderText } from "../_shared/newebpay.ts";
+import { constantTimeEqual, decryptNewebpayMpg, newebpayTradeSha, parseNewebpayMpgValues, requestFields, safeProviderText } from "../_shared/newebpay.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 function supabaseAdminKey(): string {
@@ -37,7 +37,9 @@ Deno.serve(async (request) => {
 
     let decoded: Record<string, string>;
     try {
-      decoded = parseNewebpayMpgValues(await decryptNewebpayCbc(tradeInfo, HASH_KEY, HASH_IV));
+      decoded = parseNewebpayMpgValues(await decryptNewebpayMpg(
+        tradeInfo, HASH_KEY, HASH_IV, fields.EncryptType || "",
+      ));
     } catch {
       return invalidReturn("decrypt");
     }

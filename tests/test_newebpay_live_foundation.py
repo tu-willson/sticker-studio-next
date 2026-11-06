@@ -40,7 +40,10 @@ class NewebPayLiveFoundationTests(unittest.TestCase):
 
     def test_callbacks_are_verified_and_return_pages_never_issue_entitlements(self):
         self.assertIn("newebpayTradeSha", NOTIFY)
+        self.assertIn("decryptNewebpayMpg", NOTIFY)
+        self.assertIn("reconcileVerifiedRecentOrders", NOTIFY)
         self.assertIn("finalize_newebpay_initial_payment", NOTIFY)
+        self.assertIn("decryptNewebpayMpg", RETURN)
         self.assertIn("record_newebpay_periodic_renewal", PERIODIC_NOTIFY)
         self.assertNotIn("finalize_newebpay_initial_payment", RETURN)
         self.assertNotIn("record_newebpay_periodic_renewal", PERIODIC_RETURN)

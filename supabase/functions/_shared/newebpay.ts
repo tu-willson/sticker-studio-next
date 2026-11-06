@@ -22,6 +22,10 @@ async function cbcKey(hashKey: string, usage: KeyUsage[]): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", encoder.encode(hashKey), { name: "AES-CBC" }, false, usage);
 }
 
+async function gcmKey(hashKey: string, usage: KeyUsage[]): Promise<CryptoKey> {
+  return crypto.subtle.importKey("raw", encoder.encode(hashKey), { name: "AES-GCM" }, false, usage);
+}
+
 export async function encryptNewebpayCbc(
   values: Record<string, string | number>, hashKey: string, hashIv: string,
 ): Promise<string> {
@@ -43,6 +47,36 @@ export async function decryptNewebpayCbc(
     await cbcKey(hashKey, ["decrypt"]), hexDecode(encrypted),
   );
   return decoder.decode(plain);
+}
+
+async function decryptNewebpayGcm(
+  encrypted: string, hashKey: string, hashIv: string,
+): Promise<string> {
+  const plain = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: encoder.encode(hashIv), tagLength: 128 },
+    await gcmKey(hashKey, ["decrypt"]), hexDecode(encrypted),
+  );
+  return decoder.decode(plain);
+}
+
+// MPG historically used AES-CBC, but an EncryptType=1 response uses AES-GCM.
+// Some merchant configurations omit the response EncryptType despite returning
+// GCM, so keep the second mode as a narrowly scoped compatibility fallback.
+export async function decryptNewebpayMpg(
+  encrypted: string, hashKey: string, hashIv: string, encryptType = "",
+): Promise<string> {
+  const modes = encryptType.trim() === "1"
+    ? [decryptNewebpayGcm, decryptNewebpayCbc]
+    : [decryptNewebpayCbc, decryptNewebpayGcm];
+  let lastError: unknown;
+  for (const decrypt of modes) {
+    try {
+      return await decrypt(encrypted, hashKey, hashIv);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("newebpay_decrypt_failed");
 }
 
 export async function newebpayTradeSha(tradeInfo: string, hashKey: string, hashIv: string): Promise<string> {
