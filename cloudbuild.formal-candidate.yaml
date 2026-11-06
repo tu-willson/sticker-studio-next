@@ -13,6 +13,7 @@ steps:
       - push
       - asia-east1-docker.pkg.dev/unknown-egg/cloud-run-source-deploy/sticker-studio-next/$COMMIT_SHA
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
     args:
       - run
       - services
