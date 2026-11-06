@@ -3925,6 +3925,8 @@ def _beta_rpc(function_name, payload, access_token=None):
 
 def _beta_payuni_sandbox_enabled():
     """Keep public checkout disabled until deployment secrets explicitly enable it."""
+    if _v12_acceptance_mode_enabled():
+        return False
     try:
         value = str(st.secrets.get("PAYUNI_SANDBOX_ENABLED", "") or "").strip().lower()
     except Exception:
@@ -3934,8 +3936,22 @@ def _beta_payuni_sandbox_enabled():
 
 def _beta_newebpay_live_enabled():
     """Formal NewebPay remains invisible until both deployment gates are enabled."""
+    # The private formal-architecture acceptance service uses the same
+    # Supabase project as production, but must never be able to create a
+    # live payment order while it is being tested.
+    if _v12_acceptance_mode_enabled():
+        return False
     try:
         value = str(st.secrets.get("NEWEBPAY_LIVE_ENABLED", "") or "").strip().lower()
+    except Exception:
+        return False
+    return value in {"1", "true", "yes", "on"}
+
+
+def _v12_acceptance_mode_enabled():
+    """Whether this deployment is the private formal acceptance station."""
+    try:
+        value = str(st.secrets.get("V12_ACCEPTANCE_MODE", "") or "").strip().lower()
     except Exception:
         return False
     return value in {"1", "true", "yes", "on"}
@@ -14308,6 +14324,8 @@ def _v12_render_pricing_page():
         st.success(f"📋 {current_label}")
     else:
         st.info(t("pricing_login_notice"))
+    if _v12_acceptance_mode_enabled():
+        st.info("🧪 正式架構驗收站：此站僅供內部驗收，付款功能已關閉，不會建立或送出任何藍新付款訂單。")
     # The signed PAYUNi return may be opened after the Streamlit session has
     # restarted. Show its compact provider message independently of member
     # session state so a rejected sandbox request is actionable.
