@@ -24,3 +24,5 @@ steps:
       - --quiet
 images:
   - asia-east1-docker.pkg.dev/unknown-egg/cloud-run-source-deploy/sticker-studio-next/$COMMIT_SHA
+options:
+  logging: CLOUD_LOGGING_ONLY
