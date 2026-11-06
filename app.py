@@ -5,6 +5,7 @@ import copy
 import streamlit as st
 from openai import OpenAI
 import base64
+import os
 from io import BytesIO
 from PIL import Image
 import random
@@ -3951,7 +3952,11 @@ def _beta_newebpay_live_enabled():
 def _v12_acceptance_mode_enabled():
     """Whether this deployment is the private formal acceptance station."""
     try:
-        value = str(st.secrets.get("V12_ACCEPTANCE_MODE", "") or "").strip().lower()
+        value = str(
+            st.secrets.get("V12_ACCEPTANCE_MODE", "")
+            or os.environ.get("V12_ACCEPTANCE_MODE", "")
+            or ""
+        ).strip().lower()
     except Exception:
         return False
     return value in {"1", "true", "yes", "on"}
