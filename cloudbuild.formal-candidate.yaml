@@ -1,0 +1,26 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --no-cache
+      - -t
+      - asia-east1-docker.pkg.dev/unknown-egg/cloud-run-source-deploy/sticker-studio-next/$COMMIT_SHA
+      - -f
+      - Dockerfile
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - asia-east1-docker.pkg.dev/unknown-egg/cloud-run-source-deploy/sticker-studio-next/$COMMIT_SHA
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    args:
+      - run
+      - services
+      - update
+      - sticker-studio-next-formal-candidate
+      - --platform=managed
+      - --image=asia-east1-docker.pkg.dev/unknown-egg/cloud-run-source-deploy/sticker-studio-next/$COMMIT_SHA
+      - --region=asia-east1
+      - --quiet
+images:
+  - asia-east1-docker.pkg.dev/unknown-egg/cloud-run-source-deploy/sticker-studio-next/$COMMIT_SHA
