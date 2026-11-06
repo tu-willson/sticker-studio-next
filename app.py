@@ -14526,6 +14526,12 @@ if re.fullmatch(
 ):
     st.session_state["v12_view"] = "pricing"
 
+# Allow the Taiwan creative backup service to send members directly to the
+# formal purchase page without exposing any checkout behaviour on the backup.
+_v12_requested_view = str(st.query_params.get("view", "") or "").strip().lower()
+if _v12_requested_view == "pricing":
+    st.session_state["v12_view"] = "pricing"
+
 
 # ============================================================
 # V12｜STEP 01A①
