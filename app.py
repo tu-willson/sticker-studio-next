@@ -1647,6 +1647,24 @@ div[class*="st-key-v12_basket_download_"] button:hover{
 .st-key-v12_style_card_grid [data-testid="stBaseButton-primary"],
 .st-key-v12_outline_card_grid [data-testid="stBaseButton-primary"],
 .st-key-v12_font_card_grid [data-testid="stBaseButton-primary"]{background:#2588d8 !important;border-color:#6ed9ff !important;color:#fff !important;}
+/* 克制的卡片回饋：只在滑到實際選取按鈕時，讓對應縮圖微微抬起。 */
+@media (prefers-reduced-motion:no-preference){
+  .st-key-v12_style_card_grid [data-testid="stImage"],
+  .st-key-v12_outline_card_grid [data-testid="stImage"],
+  .st-key-v12_font_card_grid [data-testid="stImage"],
+  .st-key-v12_style_card_grid [data-testid="stButton"] button,
+  .st-key-v12_outline_card_grid [data-testid="stButton"] button,
+  .st-key-v12_font_card_grid [data-testid="stButton"] button{transition:transform .16s ease,filter .16s ease,box-shadow .16s ease,border-color .16s ease,background .16s ease;}
+  .st-key-v12_style_card_grid [data-testid="stColumn"]:has([data-testid="stButton"] button:hover) [data-testid="stImage"],
+  .st-key-v12_outline_card_grid [data-testid="stColumn"]:has([data-testid="stButton"] button:hover) [data-testid="stImage"],
+  .st-key-v12_font_card_grid [data-testid="stColumn"]:has([data-testid="stButton"] button:hover) [data-testid="stImage"]{transform:translateY(-2px);filter:brightness(1.05);}
+  .st-key-v12_style_card_grid [data-testid="stButton"] button:active,
+  .st-key-v12_outline_card_grid [data-testid="stButton"] button:active,
+  .st-key-v12_font_card_grid [data-testid="stButton"] button:active{transform:scale(.985);}
+}
+.v12-apply-success{display:flex;align-items:center;gap:.62rem;margin:.55rem 0 .45rem;padding:.78rem .95rem;border:1px solid rgba(98,224,169,.58);border-radius:12px;background:linear-gradient(105deg,rgba(28,139,98,.30),rgba(46,174,143,.16));color:#dcffef;font-weight:820;box-shadow:0 7px 22px rgba(8,80,56,.16);}
+.v12-apply-success-mark{display:inline-flex;align-items:center;justify-content:center;width:1.55rem;height:1.55rem;border-radius:999px;background:#52cf96;color:#0c3826;font-weight:950;}
+@media (prefers-reduced-motion:no-preference){.v12-apply-success-mark{animation:v12-apply-check-pop .32s cubic-bezier(.2,.9,.3,1.35) both;}@keyframes v12-apply-check-pop{from{transform:scale(.55);opacity:.35}to{transform:scale(1);opacity:1}}}
 }
 .v12-project-save-divider{
   height:1px;
@@ -17164,7 +17182,11 @@ if isinstance(_v12_apply_all_settings_result, dict):
         st.rerun()
 _v12_apply_notice = st.session_state.pop("v12_apply_all_settings_notice", "")
 if _v12_apply_notice == "success":
-    st.success("✅ 已套用 STEP 02～05 的所有設定，現在可以進行生成。")
+    st.markdown(
+        '<div class="v12-apply-success" role="status"><span class="v12-apply-success-mark">✓</span>'
+        '<span>已套用 STEP 02～05 的所有設定，現在可以進行生成。</span></div>',
+        unsafe_allow_html=True,
+    )
 elif _v12_apply_notice == "local_only":
     st.warning("設定已套用到本次生成，但雲端偏好同步未完成；請稍後再試。")
 elif _v12_apply_notice == "locked_generation":
