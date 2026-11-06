@@ -14402,7 +14402,11 @@ def _v12_render_pricing_page():
     chosen = next((item for item in products if item["code"] == selected_code), None)
     if chosen:
         st.markdown(f"### {t('pricing_selected', name=chosen['name'], price=chosen['price'])}")
-        if session:
+        if _v12_acceptance_mode_enabled():
+            st.info(
+                "🧪 正式架構驗收站已停用付款流程：不會建立測試訂單、藍新訂單或任何扣款。"
+            )
+        elif session:
             if _beta_newebpay_live_enabled():
                 _checkout = st.session_state.get("v12_newebpay_checkout")
                 if isinstance(_checkout, dict) and _checkout.get("product_name"):
