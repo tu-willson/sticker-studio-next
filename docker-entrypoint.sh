@@ -15,6 +15,8 @@ keys = (
     "OPENAI_API_KEY",
     "PAYUNI_SANDBOX_ENABLED",
     "NEWEBPAY_LIVE_ENABLED",
+    "NEWEBPAY_WALLETS_ENABLED",
+    "V12_ACCEPTANCE_MODE",
     "SITE_URL",
 )
 target = Path(".streamlit/secrets.toml")
