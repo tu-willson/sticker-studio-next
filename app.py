@@ -1146,11 +1146,9 @@ def _v11_clear_generation_state() -> None:
 
 
 def _v12_recover_generation_ui_callback() -> None:
-    """Recover a local submit state or a safely stale server reservation."""
+    """Cancel an unstarted job, or recover a safely stale active generation."""
     # 同一頁仍在執行 AI 時，絕不能讓使用者中斷真正有效的作業。
-    if bool(st.session_state.get("v11_generation_pending", False)) or bool(
-        st.session_state.get("v11_generation_in_progress", False)
-    ):
+    if bool(st.session_state.get("v11_generation_in_progress", False)):
         st.session_state["v12_generation_recovery_blocked"] = True
         return
 
@@ -1169,7 +1167,11 @@ def _v12_recover_generation_ui_callback() -> None:
             )
             return
         if bool(recovery.get("recovered", False)):
-            recovery_feedback = "stale_released"
+            recovery_feedback = (
+                "cancelled_before_start"
+                if reason == "cancelled_before_start"
+                else "stale_released"
+            )
 
     _v11_clear_generation_state()
     for _key in (
@@ -5571,6 +5573,18 @@ def _beta_finish_generation(session, job_id, failure_code=None):
     return _beta_rpc(function_name, payload, access_token=session["access_token"])
 
 
+def _beta_start_generation(session, job_id):
+    """Atomically mark a reservation as actively calling the image provider."""
+    response = _beta_rpc(
+        "start_generation",
+        {"p_job_id": job_id},
+        access_token=session["access_token"],
+    )
+    if isinstance(response, list):
+        response = response[0] if response else False
+    return bool(response)
+
+
 def _beta_get_generation_recovery_status(session):
     """Read whether this member has a server-side generation lock to recover."""
     response = _beta_rpc(
@@ -5584,6 +5598,7 @@ def _beta_get_generation_recovery_status(session):
         raise RuntimeError("generation_recovery_status_invalid")
     return {
         "has_reserved": bool(response.get("has_reserved", False)),
+        "can_cancel": bool(response.get("can_cancel", False)),
         "can_recover": bool(response.get("can_recover", False)),
         "seconds_remaining": max(
             0, int(response.get("seconds_remaining", 0) or 0)
@@ -5592,7 +5607,7 @@ def _beta_get_generation_recovery_status(session):
 
 
 def _beta_recover_stale_generation(session):
-    """Release only the caller's own reservation after the five-minute grace."""
+    """Cancel the caller's unstarted reservation or recover a stale active one."""
     response = _beta_rpc(
         "recover_my_stale_generation",
         {},
@@ -9772,6 +9787,9 @@ def _v12_load_history_record(record):
     else:
         st.session_state.pop("v12_loaded_cloud_project_id", None)
     st.session_state["v12_current_project"] = metadata
+    # A loaded work/reel becomes the editable draft, but must be deliberately
+    # applied once before it can start a new image-generation request.
+    st.session_state["v12_settings_pending_apply"] = True
     # 載回作品／膠卷的快照具有最高優先權。延後清空上一次 file_uploader
     # 的控制值，避免舊上傳檔在下一次 render 時覆蓋膠卷保存的參考圖與立體設定。
     st.session_state["v12_style_reference_clear_upload_control"] = True
@@ -11917,6 +11935,15 @@ st.session_state.setdefault("v12_text_reference_dimensional", False)
 st.session_state.setdefault("v12_style_reference_elements_enabled", False)
 st.session_state.setdefault("v12_style_reference_elements", [])
 st.session_state.setdefault("v12_style_reference_custom_elements", "")
+# A newly opened or freshly loaded creation always needs one deliberate
+# STEP 02–05 apply.  This is server state, so an old browser localStorage
+# marker can never make the generation control look ready by itself.  The
+# version marker also upgrades an already-open Streamlit session once.
+if int(st.session_state.get("v12_settings_apply_policy_version", 0) or 0) < 2:
+    st.session_state["v12_settings_pending_apply"] = True
+    st.session_state["v12_settings_apply_policy_version"] = 2
+else:
+    st.session_state.setdefault("v12_settings_pending_apply", True)
 st.session_state.setdefault("v12_project_name_clear_revision", 0)
 st.session_state.setdefault("generated_4x2_bytes", None)
 st.session_state.setdefault("last_prompt", "")
@@ -17219,10 +17246,15 @@ _generation_in_progress = bool(st.session_state.get("v11_generation_in_progress"
 _generation_local_locked = _generation_pending or _generation_in_progress
 _generation_recovery_status = {
     "has_reserved": False,
+    "can_cancel": False,
     "can_recover": False,
     "seconds_remaining": 0,
 }
-if not _generation_local_locked:
+# ``pending`` is the short hand-off between accepting a click and beginning
+# the server-side job.  It is not a live AI call yet, so still read the server
+# status; a reserved (not-started) job may safely be cancelled after a broken
+# rerun.  Once ``in_progress`` is true the on-page progress flow owns it.
+if not _generation_in_progress:
     try:
         _recovery_status_session = _beta_current_user()
         if _recovery_status_session:
@@ -17290,8 +17322,9 @@ else:
         key="v11_generate_4x2",
     )
 
-# 此按鈕預設保持鎖定。只有系統查到本人確實有一筆超過五分鐘、
-# 仍未完成的後端生成作業時才開放，以免被用作任意退點工具。
+# 生成作業分為兩段：尚未交給 AI 的 reserved 可立即取消；已進入 AI
+# 生成中的 processing 一律鎖定，只有逾時五分鐘才可回復。這避免圖片
+# 已在生成卻被退回點數。
 with st.container(key="v12_recover_generate_state"):
     _recover_left, _recover_center, _recover_right = st.columns([2.2, 1.6, 2.2])
     with _recover_center:
@@ -17301,15 +17334,25 @@ with st.container(key="v12_recover_generate_state"):
         _recovery_has_waiting_job = bool(
             _generation_recovery_status.get("has_reserved", False)
         ) and not bool(_generation_recovery_status.get("can_recover", False))
+        _recovery_can_cancel = bool(
+            _generation_recovery_status.get("has_reserved", False)
+        ) and bool(_generation_recovery_status.get("can_cancel", False))
         _recovery_can_release = bool(
             _generation_recovery_status.get("has_reserved", False)
         ) and bool(_generation_recovery_status.get("can_recover", False))
-        _recovery_help = (
-            "只有系統確認存在超過 5 分鐘未完成的生成時，才可解除鎖定並退回本次生成點數。"
+        # A browser-only pending flag with no server job is the harmless
+        # "button looks stuck" case.  It can be cleared immediately because
+        # there is no reserved point to refund and no provider call to stop.
+        _recovery_can_clear_local = (
+            _generation_pending
+            and not bool(_generation_recovery_status.get("has_reserved", False))
         )
-        if _generation_local_locked:
+        _recovery_help = (
+            "尚未開始送出 AI 的生成可取消；已開始的生成為避免誤退點，需逾時 5 分鐘才可回復。"
+        )
+        if _generation_in_progress:
             _recovery_help = "此頁正在生成中，為避免中斷有效作業，暫時不能回復。"
-        elif _recovery_has_waiting_job:
+        elif _recovery_has_waiting_job and not _recovery_can_cancel:
             _recovery_help = "生成開始未滿 5 分鐘，為避免中斷有效作業，暫時不能回復。"
         st.button(
             "↩️ 回復未生成狀態",
@@ -17317,9 +17360,17 @@ with st.container(key="v12_recover_generate_state"):
             help=_recovery_help,
             on_click=_v12_recover_generation_ui_callback,
             use_container_width=True,
-            disabled=not _recovery_can_release,
+            disabled=_generation_in_progress or not (
+                _recovery_can_cancel
+                or _recovery_can_release
+                or _recovery_can_clear_local
+            ),
         )
-        if _recovery_has_waiting_job:
+        if _recovery_can_cancel:
+            st.caption("↩️ 尚未開始生成，可取消本次作業並退回點數。")
+        elif _recovery_can_clear_local:
+            st.caption("↩️ 未偵測到執行中的生成，可解除卡住的按鈕狀態。")
+        elif _recovery_has_waiting_job:
             _wait_minutes, _wait_seconds = divmod(_recovery_wait_seconds, 60)
             st.caption(
                 f"⏳ 正在生成中，約 {_wait_minutes} 分 {_wait_seconds:02d} 秒後可回復。"
@@ -17409,6 +17460,8 @@ if isinstance(_generation_feedback, dict):
         st.error("❌ 這次生成未完成，現在可以立即重新嘗試。")
 if _generation_recovery_feedback == "stale_released":
     st.success("↩️ 已解除超過 5 分鐘未完成的生成作業，已退回本次生成點數；照片、文字與其他創作設定都已保留。")
+elif _generation_recovery_feedback == "cancelled_before_start":
+    st.success("↩️ 已取消尚未開始的生成作業，已退回本次生成點數；照片、文字與其他創作設定都已保留。")
 elif _generation_recovery_feedback == "local":
     st.info("↩️ 已回復未生成狀態；照片、文字與其他創作設定都已保留。")
 if _generation_recovery_blocked:
@@ -17443,6 +17496,11 @@ if st.session_state.get("v11_generation_pending", False):
         _beta_live_session = _beta_current_user()
         if not _beta_live_session or not _beta_job_id:
             raise RuntimeError("missing_beta_reservation")
+        # After this transition the provider call is genuinely underway.  A
+        # different tab, a refresh, or a new Cloud Run instance may no longer
+        # cancel it immediately; it must use the five-minute stale recovery.
+        if not _beta_start_generation(_beta_live_session, _beta_job_id):
+            raise RuntimeError("generation_start_not_confirmed")
         _server_openai_key = _beta_site_openai_key()
         if not _server_openai_key:
             raise RuntimeError("beta_generation_not_enabled")
