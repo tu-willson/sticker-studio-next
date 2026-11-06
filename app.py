@@ -31,6 +31,7 @@ _step04_frontend = importlib.reload(_step04_frontend)
 render_frontend_apply_button = _step04_frontend.render_frontend_apply_button
 render_frontend_editor = _step04_frontend.render_frontend_editor
 render_frontend_generate_button = _step04_frontend.render_frontend_generate_button
+render_frontend_generation_status_monitor = _step04_frontend.render_frontend_generation_status_monitor
 
 
 def _v12_ui_locale():
@@ -17153,6 +17154,30 @@ def _v12_render_deferred_background_setting():
 
 transparent = _v12_render_deferred_background_setting()
 st.caption("STEP 02～05 完成後，請按一次下方按鈕同步所有設定，再進行生成。")
+
+# Poll only the account's tiny server-side generation lock.  This component
+# never calls st.rerun: Apply / Generate controls update themselves in the
+# browser, so incomplete creation settings are left untouched.
+_v12_generation_status_storage_key = "sticker-studio-next.v12.generation-status"
+_v12_generation_status_session = _beta_current_user() if _beta_config() else None
+_v12_generation_status_config = _beta_config()
+if _v12_generation_status_session and _v12_generation_status_config:
+    render_frontend_generation_status_monitor(
+        data={
+            "storageKey": _v12_generation_status_storage_key,
+            "statusEndpoint": (
+                f"{_v12_generation_status_config['url']}"
+                "/rest/v1/rpc/get_my_generation_recovery_status"
+            ),
+            "accessToken": str(
+                _v12_generation_status_session.get("access_token", "") or ""
+            ),
+            "anonKey": _v12_generation_status_config["anon_key"],
+            "pollMs": 15000,
+        },
+        key="v12_generation_status_monitor",
+    )
+
 _v12_settings_apply_generation_locked = bool(
     st.session_state.get("v11_generation_pending", False)
     or st.session_state.get("v11_generation_in_progress", False)
@@ -17160,6 +17185,7 @@ _v12_settings_apply_generation_locked = bool(
 _v12_apply_all_settings_result = render_frontend_apply_button(
     data={
         "storageKey": "sticker-studio-next.step04-formal.v1",
+        "generationStatusKey": _v12_generation_status_storage_key,
         "label": "🧩 套用所有設定（才能進行生成）\n※ 修改內容後需再次套用",
         "generationLocked": _v12_settings_apply_generation_locked,
     },
@@ -17658,6 +17684,7 @@ if _v12_step04_frontend_enabled:
         data={
             "storageKey": "sticker-studio-next.step04-formal.v1",
             "disabled": _generation_locked,
+            "generationStatusKey": _v12_generation_status_storage_key,
             "settingsPending": bool(
                 st.session_state.get("v12_settings_pending_apply", False)
             ),
