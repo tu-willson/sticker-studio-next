@@ -1587,6 +1587,29 @@ st.markdown("""
   height:100%;
   object-fit:contain;
 }
+/* Persisted cloud previews deliberately use inline image data instead of
+   Streamlit's container-local /media URLs.  Cloud Run instances may rotate
+   between the page render and the browser's follow-up image request. */
+.v12-inline-storage-preview{
+  width:100%;
+  margin:0 0 .3rem;
+}
+.v12-inline-storage-preview img{
+  display:block;
+  width:100%;
+  height:auto;
+  max-height:34rem;
+  object-fit:contain;
+  background:transparent;
+  border:0;
+  border-radius:8px;
+}
+.v12-inline-storage-preview figcaption{
+  margin-top:.22rem;
+  color:rgba(220,230,242,.78);
+  font-size:.84rem;
+  text-align:center;
+}
 [class*="st-key-v12_basket_item_"] [data-testid="stCaptionContainer"]{
   margin:0 0 -.18rem !important;
 }
@@ -5027,6 +5050,46 @@ def _v12_inline_basket_thumbnail_html(image_or_bytes, alt_text=""):
     )
 
 
+def _v12_inline_storage_preview_html(
+    image_or_bytes,
+    alt_text="",
+    caption="",
+    *,
+    max_size=(960, 720),
+    display_width_px=0,
+):
+    """Render a durable Storage asset without a Streamlit ``/media`` URL.
+
+    Supabase Storage remains the source of truth for creator reels, cloud
+    projects and marketplace templates.  The browser receives a compact WebP
+    preview directly in the page, preventing a Cloud Run revision/container
+    change from turning an otherwise valid private image into a 404.
+    """
+    image = image_or_bytes
+    if not isinstance(image, Image.Image):
+        image = Image.open(BytesIO(bytes(image_or_bytes)))
+    image = image.convert("RGBA")
+    resampling = getattr(Image, "Resampling", Image)
+    width, height = max_size
+    image.thumbnail((max(1, int(width)), max(1, int(height))), resampling.LANCZOS)
+    preview_b64 = base64.b64encode(
+        _v12_webp_bytes(image, quality=80, method=4)
+    ).decode("ascii")
+    safe_alt_text = html.escape(str(alt_text or "雲端作品預覽"), quote=True)
+    safe_caption = html.escape(str(caption or ""), quote=False)
+    width_style = ""
+    if display_width_px:
+        width_style = (
+            f' style="max-width:{max(1, int(display_width_px))}px;"'
+        )
+    caption_html = f"<figcaption>{safe_caption}</figcaption>" if safe_caption else ""
+    return (
+        f'<figure class="v12-inline-storage-preview"{width_style}>'
+        f'<img src="data:image/webp;base64,{preview_b64}" alt="{safe_alt_text}" />'
+        f"{caption_html}</figure>"
+    )
+
+
 def _v12_jpeg_bytes(image_or_bytes, quality=90):
     """Restore a browser-safe JPEG input for the style-reference image API slot."""
     image = image_or_bytes
@@ -6587,14 +6650,17 @@ def _beta_render_marketplace_moderation_center(session):
                         preview_path = str(row.get("preview_path", "") or "")
                         if preview_path:
                             try:
-                                st.image(
-                                    _beta_storage_download(
-                                        session,
-                                        preview_path,
-                                        bucket="shared-template-assets",
+                                st.markdown(
+                                    _v12_inline_storage_preview_html(
+                                        _beta_storage_download(
+                                            session,
+                                            preview_path,
+                                            bucket="shared-template-assets",
+                                        ),
+                                        alt_text="膠卷預覽",
+                                        caption="膠卷預覽",
                                     ),
-                                    caption="膠卷預覽",
-                                    use_container_width=True,
+                                    unsafe_allow_html=True,
                                 )
                             except Exception:
                                 st.caption("預覽圖暫時無法載入。")
@@ -10846,13 +10912,18 @@ def _v12_render_shared_template_manager(session):
                     preview_path = str(template.get("preview_path", "") or "")
                     if preview_path:
                         try:
-                            st.image(
-                                _beta_storage_download(
-                                    session,
-                                    preview_path,
-                                    bucket="shared-template-assets",
+                            st.markdown(
+                                _v12_inline_storage_preview_html(
+                                    _beta_storage_download(
+                                        session,
+                                        preview_path,
+                                        bucket="shared-template-assets",
+                                    ),
+                                    alt_text=t("shared_template_preview_caption"),
+                                    max_size=(400, 400),
+                                    display_width_px=200,
                                 ),
-                                width=200,
+                                unsafe_allow_html=True,
                             )
                         except Exception:
                             st.caption(t("shared_template_preview_unavailable"))
@@ -11246,13 +11317,16 @@ def _v12_render_creator_reels(session, shelf="active"):
         left, right = st.columns([1.1, 2.2], vertical_alignment="top")
         with left:
             try:
-                st.image(
-                    _beta_storage_download(
-                        session, str(reel.get("grid_path", "") or ""),
-                        bucket="creator-reels",
+                st.markdown(
+                    _v12_inline_storage_preview_html(
+                        _beta_storage_download(
+                            session, str(reel.get("grid_path", "") or ""),
+                            bucket="creator-reels",
+                        ),
+                        caption=t("creator_reel_grid_caption"),
+                        alt_text=t("creator_reel_grid_caption"),
                     ),
-                    caption=t("creator_reel_grid_caption"),
-                    use_container_width=True,
+                    unsafe_allow_html=True,
                 )
             except Exception:
                 st.info(t("creator_reel_preview_unavailable"))
@@ -11767,12 +11841,15 @@ def _v12_render_unlocked_template_shelf(session):
         with left:
             try:
                 if preview_path:
-                    st.image(
-                        _beta_storage_download(
-                            session, preview_path, bucket="shared-template-assets"
+                    st.markdown(
+                        _v12_inline_storage_preview_html(
+                            _beta_storage_download(
+                                session, preview_path, bucket="shared-template-assets"
+                            ),
+                            caption=t("shared_template_preview_caption"),
+                            alt_text=t("shared_template_preview_caption"),
                         ),
-                        caption=t("shared_template_preview_caption"),
-                        use_container_width=True,
+                        unsafe_allow_html=True,
                     )
             except Exception:
                 st.caption(t("shared_template_preview_unavailable"))
@@ -12010,12 +12087,15 @@ def _v12_render_shared_template_marketplace(session):
         with left:
             try:
                 if preview_path:
-                    st.image(
-                        _beta_storage_download(
-                            session, preview_path, bucket="shared-template-assets"
+                    st.markdown(
+                        _v12_inline_storage_preview_html(
+                            _beta_storage_download(
+                                session, preview_path, bucket="shared-template-assets"
+                            ),
+                            caption=t("shared_template_preview_caption"),
+                            alt_text=t("shared_template_preview_caption"),
                         ),
-                        caption=t("shared_template_preview_caption"),
-                        use_container_width=True,
+                        unsafe_allow_html=True,
                     )
             except Exception:
                 st.info(t("shared_template_preview_unavailable"))
@@ -14843,13 +14923,23 @@ def _v12_render_browser_workspace_projects():
 
         with card_left:
             if project.get("main_bytes"):
-                st.image(
-                    project["main_bytes"],
-                    caption=f"⭐ MAIN {project.get('main_no') or '—'}",
-                    use_container_width=True,
+                st.markdown(
+                    _v12_inline_storage_preview_html(
+                        project["main_bytes"],
+                        caption=f"⭐ MAIN {project.get('main_no') or '—'}",
+                        alt_text="作品主圖預覽",
+                    ),
+                    unsafe_allow_html=True,
                 )
             elif project.get("grid_bytes"):
-                st.image(project["grid_bytes"], caption="4×2 原始總圖", use_container_width=True)
+                st.markdown(
+                    _v12_inline_storage_preview_html(
+                        project["grid_bytes"],
+                        caption="4×2 原始總圖",
+                        alt_text="4×2 原始總圖",
+                    ),
+                    unsafe_allow_html=True,
+                )
             else:
                 st.info("🖼️ 尚無預覽圖")
 
@@ -14910,7 +15000,12 @@ def _v12_render_browser_workspace_projects():
                         st.write(f"{number:02d}. {text or '（未設定）'}")
                 if project.get("grid_bytes"):
                     st.markdown("**4×2 原始總圖：**")
-                    st.image(project["grid_bytes"], use_container_width=True)
+                    st.markdown(
+                        _v12_inline_storage_preview_html(
+                            project["grid_bytes"], alt_text="4×2 原始總圖"
+                        ),
+                        unsafe_allow_html=True,
+                    )
         st.divider()
 
 
@@ -15111,10 +15206,16 @@ if st.session_state["v12_view"] == "library":
                 _cloud_left, _cloud_right = st.columns([1, 2.4], vertical_alignment="top")
                 with _cloud_left:
                     try:
-                        st.image(
-                            _beta_storage_download(_cloud_session, _cloud_project.get("preview_path", "")),
-                            caption=t("cloud_preview"),
-                            use_container_width=True,
+                        st.markdown(
+                            _v12_inline_storage_preview_html(
+                                _beta_storage_download(
+                                    _cloud_session,
+                                    _cloud_project.get("preview_path", ""),
+                                ),
+                                caption=t("cloud_preview"),
+                                alt_text=t("cloud_preview"),
+                            ),
+                            unsafe_allow_html=True,
                         )
                     except Exception:
                         st.info(t("preview_unavailable"))
