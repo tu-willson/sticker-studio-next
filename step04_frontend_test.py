@@ -652,6 +652,7 @@ export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
   const root = parentElement.querySelector('.step04-generator-root') || parentElement;
   const generationLockKey = `${String(data.storageKey || 'step04')}.generation-requested`;
+  const generationStatusKey = String(data.generationStatusKey || `${String(data.storageKey || 'step04')}.generation-status`);
   const readDraft = () => {
     try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
     catch (_) { return null; }
@@ -669,21 +670,32 @@ export default function(component) {
   );
   const draft = readDraft();
   const needsSettingsApply = Boolean(data.settingsPending) || !draft || draft.settingsAppliedFingerprint !== fingerprint(draft);
-  const disabled = Boolean(data.disabled) || needsSettingsApply;
-  const label = data.disabled
-    ? '🔄 AI 正在生成，請稍候……'
-    : needsSettingsApply
-      ? '⚠️ 請按下「套用所有設定」按鈕後，方能進行生成'
-    : '✨ 生成 4×2 八格總圖';
-  const buttonClass = data.disabled ? 'is-generating' : needsSettingsApply ? 'needs-apply' : '';
-  root.innerHTML = `<button class="${buttonClass}" ${disabled ? 'disabled' : ''}>${label}</button>`;
+  const disabled = Boolean(data.disabled);
+  const remoteLocked = () => {
+    try { return Boolean(JSON.parse(localStorage.getItem(generationStatusKey) || 'null')?.hasReserved); }
+    catch (_) { return false; }
+  };
+  root.innerHTML = '<button></button>';
   const button = root.querySelector('button');
+  const paint = () => {
+    const locked = disabled || remoteLocked();
+    button.disabled = locked || needsSettingsApply;
+    button.className = locked ? 'is-generating' : needsSettingsApply ? 'needs-apply' : '';
+    button.textContent = locked
+      ? (disabled ? '🔄 AI 正在生成，請稍候……' : '🔒 此帳號正在其他裝置生成中')
+      : needsSettingsApply
+        ? '⚠️ 請按下「套用所有設定」按鈕後，方能進行生成'
+        : '✨ 生成 4×2 八格總圖';
+  };
+  paint();
+  if (root.__generationButtonTimer) clearInterval(root.__generationButtonTimer);
+  root.__generationButtonTimer = setInterval(paint, 900);
   button.addEventListener('click', () => {
     // STEP 04 inputs deliberately stay browser-only while users type, so this
     // component must read the draft *at click time*.  Capturing it above would
     // submit the version that existed when STEP 06 first rendered instead.
     const state = readDraft();
-    if (!state) return;
+    if (!state || disabled || remoteLocked()) return;
     // 文字編輯器存在於瀏覽器端；先在此判斷，避免空白請求送到後端後
     // 讓按鈕被短暫鎖住。固定提醒則由 STEP 06 標題下方呈現。
     if (isTextModeEmpty(state)) return;
@@ -711,6 +723,83 @@ def render_frontend_generate_button(*, data, key):
     return getattr(result, "request", None)
 
 
+# A generation may be accepted from another browser, device, or deployment
+# sharing the same Supabase member account.  Poll the tiny status RPC in one
+# invisible component, then let the visible controls react to a browser-local
+# value.  This avoids periodic Streamlit reruns that would redraw unfinished
+# creation settings.
+GENERATION_STATUS_MONITOR_HTML = '<div class="step04-generation-status-monitor"></div>'
+GENERATION_STATUS_MONITOR_CSS = r"""
+:host { display:block; height:0; overflow:hidden; }
+.step04-generation-status-monitor { display:none; }
+"""
+GENERATION_STATUS_MONITOR_JS = r"""
+export default function(component) {
+  const { parentElement, data } = component;
+  const root = parentElement.querySelector('.step04-generation-status-monitor') || parentElement;
+  const storageKey = String(data.storageKey || 'sticker-studio-next.generation-status');
+  const endpoint = String(data.statusEndpoint || '');
+  const accessToken = String(data.accessToken || '');
+  const anonKey = String(data.anonKey || '');
+  const pollMs = Math.max(10000, Number(data.pollMs) || 15000);
+  if (!endpoint || !accessToken || !anonKey) return;
+
+  const visible = () => {
+    try { return window.top.document.visibilityState === 'visible'; }
+    catch (_) { return document.visibilityState === 'visible'; }
+  };
+  const writeStatus = value => {
+    try { localStorage.setItem(storageKey, JSON.stringify(value)); }
+    catch (_) {}
+  };
+  const poll = async () => {
+    if (!visible()) return;
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'apikey': anonKey,
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+        cache: 'no-store',
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const item = Array.isArray(payload) ? (payload[0] || {}) : (payload || {});
+      writeStatus({
+        known: true,
+        hasReserved: Boolean(item.has_reserved),
+        canCancel: Boolean(item.can_cancel),
+        canRecover: Boolean(item.can_recover),
+        secondsRemaining: Math.max(0, Number(item.seconds_remaining) || 0),
+        checkedAt: Date.now(),
+      });
+    } catch (_) {
+      // The server repeats this lock check when Generate is pressed; a
+      // transient status failure must not make a settings form unusable.
+    }
+  };
+  if (root.__generationStatusTimer) clearInterval(root.__generationStatusTimer);
+  poll();
+  root.__generationStatusTimer = setInterval(poll, pollMs);
+}
+"""
+
+
+def render_frontend_generation_status_monitor(*, data, key):
+    """Keep cross-tab generation state fresh without rerunning Streamlit."""
+    monitor = components.component(
+        "v12_step04_generation_status_monitor",
+        html=GENERATION_STATUS_MONITOR_HTML,
+        css=GENERATION_STATUS_MONITOR_CSS,
+        js=GENERATION_STATUS_MONITOR_JS,
+        isolate_styles=False,
+    )
+    monitor(data=data, key=key)
+
+
 # The STEP 02/03/05 controls intentionally keep their changes in the browser
 # until the member confirms one final apply action.  STEP 04 is already stored
 # in localStorage, so this companion component reads that same draft and sends
@@ -730,6 +819,7 @@ export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
   const root = parentElement.querySelector('.step04-apply-settings-root') || parentElement;
   const generationLockKey = `${String(data.storageKey || 'step04')}.generation-requested`;
+  const generationStatusKey = String(data.generationStatusKey || `${String(data.storageKey || 'step04')}.generation-status`);
   const readDraft = () => {
     try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
     catch (_) { return null; }
@@ -739,21 +829,32 @@ export default function(component) {
     slots: Array.isArray(state?.slots) ? state.slots : [],
   });
   const generationLocked = Boolean(data.generationLocked);
+  const remoteLocked = () => {
+    try { return Boolean(JSON.parse(localStorage.getItem(generationStatusKey) || 'null')?.hasReserved); }
+    catch (_) { return false; }
+  };
   if (!generationLocked) {
     // A rejected request (for example, missing a required photo) arrives here
     // on its fresh render and clears the browser-only click guard.
     localStorage.removeItem(generationLockKey);
   }
-  const label = generationLocked
-    ? '🔒 圖片生成中，設定暫時鎖定'
-    : String(data.label || '🧩 套用所有設定（才能進行生成）');
-  root.innerHTML = `<button ${generationLocked ? 'disabled' : ''}>${label}</button>`;
+  root.innerHTML = '<button></button>';
   const button = root.querySelector('button');
+  const paint = () => {
+    const locked = generationLocked || remoteLocked();
+    button.disabled = locked;
+    button.textContent = locked
+      ? (generationLocked ? '🔒 圖片生成中，設定暫時鎖定' : '🔒 此帳號正在其他裝置生成中')
+      : String(data.label || '🧩 套用所有設定（才能進行生成）');
+  };
+  paint();
+  if (root.__applyButtonTimer) clearInterval(root.__applyButtonTimer);
+  root.__applyButtonTimer = setInterval(paint, 900);
   button.addEventListener('click', () => {
     // The generate component writes this synchronously before Streamlit can
     // redraw.  It closes the small same-page window in which a second click
     // could otherwise submit an apply request after generation was accepted.
-    if (generationLocked || localStorage.getItem(generationLockKey)) {
+    if (generationLocked || remoteLocked() || localStorage.getItem(generationLockKey)) {
       button.disabled = true;
       button.textContent = '🔒 圖片生成中，設定暫時鎖定';
       return;

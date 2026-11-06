@@ -17,6 +17,8 @@ keys = (
     "NEWEBPAY_LIVE_ENABLED",
     "NEWEBPAY_WALLETS_ENABLED",
     "V12_ACCEPTANCE_MODE",
+    "V12_CREATIVE_BACKUP_MODE",
+    "V12_FORMAL_PURCHASE_URL",
     "SITE_URL",
 )
 target = Path(".streamlit/secrets.toml")

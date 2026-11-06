@@ -31,6 +31,7 @@ _step04_frontend = importlib.reload(_step04_frontend)
 render_frontend_apply_button = _step04_frontend.render_frontend_apply_button
 render_frontend_editor = _step04_frontend.render_frontend_editor
 render_frontend_generate_button = _step04_frontend.render_frontend_generate_button
+render_frontend_generation_status_monitor = _step04_frontend.render_frontend_generation_status_monitor
 
 
 def _v12_ui_locale():
@@ -3954,7 +3955,7 @@ def _beta_rpc(function_name, payload, access_token=None):
 
 def _beta_payuni_sandbox_enabled():
     """Keep public checkout disabled until deployment secrets explicitly enable it."""
-    if _v12_acceptance_mode_enabled():
+    if _v12_acceptance_mode_enabled() or _v12_creative_backup_mode_enabled():
         return False
     try:
         value = str(st.secrets.get("PAYUNI_SANDBOX_ENABLED", "") or "").strip().lower()
@@ -3968,7 +3969,7 @@ def _beta_newebpay_live_enabled():
     # The private formal-architecture acceptance service uses the same
     # Supabase project as production, but must never be able to create a
     # live payment order while it is being tested.
-    if _v12_acceptance_mode_enabled():
+    if _v12_acceptance_mode_enabled() or _v12_creative_backup_mode_enabled():
         return False
     try:
         value = str(st.secrets.get("NEWEBPAY_LIVE_ENABLED", "") or "").strip().lower()
@@ -3988,6 +3989,32 @@ def _v12_acceptance_mode_enabled():
     except Exception:
         return False
     return value in {"1", "true", "yes", "on"}
+
+
+def _v12_creative_backup_mode_enabled():
+    """Keep a Taiwan creative backup deployment payment-free by design."""
+    try:
+        value = str(
+            st.secrets.get("V12_CREATIVE_BACKUP_MODE", "")
+            or os.environ.get("V12_CREATIVE_BACKUP_MODE", "")
+            or ""
+        ).strip().lower()
+    except Exception:
+        return False
+    return value in {"1", "true", "yes", "on"}
+
+
+def _v12_formal_purchase_url():
+    """Return the only purchase destination used by a creative backup site."""
+    try:
+        configured = str(
+            st.secrets.get("V12_FORMAL_PURCHASE_URL", "")
+            or os.environ.get("V12_FORMAL_PURCHASE_URL", "")
+            or ""
+        ).strip()
+    except Exception:
+        configured = ""
+    return configured or "https://sticker-studio-next.streamlit.app/?view=pricing"
 
 
 def _beta_create_payuni_checkout(session, product_code):
@@ -14416,6 +14443,14 @@ def _v12_render_pricing_page():
         st.info(t("pricing_login_notice"))
     if _v12_acceptance_mode_enabled():
         st.info("🧪 正式架構驗收站：此站僅供內部驗收，付款功能已關閉，不會建立或送出任何藍新付款訂單。")
+    elif _v12_creative_backup_mode_enabled():
+        st.info("⚡ 台灣創作備援站：作品、額度與會員權益會與正式站同步；購買與加值請前往正式站完成。")
+        st.link_button(
+            "🛒 前往正式站購買／加值",
+            _v12_formal_purchase_url(),
+            type="primary",
+            use_container_width=True,
+        )
     # The signed PAYUNi return may be opened after the Streamlit session has
     # restarted. Show its compact provider message independently of member
     # session state so a rejected sandbox request is actionable.
@@ -14474,18 +14509,25 @@ def _v12_render_pricing_page():
                 """,
                 unsafe_allow_html=True,
             )
-            st.button(
-                product["button"],
-                key=f"v12_select_product_{product['code']}",
-                type="primary" if is_selected else "secondary",
-                use_container_width=True,
-                disabled=False,
-                on_click=_v12_select_purchase_product_callback,
-                args=(product["code"],),
-            )
+            if _v12_creative_backup_mode_enabled():
+                st.link_button(
+                    "前往正式站購買",
+                    _v12_formal_purchase_url(),
+                    use_container_width=True,
+                )
+            else:
+                st.button(
+                    product["button"],
+                    key=f"v12_select_product_{product['code']}",
+                    type="primary" if is_selected else "secondary",
+                    use_container_width=True,
+                    disabled=False,
+                    on_click=_v12_select_purchase_product_callback,
+                    args=(product["code"],),
+                )
 
     chosen = next((item for item in products if item["code"] == selected_code), None)
-    if chosen:
+    if chosen and not _v12_creative_backup_mode_enabled():
         st.markdown(f"### {t('pricing_selected', name=chosen['name'], price=chosen['price'])}")
         if _v12_acceptance_mode_enabled():
             st.info(
@@ -14604,6 +14646,13 @@ if re.fullmatch(
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
     str(st.query_params.get("payment_order", "") or ""),
 ):
+    st.session_state["v12_view"] = "pricing"
+
+# The backup station links members to this explicit public route.  It also
+# makes the destination useful when shared in a normal browser, rather than
+# sending people to the formal site's generic creation page first.
+_v12_requested_view = str(st.query_params.get("view", "") or "").strip().lower()
+if _v12_requested_view == "pricing":
     st.session_state["v12_view"] = "pricing"
 
 
@@ -17248,6 +17297,32 @@ def _v12_render_deferred_background_setting():
 
 transparent = _v12_render_deferred_background_setting()
 st.caption("STEP 02～05 完成後，請按一次下方按鈕同步所有設定，再進行生成。")
+
+# This hidden browser component polls only the member's tiny generation-lock
+# status.  It does not call ``st.rerun``: the visible Apply / Generate
+# components read the browser value and update their own disabled state, so
+# unfinished STEP 02–05 edits never get redrawn just because another device
+# started generating.
+_v12_generation_status_storage_key = "sticker-studio-next.v12.generation-status"
+_v12_generation_status_session = _beta_current_user() if _beta_config() else None
+_v12_generation_status_config = _beta_config()
+if _v12_generation_status_session and _v12_generation_status_config:
+    render_frontend_generation_status_monitor(
+        data={
+            "storageKey": _v12_generation_status_storage_key,
+            "statusEndpoint": (
+                f"{_v12_generation_status_config['url']}"
+                "/rest/v1/rpc/get_my_generation_recovery_status"
+            ),
+            "accessToken": str(
+                _v12_generation_status_session.get("access_token", "") or ""
+            ),
+            "anonKey": _v12_generation_status_config["anon_key"],
+            "pollMs": 15000,
+        },
+        key="v12_generation_status_monitor",
+    )
+
 _v12_settings_apply_generation_locked = bool(
     st.session_state.get("v11_generation_pending", False)
     or st.session_state.get("v11_generation_in_progress", False)
@@ -17255,6 +17330,7 @@ _v12_settings_apply_generation_locked = bool(
 _v12_apply_all_settings_result = render_frontend_apply_button(
     data={
         "storageKey": "sticker-studio-next.step04-formal.v1",
+        "generationStatusKey": _v12_generation_status_storage_key,
         "label": "🧩 套用所有設定（才能進行生成）\n※ 修改內容後需再次套用",
         "generationLocked": _v12_settings_apply_generation_locked,
     },
@@ -17753,6 +17829,7 @@ if _v12_step04_frontend_enabled:
         data={
             "storageKey": "sticker-studio-next.step04-formal.v1",
             "disabled": _generation_locked,
+            "generationStatusKey": _v12_generation_status_storage_key,
             "settingsPending": bool(
                 st.session_state.get("v12_settings_pending_apply", False)
             ),
