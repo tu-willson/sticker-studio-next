@@ -15461,7 +15461,10 @@ def _v12_set_style_source_mode(mode):
         st.session_state["v10_style_mode"] = "↓ 請選擇風格"
         st.session_state["v12_use_custom_style"] = False
         st.session_state["v12_use_text_only_style"] = False
-        st.session_state["v12_use_text_person_style"] = False
+        # 「文字搭人物」仍需要人物照，且能正確搭配第二張畫風參考圖：
+        # 第一張決定人物身份，第二張只提供筆觸／配色／材質。因此不可在
+        # 切換畫風參考來源時把它取消；只有純文字（無人物）才與此來源切換
+        # 的人物創作流程互斥。
         st.session_state.pop("v12_loaded_project_custom_style", None)
 
 
