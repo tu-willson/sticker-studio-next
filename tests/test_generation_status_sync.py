@@ -35,6 +35,11 @@ class GenerationStatusSyncTests(unittest.TestCase):
         self.assertIn("_server_allows_stale_recovery", APP)
         self.assertIn("_v11_clear_generation_state()", APP)
 
+    def test_apply_handoff_temporarily_locks_apply_and_generate_controls(self):
+        self.assertIn("apply-cooldown-until", FRONTEND)
+        self.assertIn("Date.now() + 5000", FRONTEND)
+        self.assertIn("設定同步中，請稍候", FRONTEND)
+
 
 if __name__ == "__main__":
     unittest.main()

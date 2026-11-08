@@ -652,6 +652,7 @@ export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
   const root = parentElement.querySelector('.step04-generator-root') || parentElement;
   const generationLockKey = `${String(data.storageKey || 'step04')}.generation-requested`;
+  const applyCooldownKey = `${String(data.storageKey || 'step04')}.apply-cooldown-until`;
   const generationStatusKey = String(data.generationStatusKey || `${String(data.storageKey || 'step04')}.generation-status`);
   const readDraft = () => {
     try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
@@ -675,14 +676,23 @@ export default function(component) {
     try { return Boolean(JSON.parse(localStorage.getItem(generationStatusKey) || 'null')?.hasReserved); }
     catch (_) { return false; }
   };
+  const applyCooldownRemaining = () => {
+    try {
+      return Math.max(0, Number(localStorage.getItem(applyCooldownKey) || '0') - Date.now());
+    } catch (_) { return 0; }
+  };
   root.innerHTML = '<button></button>';
   const button = root.querySelector('button');
   const paint = () => {
     const locked = disabled || remoteLocked();
-    button.disabled = locked || needsSettingsApply;
-    button.className = locked ? 'is-generating' : needsSettingsApply ? 'needs-apply' : '';
+    const applyCooldownMs = applyCooldownRemaining();
+    const applying = applyCooldownMs > 0;
+    button.disabled = locked || needsSettingsApply || applying;
+    button.className = locked ? 'is-generating' : needsSettingsApply || applying ? 'needs-apply' : '';
     button.textContent = locked
       ? (disabled ? '🔄 AI 正在生成，請稍候……' : '🔒 此帳號正在其他裝置生成中')
+      : applying
+        ? `🔒 設定同步中，請稍候 ${Math.max(1, Math.ceil(applyCooldownMs / 1000))} 秒`
       : needsSettingsApply
         ? '⚠️ 請按下「套用所有設定」按鈕後，方能進行生成'
         : '✨ 生成 4×2 八格總圖';
@@ -695,7 +705,7 @@ export default function(component) {
     // component must read the draft *at click time*.  Capturing it above would
     // submit the version that existed when STEP 06 first rendered instead.
     const state = readDraft();
-    if (!state || disabled || remoteLocked()) return;
+    if (!state || disabled || remoteLocked() || applyCooldownRemaining() > 0) return;
     // 文字編輯器存在於瀏覽器端；先在此判斷，避免空白請求送到後端後
     // 讓按鈕被短暫鎖住。固定提醒則由 STEP 06 標題下方呈現。
     if (isTextModeEmpty(state)) return;
@@ -818,6 +828,7 @@ export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
   const root = parentElement.querySelector('.step04-apply-settings-root') || parentElement;
   const generationLockKey = `${String(data.storageKey || 'step04')}.generation-requested`;
+  const applyCooldownKey = `${String(data.storageKey || 'step04')}.apply-cooldown-until`;
   const generationStatusKey = String(data.generationStatusKey || `${String(data.storageKey || 'step04')}.generation-status`);
   const readDraft = () => {
     try { return JSON.parse(localStorage.getItem(data.storageKey) || 'null'); }
@@ -832,6 +843,11 @@ export default function(component) {
     try { return Boolean(JSON.parse(localStorage.getItem(generationStatusKey) || 'null')?.hasReserved); }
     catch (_) { return false; }
   };
+  const applyCooldownRemaining = () => {
+    try {
+      return Math.max(0, Number(localStorage.getItem(applyCooldownKey) || '0') - Date.now());
+    } catch (_) { return 0; }
+  };
   if (!generationLocked) {
     // A rejected request (for example, missing a required photo) arrives here
     // on its fresh render and clears the browser-only click guard.
@@ -841,9 +857,13 @@ export default function(component) {
   const button = root.querySelector('button');
   const paint = () => {
     const locked = generationLocked || remoteLocked();
-    button.disabled = locked;
+    const applyCooldownMs = applyCooldownRemaining();
+    const applying = applyCooldownMs > 0;
+    button.disabled = locked || applying;
     button.textContent = locked
       ? (generationLocked ? '🔒 圖片生成中，設定暫時鎖定' : '🔒 此帳號正在其他裝置生成中')
+      : applying
+        ? `🔄 正在同步所有設定，請稍候 ${Math.max(1, Math.ceil(applyCooldownMs / 1000))} 秒…`
       : String(data.label || '🧩 套用所有設定（才能進行生成）');
   };
   paint();
@@ -853,11 +873,17 @@ export default function(component) {
     // The generate component writes this synchronously before Streamlit can
     // redraw.  It closes the small same-page window in which a second click
     // could otherwise submit an apply request after generation was accepted.
-    if (generationLocked || remoteLocked() || localStorage.getItem(generationLockKey)) {
+    if (generationLocked || remoteLocked() || localStorage.getItem(generationLockKey) || applyCooldownRemaining() > 0) {
       button.disabled = true;
       button.textContent = '🔒 圖片生成中，設定暫時鎖定';
       return;
     }
+    // A successful Apply intentionally causes two safe Streamlit reruns: the
+    // first receives browser-only fields, the second recreates this button.
+    // Keep both controls unavailable through that short hand-off so a user
+    // cannot start generation between the two redraws.
+    try { localStorage.setItem(applyCooldownKey, String(Date.now() + 5000)); }
+    catch (_) {}
     const state = readDraft();
     if (state && typeof state === 'object') {
       state.settingsAppliedFingerprint = fingerprint(state);
