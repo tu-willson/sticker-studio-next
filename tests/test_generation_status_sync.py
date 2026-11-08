@@ -29,8 +29,6 @@ class GenerationStatusSyncTests(unittest.TestCase):
         self.assertIn("此帳號正在其他裝置生成中", FRONTEND)
         self.assertIn("generationStatusKey", FRONTEND)
         self.assertIn("render_frontend_generation_status_monitor", APP)
-        self.assertIn("notifyRecoveryReady", FRONTEND)
-        self.assertIn("v12_generation_recovery_ready_event", APP)
 
     def test_stale_local_generation_lock_is_reconciled_with_server_status(self):
         self.assertIn("Always reconcile the browser's transient lock", APP)

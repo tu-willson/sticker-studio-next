@@ -751,28 +751,6 @@ export default function(component) {
     try { localStorage.setItem(storageKey, JSON.stringify(value)); }
     catch (_) {}
   };
-  const notifyRecoveryReady = value => {
-    // A backend lock changing from "processing" to either stale-recoverable
-    // or complete is the one state change that needs a small Streamlit rerun.
-    // It releases a stranded same-page UI lock without continuously rerunning
-    // the creator while a normal image request is still active.
-    const recoveryReady = Boolean(value?.canRecover);
-    if (!recoveryReady) {
-      try { localStorage.removeItem(`${storageKey}.recovery-rerun`); }
-      catch (_) {}
-      return;
-    }
-    const signature = `${Boolean(value.hasReserved)}:${Boolean(value.canRecover)}:${Number(value.checkedAt) || 0}`;
-    try {
-      const markerKey = `${storageKey}.recovery-rerun`;
-      const previous = String(localStorage.getItem(markerKey) || '');
-      // checkedAt changes on every poll; only the stable recoverable state
-      // matters, so one re-render is sufficient until a new generation starts.
-      if (previous === 'recoverable') return;
-      localStorage.setItem(markerKey, 'recoverable');
-    } catch (_) {}
-    setTriggerValue('recoveryReady', { hasReserved: true, canRecover: true, signature });
-  };
   const poll = async () => {
     if (!visible()) return;
     try {
@@ -789,16 +767,14 @@ export default function(component) {
       if (!response.ok) return;
       const payload = await response.json();
       const item = Array.isArray(payload) ? (payload[0] || {}) : (payload || {});
-      const value = {
+      writeStatus({
         known: true,
         hasReserved: Boolean(item.has_reserved),
         canCancel: Boolean(item.can_cancel),
         canRecover: Boolean(item.can_recover),
         secondsRemaining: Math.max(0, Number(item.seconds_remaining) || 0),
         checkedAt: Date.now(),
-      };
-      writeStatus(value);
-      notifyRecoveryReady(value);
+      });
     } catch (_) {
       // The server repeats this lock check when Generate is pressed; a
       // transient status failure must not make a settings form unusable.
@@ -820,8 +796,7 @@ def render_frontend_generation_status_monitor(*, data, key):
         js=GENERATION_STATUS_MONITOR_JS,
         isolate_styles=False,
     )
-    result = monitor(data=data, key=key)
-    return getattr(result, "recoveryReady", None)
+    monitor(data=data, key=key)
 
 
 # The STEP 02/03/05 controls intentionally keep their changes in the browser

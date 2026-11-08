@@ -17165,7 +17165,7 @@ _v12_generation_status_storage_key = "sticker-studio-next.v12.generation-status"
 _v12_generation_status_session = _beta_current_user() if _beta_config() else None
 _v12_generation_status_config = _beta_config()
 if _v12_generation_status_session and _v12_generation_status_config:
-    _v12_generation_recovery_ready_event = render_frontend_generation_status_monitor(
+    render_frontend_generation_status_monitor(
         data={
             "storageKey": _v12_generation_status_storage_key,
             "statusEndpoint": (
@@ -17180,13 +17180,6 @@ if _v12_generation_status_session and _v12_generation_status_config:
         },
         key="v12_generation_status_monitor",
     )
-    if isinstance(_v12_generation_recovery_ready_event, dict):
-        # The monitor only emits this after a server-side processing job passes
-        # its five-minute safety window.  Re-render once so the authoritative
-        # reconciliation below can replace any stranded browser-side lock with
-        # the enabled recovery control.
-        st.session_state["v12_generation_recovery_ready_event"] = True
-        st.rerun()
 
 _v12_settings_apply_generation_locked = bool(
     st.session_state.get("v11_generation_pending", False)
