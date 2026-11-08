@@ -17645,20 +17645,40 @@ _generation_recovery_status = {
     "can_recover": False,
     "seconds_remaining": 0,
 }
-# This page's pending hand-off always proceeds immediately into the provider
-# call.  Do not render an enabled recovery control in that tiny interval; a
-# broken hand-off can be cancelled safely after reopening the page, when the
-# server still reports it as an unstarted ``reserved`` job.
-if not _generation_local_locked:
-    try:
-        _recovery_status_session = _beta_current_user()
-        if _recovery_status_session:
-            _generation_recovery_status = _beta_get_generation_recovery_status(
-                _recovery_status_session
-            )
-    except Exception:
-        # A temporary status lookup failure must never block a normal creation.
-        pass
+# Always reconcile the browser's transient lock with the server-side job.
+#
+# A Streamlit websocket reconnect / script interruption can leave
+# ``v11_generation_in_progress`` behind in this browser session even though the
+# provider call no longer exists.  Previously we skipped the server lookup when
+# that local flag was set, which made an already-stale job impossible to recover
+# from the UI.  The database is the source of truth: a fresh processing job
+# remains locked; a completed/missing job clears the stale local flag; and an
+# expired processing job exposes the normal five-minute recovery control.
+try:
+    _recovery_status_session = _beta_current_user()
+    if _recovery_status_session:
+        _generation_recovery_status = _beta_get_generation_recovery_status(
+            _recovery_status_session
+        )
+except Exception:
+    # A temporary status lookup failure must never block a normal creation.
+    pass
+
+if _generation_local_locked:
+    _server_has_active_generation = bool(
+        _generation_recovery_status.get("has_reserved", False)
+    )
+    _server_allows_stale_recovery = bool(
+        _generation_recovery_status.get("can_recover", False)
+    )
+    if not _server_has_active_generation or _server_allows_stale_recovery:
+        # Do not refund automatically.  This only releases the *local* UI lock
+        # so the existing server-side recovery button can make the audited,
+        # idempotent decision after five minutes.
+        _v11_clear_generation_state()
+        _generation_pending = False
+        _generation_in_progress = False
+        _generation_local_locked = False
 _generation_backend_locked = bool(_generation_recovery_status["has_reserved"])
 _generation_locked = _generation_local_locked or _generation_backend_locked
 _generation_feedback = st.session_state.pop("v11_generation_release_feedback", None)

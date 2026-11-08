@@ -10,9 +10,10 @@ FRONTEND = ROOT.joinpath("step04_frontend_test.py").read_text(encoding="utf-8")
 
 
 class GenerationStatusSyncTests(unittest.TestCase):
-    def test_creation_page_exposes_taiwan_backup_link(self):
-        self.assertIn("台灣備援創作站（正式站延遲時可改由此創作）", APP)
-        self.assertIn(
+    def test_creation_page_does_not_expose_paused_taiwan_backup_link(self):
+        """The paid Cloud Run backup is paused and must not be shown publicly."""
+        self.assertNotIn("台灣備援創作站（正式站延遲時可改由此創作）", APP)
+        self.assertNotIn(
             "https://sticker-studio-next-formal-candidate-335753249693.asia-east1.run.app/",
             APP,
         )
@@ -28,6 +29,11 @@ class GenerationStatusSyncTests(unittest.TestCase):
         self.assertIn("此帳號正在其他裝置生成中", FRONTEND)
         self.assertIn("generationStatusKey", FRONTEND)
         self.assertIn("render_frontend_generation_status_monitor", APP)
+
+    def test_stale_local_generation_lock_is_reconciled_with_server_status(self):
+        self.assertIn("Always reconcile the browser's transient lock", APP)
+        self.assertIn("_server_allows_stale_recovery", APP)
+        self.assertIn("_v11_clear_generation_state()", APP)
 
 
 if __name__ == "__main__":
